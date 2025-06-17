@@ -1,119 +1,82 @@
 ' =====================================================
-' MACRO : Supprimer les doublons dans la façade PDI
-' Analyse la façade générée et supprime les numéros en doublons
-' Tient compte des extensions (A, Bis, Ter, etc.)
+' MACRO : Nettoyer les doublons à l'intérieur de chaque case PDI
+' Analyse seulement le contenu interne de chaque case sans modifier la structure
+' Exemple : "51-49-47-67-51-51A-51B-89" devient "49-47-67-51-51A-51B-89"
 ' =====================================================
 
-Sub SupprimerDoublonsFacade()
+Sub NettoyerDoublonsInternesCases()
     Dim wsFacade As Worksheet
-    Dim wsAccueil As Worksheet
-    Dim dictNumeros As Object
-    Dim dictPositions As Object
     Dim derniereLigne As Long
     Dim ligneActuelle As Long
     Dim colonneActuelle As Long
-    Dim contenuCellule As String
-    Dim numeroExtrait As String
     Dim rngCellule As Range
-    Dim compteurSupprimes As Long
+    Dim contenuOriginal As String
+    Dim contenuNettoye As String
+    Dim compteurCasesModifiees As Long
     Dim msgResultat As String
     
     ' Vérifier que la feuille Facade_PDI existe
     On Error GoTo FacadeInexistante
     Set wsFacade = ThisWorkbook.Sheets("Facade_PDI")
-    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
     On Error GoTo 0
-    
-    ' Créer les dictionnaires pour traquer les numéros et leurs positions
-    Set dictNumeros = CreateObject("Scripting.Dictionary")
-    Set dictPositions = CreateObject("Scripting.Dictionary")
     
     ' Désactiver les mises à jour pour améliorer les performances
     Application.ScreenUpdating = False
-    Application.DisplayAlerts = False
     
     ' Trouver la dernière ligne utilisée dans la façade
     derniereLigne = wsFacade.UsedRange.Rows.Count
-    compteurSupprimes = 0
+    compteurCasesModifiees = 0
     
-    ' PHASE 1 : Analyser toutes les cellules et identifier les doublons
-    msgResultat = "ANALYSE DE LA FAÇADE PDI" & vbCrLf & vbCrLf
+    msgResultat = "🧹 NETTOYAGE DES DOUBLONS INTERNES" & vbCrLf & vbCrLf
     
-    ' Parcourir toutes les lignes de numéros (lignes impaires : 1, 3, 5, etc.)
+    ' Parcourir seulement les lignes impaires (lignes des numéros PDI)
     For ligneActuelle = 1 To derniereLigne Step 2
         colonneActuelle = 1
         
         Do While colonneActuelle <= 26 ' Colonnes A à Z
             Set rngCellule = wsFacade.Cells(ligneActuelle, colonneActuelle)
             
-            ' Ignorer les cellules vides
+            ' Si la cellule n'est pas vide, nettoyer son contenu
             If rngCellule.Value <> "" Then
-                contenuCellule = CStr(rngCellule.Value)
+                contenuOriginal = CStr(rngCellule.Value)
+                contenuNettoye = NettoyerContenuCase(contenuOriginal)
                 
-                ' Déterminer la largeur de la cellule (fusionnée ou non)
-                Dim largeurCellule As Integer
-                If rngCellule.MergeCells Then
-                    largeurCellule = rngCellule.MergeArea.Columns.Count
-                Else
-                    largeurCellule = 1
+                ' Si le contenu a changé, le mettre à jour
+                If contenuOriginal <> contenuNettoye Then
+                    rngCellule.Value = contenuNettoye
+                    compteurCasesModifiees = compteurCasesModifiees + 1
+                    
+                    msgResultat = msgResultat & "Case L" & ligneActuelle & "C" & colonneActuelle & " :" & vbCrLf
+                    msgResultat = msgResultat & "  Avant : " & contenuOriginal & vbCrLf
+                    msgResultat = msgResultat & "  Après : " & contenuNettoye & vbCrLf & vbCrLf
                 End If
                 
-                ' Extraire le ou les numéros de la cellule
-                Call AnalyserContenuCellule(contenuCellule, dictNumeros, dictPositions, ligneActuelle, colonneActuelle, largeurCellule)
-                
-                ' Passer à la colonne suivante après la zone fusionnée
-                colonneActuelle = colonneActuelle + largeurCellule
+                ' Gérer les cellules fusionnées pour avancer correctement
+                If rngCellule.MergeCells Then
+                    colonneActuelle = colonneActuelle + rngCellule.MergeArea.Columns.Count
+                Else
+                    colonneActuelle = colonneActuelle + 1
+                End If
             Else
                 colonneActuelle = colonneActuelle + 1
             End If
         Loop
     Next ligneActuelle
     
-    ' PHASE 2 : Identifier et traiter les doublons
-    Dim numerosCles As Variant
-    Dim cle As Variant
-    Dim positions As Collection
-    Dim positionInfo As String
-    Dim i As Long
-    
-    numerosCles = dictNumeros.Keys
-    
-    For Each cle In numerosCles
-        Set positions = dictNumeros(cle)
-        
-        ' Si plus d'une position pour ce numéro, c'est un doublon
-        If positions.Count > 1 Then
-            msgResultat = msgResultat & "DOUBLON DÉTECTÉ : " & cle & " (" & positions.Count & " occurrences)" & vbCrLf
-            
-            ' Garder la première occurrence et supprimer les autres
-            For i = 2 To positions.Count
-                positionInfo = positions(i)
-                Call SupprimerCelluleFacade(wsFacade, positionInfo)
-                compteurSupprimes = compteurSupprimes + 1
-                msgResultat = msgResultat & "  - Supprimé en position : " & positionInfo & vbCrLf
-            Next i
-            
-            msgResultat = msgResultat & vbCrLf
-        End If
-    Next cle
-    
-    ' PHASE 3 : Nettoyer et réorganiser la façade
-    Call NettoyerEspacesVides(wsFacade)
-    
     ' Réactiver les mises à jour
     Application.ScreenUpdating = True
-    Application.DisplayAlerts = True
     
     ' Message de résultat
-    If compteurSupprimes > 0 Then
-        msgResultat = msgResultat & "RÉSULTAT :" & vbCrLf
-        msgResultat = msgResultat & "✓ " & compteurSupprimes & " doublons supprimés avec succès !" & vbCrLf
-        msgResultat = msgResultat & "✓ Façade réorganisée automatiquement"
+    If compteurCasesModifiees > 0 Then
+        msgResultat = msgResultat & "✅ RÉSULTAT :" & vbCrLf
+        msgResultat = msgResultat & "• " & compteurCasesModifiees & " cases nettoyées" & vbCrLf
+        msgResultat = msgResultat & "• Structure de la façade préservée" & vbCrLf
+        msgResultat = msgResultat & "• Formatage conservé"
         
-        MsgBox msgResultat, vbInformation, "Suppression des doublons terminée"
+        MsgBox msgResultat, vbInformation, "Nettoyage terminé"
     Else
-        MsgBox "✓ Aucun doublon détecté dans la façade !" & vbCrLf & _
-               "La façade est déjà optimisée.", vbInformation, "Analyse terminée"
+        MsgBox "✅ Aucun doublon interne détecté !" & vbCrLf & _
+               "Toutes les cases sont déjà optimisées.", vbInformation, "Analyse terminée"
     End If
     
     Exit Sub
@@ -125,142 +88,167 @@ FacadeInexistante:
 End Sub
 
 ' =====================================================
-' SUB : Analyser le contenu d'une cellule et extraire les numéros
+' FONCTION : Nettoyer le contenu d'une case individuelle
 ' =====================================================
-Sub AnalyserContenuCellule(contenu As String, dictNumeros As Object, dictPositions As Object, ligne As Long, colonne As Long, largeur As Integer)
+Function NettoyerContenuCase(contenuOriginal As String) As String
     Dim lignes As Variant
-    Dim i As Integer
-    Dim ligneTexte As String
-    Dim numerosExtraits As Collection
-    Dim numero As Variant
-    Dim positionInfo As String
+    Dim ligneNumeros As String
+    Dim ligneObservations As String
+    Dim numerosNettoyes As String
     
-    ' Diviser le contenu par les sauts de ligne
-    If InStr(contenu, vbCrLf) > 0 Then
-        lignes = Split(contenu, vbCrLf)
-        ' Prendre seulement la première ligne (qui contient les numéros)
-        ligneTexte = Trim(lignes(0))
+    ' Séparer les numéros des observations (saut de ligne)
+    If InStr(contenuOriginal, vbCrLf) > 0 Then
+        lignes = Split(contenuOriginal, vbCrLf)
+        ligneNumeros = Trim(lignes(0))
+        If UBound(lignes) >= 1 Then
+            ligneObservations = Trim(lignes(1))
+        Else
+            ligneObservations = ""
+        End If
     Else
-        ligneTexte = Trim(contenu)
+        ligneNumeros = Trim(contenuOriginal)
+        ligneObservations = ""
     End If
     
-    ' Enlever les symboles en début (triangle, carré, etc.)
-    ligneTexte = NettoyerSymboles(ligneTexte)
+    ' Nettoyer seulement la ligne des numéros
+    numerosNettoyes = SupprimerDoublonsNumeros(ligneNumeros)
     
-    ' Extraire tous les numéros de cette ligne
-    Set numerosExtraits = ExtraireNumerosPDI(ligneTexte)
-    
-    ' Créer l'info de position avec la largeur pour les cellules fusionnées
-    If largeur > 1 Then
-        positionInfo = "L" & ligne & "C" & colonne & "-" & (colonne + largeur - 1) & " (largeur:" & largeur & ")"
+    ' Reconstituer le contenu
+    If ligneObservations <> "" Then
+        NettoyerContenuCase = numerosNettoyes & vbCrLf & ligneObservations
     Else
-        positionInfo = "L" & ligne & "C" & colonne
+        NettoyerContenuCase = numerosNettoyes
     End If
-    
-    ' Ajouter chaque numéro au dictionnaire
-    For Each numero In numerosExtraits
-        If Not dictNumeros.Exists(numero) Then
-            ' Créer une nouvelle collection pour ce numéro
-            Set dictNumeros(numero) = New Collection
-        End If
-        
-        ' Ajouter cette position à la liste des positions pour ce numéro
-        dictNumeros(numero).Add positionInfo
-    Next numero
-End Sub
-
-' =====================================================
-' FONCTION : Nettoyer les symboles en début de texte
-' =====================================================
-Function NettoyerSymboles(texte As String) As String
-    Dim result As String
-    result = Trim(texte)
-    
-    ' Enlever les symboles Unicode en début
-    If Len(result) > 0 Then
-        ' Triangle (Bat P)
-        If Left(result, 1) = ChrW(&H25B2) Then
-            result = Trim(Mid(result, 2))
-        End If
-        
-        ' Carré (Bat C)
-        If Left(result, 1) = ChrW(&H25A0) Then
-            result = Trim(Mid(result, 2))
-        End If
-        
-        ' Cercle blanc (multi-voies)
-        If Left(result, 1) = ChrW(&H25CB) Then
-            result = Trim(Mid(result, 2))
-        End If
-    End If
-    
-    NettoyerSymboles = result
 End Function
 
 ' =====================================================
-' FONCTION : Extraire tous les numéros PDI d'une chaîne
+' FONCTION : Supprimer les doublons dans une chaîne de numéros
 ' =====================================================
-Function ExtraireNumerosPDI(texte As String) As Collection
-    Dim numerosCollection As Collection
+Function SupprimerDoublonsNumeros(chaineNumeros As String) As String
+    Dim symboleDebut As String
+    Dim chaineNettoyee As String
     Dim segments As Variant
     Dim i As Integer
-    Dim segment As String
+    Dim dictNumeros As Object
+    Dim numerosUniques As Collection
     Dim numeroNormalise As String
+    Dim resultat As String
     
-    Set numerosCollection = New Collection
+    ' Conserver le symbole en début (triangle, carré, etc.)
+    symboleDebut = ExtraireSymboleDebut(chaineNumeros)
+    chaineNettoyee = EnleverSymboleDebut(chaineNumeros)
     
-    ' Diviser par "/" pour les voies multiples
-    If InStr(texte, " / ") > 0 Then
-        segments = Split(texte, " / ")
+    ' Si la chaîne est vide après nettoyage, retourner le symbole seul
+    If Trim(chaineNettoyee) = "" Then
+        SupprimerDoublonsNumeros = symboleDebut
+        Exit Function
+    End If
+    
+    ' Créer un dictionnaire pour traquer les numéros déjà vus
+    Set dictNumeros = CreateObject("Scripting.Dictionary")
+    Set numerosUniques = New Collection
+    
+    ' Séparer par différents délimiteurs possibles
+    ' D'abord par "/" (voies multiples), puis par "-" (plages)
+    If InStr(chaineNettoyee, " / ") > 0 Then
+        ' Voies multiples : traiter chaque partie séparément
+        segments = Split(chaineNettoyee, " / ")
+        For i = 0 To UBound(segments)
+            Dim partieNettoyee As String
+            partieNettoyee = SupprimerDoublonsPartie(Trim(segments(i)), dictNumeros)
+            If partieNettoyee <> "" Then
+                If numerosUniques.Count = 0 Then
+                    numerosUniques.Add partieNettoyee
+                Else
+                    numerosUniques.Add " / " & partieNettoyee
+                End If
+            End If
+        Next i
     Else
-        ' Diviser par "-" pour les plages de numéros
-        If InStr(texte, "-") > 0 Then
-            segments = Split(texte, "-")
-        Else
-            ' Un seul numéro
-            ReDim segments(0)
-            segments(0) = texte
+        ' Pas de voies multiples : traiter directement
+        Dim partieUnique As String
+        partieUnique = SupprimerDoublonsPartie(chaineNettoyee, dictNumeros)
+        If partieUnique <> "" Then
+            numerosUniques.Add partieUnique
         End If
     End If
     
-    ' Traiter chaque segment
-    For i = 0 To UBound(segments)
-        segment = Trim(segments(i))
-        If segment <> "" Then
-            numeroNormalise = NormaliserNumeroPDI(segment)
-            If numeroNormalise <> "" Then
-                ' Éviter les doublons dans la même cellule
-                On Error Resume Next
-                numerosCollection.Add numeroNormalise, numeroNormalise
-                On Error GoTo 0
+    ' Reconstituer le résultat
+    resultat = ""
+    For i = 1 To numerosUniques.Count
+        resultat = resultat & numerosUniques(i)
+    Next i
+    
+    SupprimerDoublonsNumeros = symboleDebut & resultat
+End Function
+
+' =====================================================
+' FONCTION : Supprimer les doublons dans une partie de numéros
+' =====================================================
+Function SupprimerDoublonsPartie(partie As String, dictNumeros As Object) As String
+    Dim elements As Variant
+    Dim i As Integer
+    Dim element As String
+    Dim numeroNormalise As String
+    Dim resultats As Collection
+    Dim resultat As String
+    
+    Set resultats = New Collection
+    
+    ' Séparer par tirets (pour les plages comme "51-49-47")
+    If InStr(partie, "-") > 0 Then
+        elements = Split(partie, "-")
+    Else
+        ' Un seul élément
+        ReDim elements(0)
+        elements(0) = partie
+    End If
+    
+    ' Traiter chaque élément
+    For i = 0 To UBound(elements)
+        element = Trim(elements(i))
+        If element <> "" Then
+            numeroNormalise = NormaliserNumero(element)
+            
+            ' Ajouter seulement si pas déjà vu
+            If Not dictNumeros.Exists(numeroNormalise) Then
+                dictNumeros.Add numeroNormalise, True
+                
+                ' Ajouter le délimiteur approprié
+                If resultats.Count = 0 Then
+                    resultats.Add element
+                Else
+                    resultats.Add "-" & element
+                End If
             End If
         End If
     Next i
     
-    Set ExtraireNumerosPDI = numerosCollection
+    ' Reconstituer la partie
+    resultat = ""
+    For i = 1 To resultats.Count
+        resultat = resultat & resultats(i)
+    Next i
+    
+    SupprimerDoublonsPartie = resultat
 End Function
 
 ' =====================================================
-' FONCTION : Normaliser un numéro PDI (gérer les extensions)
+' FONCTION : Normaliser un numéro pour la comparaison
 ' =====================================================
-Function NormaliserNumeroPDI(numeroRaw As String) As String
-    Dim numero As String
-    Dim pattern As String
+Function NormaliserNumero(numero As String) As String
+    Dim numeroNettoye As String
     Dim regex As Object
     Dim matches As Object
     
-    numero = Trim(numeroRaw)
+    numeroNettoye = UCase(Trim(numero))
     
-    ' Créer un objet regex pour extraire les numéros avec extensions
+    ' Créer un regex pour extraire numéro + extension
     Set regex = CreateObject("VBScript.RegExp")
-    
-    ' Pattern pour capturer : numéro + extension optionnelle
-    ' Exemples : "3", "3A", "34", "34Ter", "8Bis", "125 A", "12 BIS"
-    regex.pattern = "(\d+)\s*(A|B|C|D|E|F|BIS|TER|QUATER|bis|ter|quater)?"
+    regex.pattern = "^(\d+)\s*([A-Z]*|BIS|TER|QUATER)?$"
     regex.IgnoreCase = True
-    regex.Global = False
     
-    Set matches = regex.Execute(numero)
+    Set matches = regex.Execute(numeroNettoye)
     
     If matches.Count > 0 Then
         Dim numeroBase As String
@@ -269,317 +257,83 @@ Function NormaliserNumeroPDI(numeroRaw As String) As String
         numeroBase = matches(0).SubMatches(0)
         extension = matches(0).SubMatches(1)
         
-        ' Normaliser l'extension
         If extension <> "" Then
-            extension = UCase(Trim(extension))
-            NormaliserNumeroPDI = numeroBase & " " & extension
+            NormaliserNumero = numeroBase & " " & extension
         Else
-            NormaliserNumeroPDI = numeroBase
+            NormaliserNumero = numeroBase
         End If
     Else
-        ' Si pas de match, retourner vide
-        NormaliserNumeroPDI = ""
+        ' Si pas de match, retourner tel quel
+        NormaliserNumero = numeroNettoye
     End If
 End Function
 
 ' =====================================================
-' SUB : Supprimer une cellule de la façade (gestion cellules fusionnées)
+' FONCTION : Extraire le symbole en début de chaîne
 ' =====================================================
-Sub SupprimerCelluleFacade(ws As Worksheet, positionInfo As String)
-    Dim ligne As Long
-    Dim colonneDebut As Long
-    Dim colonneFin As Long
-    Dim largeur As Integer
-    Dim rngHaut As Range
-    Dim rngBas As Range
-    Dim i As Long
+Function ExtraireSymboleDebut(texte As String) As String
+    Dim premier As String
     
-    ' Parser l'information de position
-    If InStr(positionInfo, "-") > 0 Then
-        ' Format: "L1C2-5 (largeur:4)" pour cellules fusionnées
-        Dim parties As Variant
-        parties = Split(positionInfo, " ")
-        Dim coordonnees As String
-        coordonnees = parties(0) ' "L1C2-5"
-        
-        ' Extraire ligne
-        ligne = CLng(Mid(coordonnees, 2, InStr(coordonnees, "C") - 2))
-        
-        ' Extraire colonnes début et fin
-        Dim partieColonnes As String
-        partieColonnes = Mid(coordonnees, InStr(coordonnees, "C") + 1) ' "2-5"
-        
-        If InStr(partieColonnes, "-") > 0 Then
-            colonneDebut = CLng(Left(partieColonnes, InStr(partieColonnes, "-") - 1))
-            colonneFin = CLng(Mid(partieColonnes, InStr(partieColonnes, "-") + 1))
-            largeur = colonneFin - colonneDebut + 1
-        Else
-            colonneDebut = CLng(partieColonnes)
-            colonneFin = colonneDebut
-            largeur = 1
-        End If
-    Else
-        ' Format simple: "L1C2"
-        ligne = CLng(Mid(positionInfo, 2, InStr(positionInfo, "C") - 2))
-        colonneDebut = CLng(Mid(positionInfo, InStr(positionInfo, "C") + 1))
-        colonneFin = colonneDebut
-        largeur = 1
+    If Len(texte) = 0 Then
+        ExtraireSymboleDebut = ""
+        Exit Function
     End If
     
-    ' ÉTAPE 1 : Défusionner complètement toute la zone
-    ' Défusionner ligne du haut
-    For i = colonneDebut To colonneFin
-        If ws.Cells(ligne, i).MergeCells Then
-            ws.Cells(ligne, i).MergeArea.UnMerge
-        End If
-    Next i
+    premier = Left(texte, 1)
     
-    ' Défusionner ligne du bas
-    For i = colonneDebut To colonneFin
-        If ws.Cells(ligne + 1, i).MergeCells Then
-            ws.Cells(ligne + 1, i).MergeArea.UnMerge
-        End If
-    Next i
-    
-    ' ÉTAPE 2 : Vider le contenu et le formatage cellule par cellule
-    For i = colonneDebut To colonneFin
-        ' Nettoyer ligne du haut
-        With ws.Cells(ligne, i)
-            .ClearContents
-            .ClearFormats
-        End With
-        
-        ' Nettoyer ligne du bas
-        With ws.Cells(ligne + 1, i)
-            .ClearContents
-            .ClearFormats
-        End With
-    Next i
-End Sub
-
-' =====================================================
-' SUB : Nettoyer les espaces vides et réorganiser
-' =====================================================
-Sub NettoyerEspacesVides(ws As Worksheet)
-    Dim ligne As Long
-    Dim colonne As Long
-    Dim derniereLigne As Long
-    Dim derniereColonneUtilisee As Long
-    Dim espaceVide As Boolean
-    
-    derniereLigne = ws.UsedRange.Rows.Count
-    
-    ' Pour chaque ligne de casiers (lignes impaires)
-    For ligne = 1 To derniereLigne Step 2
-        ' Compacter les cellules vers la gauche
-        Call CompacterLigneVersGauche(ws, ligne)
-    Next ligne
-    
-    ' Supprimer les lignes complètement vides à la fin
-    Call SupprimerLignesVidesFinales(ws)
-End Sub
-
-' =====================================================
-' SUB : Compacter une ligne vers la gauche (gestion des cellules fusionnées)
-' =====================================================
-Sub CompacterLigneVersGauche(ws As Worksheet, ligne As Long)
-    Dim colSource As Long
-    Dim colDestination As Long
-    Dim rngHautSource As Range
-    Dim rngBasSource As Range
-    Dim rngHautDest As Range
-    Dim rngBasDest As Range
-    Dim largeurSource As Integer
-    Dim i As Long
-    
-    colDestination = 1
-    colSource = 1
-    
-    ' Parcourir toutes les colonnes
-    Do While colSource <= 26
-        Set rngHautSource = ws.Cells(ligne, colSource)
-        Set rngBasSource = ws.Cells(ligne + 1, colSource)
-        
-        ' Si la cellule source n'est pas vide
-        If rngHautSource.Value <> "" Then
-            ' Déterminer la largeur de la cellule source
-            If rngHautSource.MergeCells Then
-                largeurSource = rngHautSource.MergeArea.Columns.Count
-            Else
-                largeurSource = 1
-            End If
-            
-            ' Si source et destination sont différentes, déplacer
-            If colSource <> colDestination Then
-                ' ÉTAPE 1 : Défusionner complètement les cellules source
-                For i = 0 To largeurSource - 1
-                    If ws.Cells(ligne, colSource + i).MergeCells Then
-                        ws.Cells(ligne, colSource + i).MergeArea.UnMerge
-                    End If
-                    If ws.Cells(ligne + 1, colSource + i).MergeCells Then
-                        ws.Cells(ligne + 1, colSource + i).MergeArea.UnMerge
-                    End If
-                Next i
-                
-                ' ÉTAPE 2 : Copier cellule par cellule pour toute la largeur
-                For i = 0 To largeurSource - 1
-                    Set rngHautDest = ws.Cells(ligne, colDestination + i)
-                    Set rngBasDest = ws.Cells(ligne + 1, colDestination + i)
-                    
-                    ' S'assurer que la destination n'est pas fusionnée
-                    If rngHautDest.MergeCells Then
-                        rngHautDest.MergeArea.UnMerge
-                    End If
-                    If rngBasDest.MergeCells Then
-                        rngBasDest.MergeArea.UnMerge
-                    End If
-                    
-                    ' Copier le contenu et le formatage
-                    Call CopierCelluleComplete(ws.Cells(ligne, colSource + i), rngHautDest)
-                    Call CopierCelluleComplete(ws.Cells(ligne + 1, colSource + i), rngBasDest)
-                    
-                    ' Vider la source (maintenant défusionnée)
-                    ws.Cells(ligne, colSource + i).ClearContents
-                    ws.Cells(ligne, colSource + i).ClearFormats
-                    ws.Cells(ligne + 1, colSource + i).ClearContents
-                    ws.Cells(ligne + 1, colSource + i).ClearFormats
-                Next i
-                
-                ' ÉTAPE 3 : Refusionner à la destination si nécessaire
-                If largeurSource > 1 Then
-                    On Error Resume Next
-                    Set rngHautDest = ws.Range(ws.Cells(ligne, colDestination), ws.Cells(ligne, colDestination + largeurSource - 1))
-                    Set rngBasDest = ws.Range(ws.Cells(ligne + 1, colDestination), ws.Cells(ligne + 1, colDestination + largeurSource - 1))
-                    
-                    rngHautDest.Merge
-                    rngBasDest.Merge
-                    On Error GoTo 0
-                End If
-            End If
-            
-            ' Avancer les positions
-            colDestination = colDestination + largeurSource
-            colSource = colSource + largeurSource
+    ' Vérifier si c'est un symbole Unicode
+    If premier = ChrW(&H25B2) Or premier = ChrW(&H25A0) Or premier = ChrW(&H25CB) Then
+        ' Inclure l'espace qui suit si présent
+        If Len(texte) > 1 And Mid(texte, 2, 1) = " " Then
+            ExtraireSymboleDebut = Left(texte, 2)
         Else
-            colSource = colSource + 1
+            ExtraireSymboleDebut = premier
         End If
-    Loop
-End Sub
+    Else
+        ExtraireSymboleDebut = ""
+    End If
+End Function
 
 ' =====================================================
-' SUB : Copier une cellule complète (contenu + formatage)
+' FONCTION : Enlever le symbole en début de chaîne
 ' =====================================================
-Sub CopierCelluleComplete(source As Range, destination As Range)
-    ' Copier le contenu
-    destination.Value = source.Value
+Function EnleverSymboleDebut(texte As String) As String
+    Dim symbole As String
+    symbole = ExtraireSymboleDebut(texte)
     
-    ' Copier le formatage
-    destination.NumberFormat = source.NumberFormat
-    destination.HorizontalAlignment = source.HorizontalAlignment
-    destination.VerticalAlignment = source.VerticalAlignment
-    destination.WrapText = source.WrapText
-    destination.Font.Name = source.Font.Name
-    destination.Font.Size = source.Font.Size
-    destination.Font.Bold = source.Font.Bold
-    destination.Font.Color = source.Font.Color
-    destination.Font.Underline = source.Font.Underline
-    destination.Interior.Color = source.Interior.Color
-    destination.Interior.ColorIndex = source.Interior.ColorIndex
-    destination.Borders.LineStyle = source.Borders.LineStyle
-    destination.Borders.Weight = source.Borders.Weight
-End Sub
+    If symbole <> "" Then
+        EnleverSymboleDebut = Trim(Mid(texte, Len(symbole) + 1))
+    Else
+        EnleverSymboleDebut = texte
+    End If
+End Function
 
 ' =====================================================
-' SUB : Supprimer les lignes vides en fin de façade (gestion cellules fusionnées)
+' MACRO DE TEST : Analyser sans modifier
 ' =====================================================
-Sub SupprimerLignesVidesFinales(ws As Worksheet)
-    Dim ligne As Long
-    Dim derniereLigne As Long
-    Dim ligneVide As Boolean
-    Dim colonne As Long
-    
-    derniereLigne = ws.UsedRange.Rows.Count
-    
-    ' Parcourir de bas en haut
-    For ligne = derniereLigne To 1 Step -2
-        ligneVide = True
-        
-        ' Vérifier si la ligne est vide (en tenant compte des cellules fusionnées)
-        colonne = 1
-        Do While colonne <= 26
-            Dim celluleHaut As Range
-            Dim celluleBas As Range
-            Set celluleHaut = ws.Cells(ligne, colonne)
-            Set celluleBas = ws.Cells(ligne + 1, colonne)
-            
-            ' Vérifier si les cellules ont du contenu
-            If celluleHaut.Value <> "" Or celluleBas.Value <> "" Then
-                ligneVide = False
-                Exit Do
-            End If
-            
-            ' Si c'est une cellule fusionnée, passer toute la largeur
-            If celluleHaut.MergeCells Then
-                colonne = colonne + celluleHaut.MergeArea.Columns.Count
-            Else
-                colonne = colonne + 1
-            End If
-        Loop
-        
-        ' Si la ligne est vide, la supprimer (avec gestion d'erreur)
-        If ligneVide Then
-            On Error Resume Next
-            ' Défusionner d'abord toutes les cellules de ces deux lignes
-            For colonne = 1 To 26
-                If ws.Cells(ligne, colonne).MergeCells Then
-                    ws.Cells(ligne, colonne).MergeArea.UnMerge
-                End If
-                If ws.Cells(ligne + 1, colonne).MergeCells Then
-                    ws.Cells(ligne + 1, colonne).MergeArea.UnMerge
-                End If
-            Next colonne
-            
-            ' Maintenant supprimer les lignes
-            ws.Rows(ligne & ":" & (ligne + 1)).Delete
-            On Error GoTo 0
-        Else
-            ' Dès qu'on trouve une ligne non vide, on arrête
-            Exit For
-        End If
-    Next ligne
-End Sub
-
-' =====================================================
-' MACRO DE TEST : Analyser la façade sans supprimer
-' =====================================================
-Sub AnalyserDoublonsSansSupprimer()
+Sub AnalyserDoublonsInternesSansModifier()
     Dim wsFacade As Worksheet
-    Dim dictNumeros As Object
-    Dim dictPositions As Object
     Dim derniereLigne As Long
     Dim ligneActuelle As Long
     Dim colonneActuelle As Long
-    Dim contenuCellule As String
     Dim rngCellule As Range
-    Dim msgAnalyse As String
+    Dim contenuOriginal As String
+    Dim contenuNettoye As String
     Dim compteurDoublons As Long
+    Dim msgAnalyse As String
     
     ' Vérifier que la feuille Facade_PDI existe
     On Error GoTo FacadeInexistante
     Set wsFacade = ThisWorkbook.Sheets("Facade_PDI")
     On Error GoTo 0
     
-    ' Créer les dictionnaires
-    Set dictNumeros = CreateObject("Scripting.Dictionary")
-    Set dictPositions = CreateObject("Scripting.Dictionary")
-    
     ' Analyser la façade
     derniereLigne = wsFacade.UsedRange.Rows.Count
     compteurDoublons = 0
     
-    msgAnalyse = "📊 ANALYSE DES DOUBLONS DANS LA FAÇADE" & vbCrLf & vbCrLf
+    msgAnalyse = "🔍 ANALYSE DES DOUBLONS INTERNES" & vbCrLf & vbCrLf
     
-    ' Parcourir toutes les cellules avec gestion des cellules fusionnées
+    ' Parcourir seulement les lignes impaires
     For ligneActuelle = 1 To derniereLigne Step 2
         colonneActuelle = 1
         
@@ -587,60 +341,40 @@ Sub AnalyserDoublonsSansSupprimer()
             Set rngCellule = wsFacade.Cells(ligneActuelle, colonneActuelle)
             
             If rngCellule.Value <> "" Then
-                contenuCellule = CStr(rngCellule.Value)
+                contenuOriginal = CStr(rngCellule.Value)
+                contenuNettoye = NettoyerContenuCase(contenuOriginal)
                 
-                ' Déterminer la largeur de la cellule
-                Dim largeurCellule As Integer
-                If rngCellule.MergeCells Then
-                    largeurCellule = rngCellule.MergeArea.Columns.Count
-                Else
-                    largeurCellule = 1
+                If contenuOriginal <> contenuNettoye Then
+                    compteurDoublons = compteurDoublons + 1
+                    msgAnalyse = msgAnalyse & "🔄 Case L" & ligneActuelle & "C" & colonneActuelle & " :" & vbCrLf
+                    msgAnalyse = msgAnalyse & "  Actuel : " & contenuOriginal & vbCrLf
+                    msgAnalyse = msgAnalyse & "  Optimisé : " & contenuNettoye & vbCrLf & vbCrLf
                 End If
                 
-                Call AnalyserContenuCellule(contenuCellule, dictNumeros, dictPositions, ligneActuelle, colonneActuelle, largeurCellule)
-                
-                ' Passer à la colonne suivante après la zone fusionnée
-                colonneActuelle = colonneActuelle + largeurCellule
+                ' Gérer les cellules fusionnées
+                If rngCellule.MergeCells Then
+                    colonneActuelle = colonneActuelle + rngCellule.MergeArea.Columns.Count
+                Else
+                    colonneActuelle = colonneActuelle + 1
+                End If
             Else
                 colonneActuelle = colonneActuelle + 1
             End If
         Loop
     Next ligneActuelle
     
-    ' Analyser les résultats
-    Dim numerosCles As Variant
-    Dim cle As Variant
-    Dim positions As Collection
-    
-    numerosCles = dictNumeros.Keys
-    
-    For Each cle in numerosCles
-        Set positions = dictNumeros(cle)
-        
-        If positions.Count > 1 Then
-            compteurDoublons = compteurDoublons + 1
-            msgAnalyse = msgAnalyse & "🔄 DOUBLON : " & cle & " (" & positions.Count & " fois)" & vbCrLf
-            
-            Dim pos As Variant
-            For Each pos In positions
-                msgAnalyse = msgAnalyse & "    • " & pos & vbCrLf
-            Next pos
-            msgAnalyse = msgAnalyse & vbCrLf
-        End If
-    Next cle
-    
     ' Résultat final
     If compteurDoublons > 0 Then
-        msgAnalyse = msgAnalyse & "📈 RÉSUMÉ :" & vbCrLf
-        msgAnalyse = msgAnalyse & "• " & compteurDoublons & " numéros en doublon détectés" & vbCrLf
-        msgAnalyse = msgAnalyse & "• Utilisez 'SupprimerDoublonsFacade' pour les corriger"
+        msgAnalyse = msgAnalyse & "📊 RÉSUMÉ :" & vbCrLf
+        msgAnalyse = msgAnalyse & "• " & compteurDoublons & " cases contiennent des doublons" & vbCrLf
+        msgAnalyse = msgAnalyse & "• Utilisez 'NettoyerDoublonsInternesCases' pour les corriger"
     Else
-        msgAnalyse = "✅ EXCELLENTE NOUVELLE !" & vbCrLf & vbCrLf
-        msgAnalyse = msgAnalyse & "Aucun doublon détecté dans la façade." & vbCrLf
-        msgAnalyse = msgAnalyse & "La façade est parfaitement optimisée !"
+        msgAnalyse = "✅ PARFAIT !" & vbCrLf & vbCrLf
+        msgAnalyse = msgAnalyse & "Aucun doublon interne détecté." & vbCrLf
+        msgAnalyse = msgAnalyse & "Toutes les cases sont optimisées !"
     End If
     
-    MsgBox msgAnalyse, vbInformation, "Analyse des doublons"
+    MsgBox msgAnalyse, vbInformation, "Analyse des doublons internes"
     Exit Sub
     
 FacadeInexistante:
