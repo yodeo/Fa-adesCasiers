@@ -159,15 +159,48 @@ Sub SimplificationBornesNumPDI()
 End Sub
 
 ' =====================================================
-' FONCTION : Vérifier si une valeur est un symbole (triangle, carré)
+' FONCTION : Vérifier si une valeur est un symbole ou ne contient que des symboles
 ' =====================================================
 Function EstUnSymbole(valeur As String) As Boolean
     EstUnSymbole = False
-    If Len(valeur) <= 2 Then
-        If InStr(valeur, ChrW(&H25B2)) > 0 Or _
-           InStr(valeur, ChrW(&H25A0)) > 0 Then
-            EstUnSymbole = True
-        End If
+    
+    ' Si la valeur est vide, ce n'est pas un symbole
+    If Len(Trim(valeur)) = 0 Then Exit Function
+    
+    ' Créer une expression régulière pour détecter les chiffres
+    Dim reg As Object
+    Set reg = CreateObject("VBScript.RegExp")
+    reg.Pattern = "\d"
+    reg.Global = True
+    
+    ' Si la valeur ne contient aucun chiffre, c'est probablement un symbole seul
+    If Not reg.Test(valeur) Then
+        EstUnSymbole = True
+        Exit Function
+    End If
+    
+    ' Vérifications spécifiques pour les symboles connus
+    Dim valeurTest As String
+    valeurTest = valeur
+    
+    ' Vérifier les codes Unicode des symboles
+    If InStr(valeurTest, Chr(9650)) > 0 Then EstUnSymbole = True  ' Triangle noir
+    If InStr(valeurTest, Chr(9632)) > 0 Then EstUnSymbole = True  ' Carré noir
+    If InStr(valeurTest, Chr(9675)) > 0 Then EstUnSymbole = True  ' Cercle blanc
+    
+    ' Vérifier aussi par code de caractère
+    If Len(valeurTest) <= 3 Then
+        Dim i As Integer
+        For i = 1 To Len(valeurTest)
+            Dim codeChar As Long
+            codeChar = AscW(Mid(valeurTest, i, 1))
+            ' Plage des symboles géométriques Unicode
+            If (codeChar >= 9632 And codeChar <= 9727) Or _
+               (codeChar >= 8704 And codeChar <= 8959) Then
+                EstUnSymbole = True
+                Exit Function
+            End If
+        Next i
     End If
 End Function
 
@@ -241,32 +274,75 @@ Function ObtenirLibelleVoiePDI(ws As Worksheet, ligneNum As Long, colonne As Lon
 End Function
 
 ' =====================================================
-' SUB : Extraire les numéros pairs et impairs d'une chaîne PDI
+' SUB : Extraire les numéros pairs et impairs d'une chaîne PDI - VERSION ROBUSTE
 ' =====================================================
 Sub ExtraireNumerosPDI(valeur As String, ByRef numsP As Collection, ByRef numsI As Collection)
+    On Error GoTo ErreurExtraction
+    
+    ' Nettoyer la valeur d'entrée
+    Dim valeurNettoyee As String
+    valeurNettoyee = valeur
+    
+    ' Supprimer les symboles connus avant l'extraction
+    valeurNettoyee = Replace(valeurNettoyee, Chr(9650), " ")  ' Triangle
+    valeurNettoyee = Replace(valeurNettoyee, Chr(9632), " ")  ' Carré
+    valeurNettoyee = Replace(valeurNettoyee, Chr(9675), " ")  ' Cercle
+    
+    ' Supprimer aussi par code Unicode alternatif
+    Dim i As Integer
+    Dim nouvelleValeur As String
+    nouvelleValeur = ""
+    
+    For i = 1 To Len(valeurNettoyee)
+        Dim codeChar As Long
+        codeChar = AscW(Mid(valeurNettoyee, i, 1))
+        ' Conserver seulement les chiffres, tirets, espaces et caractères alphanumériques normaux
+        If (codeChar >= 48 And codeChar <= 57) Or _
+           (codeChar >= 65 And codeChar <= 90) Or _
+           (codeChar >= 97 And codeChar <= 122) Or _
+           codeChar = 32 Or codeChar = 45 Or codeChar = 47 Then
+            nouvelleValeur = nouvelleValeur & Mid(valeurNettoyee, i, 1)
+        Else
+            nouvelleValeur = nouvelleValeur & " "
+        End If
+    Next i
+    
+    valeurNettoyee = nouvelleValeur
+    
+    ' Expression régulière pour extraire les numéros
     Dim reg As Object
     Set reg = CreateObject("VBScript.RegExp")
-    reg.pattern = "\d+"
+    reg.Pattern = "\d+"
     reg.Global = True
     
     Dim matches As Object
-    Set matches = reg.Execute(valeur)
+    Set matches = reg.Execute(valeurNettoyee)
     
-    Dim i As Long
+    Dim j As Long
     Dim n As Long
     
-    For i = 0 To matches.Count - 1
-        n = CLng(matches(i).Value)
-        If n Mod 2 = 0 Then
-            numsP.Add n
-        Else
-            numsI.Add n
+    For j = 0 To matches.Count - 1
+        On Error Resume Next
+        n = CLng(matches(j).Value)
+        If Err.Number = 0 And n > 0 Then
+            If n Mod 2 = 0 Then
+                numsP.Add n
+            Else
+                numsI.Add n
+            End If
         End If
-    Next i
+        On Error GoTo ErreurExtraction
+    Next j
+    
+    Exit Sub
+    
+ErreurExtraction:
+    ' En cas d'erreur, ne pas interrompre le processus
+    Resume Next
 End Sub
 
 ' =====================================================
-' FUNCTION : Générer le texte avec bornes pour PDI
+' FUNCTION : Générer le texte avec bornes pour PDI - VERSION ROBUSTE
 ' =====================================================
 Function GenererTexteBornesPDI(collPairs As Collection, collImpairs As Collection, _
                               autresP As Object, autresI As Object, texteOriginal As String) As String
@@ -274,13 +350,26 @@ Function GenererTexteBornesPDI(collPairs As Collection, collImpairs As Collectio
     Dim res As String
     res = ""
     
-    ' Conserver les symboles du début s'il y en a
+    ' Détecter et conserver les symboles du début de manière plus robuste
     Dim symbole As String
     symbole = ""
-    If Left(texteOriginal, 1) = ChrW(&H25B2) Then ' Triangle
-        symbole = ChrW(&H25B2) & " "
-    ElseIf Left(texteOriginal, 1) = ChrW(&H25A0) Then ' Carré
-        symbole = ChrW(&H25A0) & " "
+    Dim premierChar As String
+    
+    If Len(texteOriginal) > 0 Then
+        premierChar = Left(texteOriginal, 1)
+        Dim codeChar As Long
+        codeChar = AscW(premierChar)
+        
+        ' Vérifier si c'est un symbole géométrique
+        If (codeChar >= 9632 And codeChar <= 9727) Or _
+           codeChar = 9650 Or codeChar = 9632 Or codeChar = 9675 Then
+            ' C'est un symbole, le conserver avec un espace
+            If Len(texteOriginal) > 1 And Mid(texteOriginal, 2, 1) = " " Then
+                symbole = Left(texteOriginal, 2) ' Symbole + espace
+            Else
+                symbole = premierChar & " " ' Ajouter l'espace
+            End If
+        End If
     End If
     
     ' Traiter les numéros pairs
@@ -296,7 +385,7 @@ Function GenererTexteBornesPDI(collPairs As Collection, collImpairs As Collectio
         resImpairs = GenererBornesAvecExclusionsPDI(collImpairs, autresI, False)
         If resImpairs <> "" Then
             If res <> "" Then
-                res = res & " / " & resImpairs ' Séparateur pour pairs/impairs
+                res = res & " / " & resImpairs
             Else
                 res = resImpairs
             End If
