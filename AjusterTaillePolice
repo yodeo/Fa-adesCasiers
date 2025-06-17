@@ -115,7 +115,7 @@ Sub TraiterCelluleFacade(cell As Range, estFusionnee As Boolean)
 End Sub
 
 Sub CalculerTailleNumerosPDI(cellRange As Range, largeur As Double, hauteur As Double, contenu As String)
-    ' Calcule la taille optimale pour les numéros PDI
+    ' Calcule la taille MAXIMALE pour les numéros PDI tout en gardant le contenu visible
     
     Dim tailleOptimale As Integer
     Dim largeurEnColonnes As Integer
@@ -129,23 +129,23 @@ Sub CalculerTailleNumerosPDI(cellRange As Range, largeur As Double, hauteur As D
     ' Analyser le contenu
     Call AnalyserContenuPDI(contenu, largeurEnColonnes, longueurMaxLigne, nbLignes)
     
-    ' Calculer la taille basée sur les contraintes
-    tailleOptimale = CalculerTailleSelonContraintes(largeurEnColonnes, longueurMaxLigne, nbLignes, False)
+    ' Calculer la taille MAXIMALE basée sur les contraintes réelles
+    tailleOptimale = CalculerTailleMaximale(largeur, hauteur, longueurMaxLigne, nbLignes, False)
     
-    ' Appliquer avec limites spécifiques aux numéros
+    ' Limites absolues pour éviter le débordement mais maximiser la taille
     Select Case largeurEnColonnes
         Case 1
-            If tailleOptimale > 8 Then tailleOptimale = 8
-            If tailleOptimale < 6 Then tailleOptimale = 6
+            If tailleOptimale > 16 Then tailleOptimale = 16  ' Augmenté de 8 à 16
+            If tailleOptimale < 6 Then tailleOptimale = 6    ' Police minimale à 6pt
         Case 2
-            If tailleOptimale > 10 Then tailleOptimale = 10
-            If tailleOptimale < 7 Then tailleOptimale = 7
+            If tailleOptimale > 20 Then tailleOptimale = 20  ' Augmenté de 10 à 20
+            If tailleOptimale < 6 Then tailleOptimale = 6    ' Police minimale à 6pt
         Case 3
-            If tailleOptimale > 12 Then tailleOptimale = 12
-            If tailleOptimale < 8 Then tailleOptimale = 8
+            If tailleOptimale > 24 Then tailleOptimale = 24  ' Augmenté de 12 à 24
+            If tailleOptimale < 6 Then tailleOptimale = 6    ' Police minimale à 6pt
         Case Else
-            If tailleOptimale > 14 Then tailleOptimale = 14
-            If tailleOptimale < 9 Then tailleOptimale = 9
+            If tailleOptimale > 28 Then tailleOptimale = 28  ' Augmenté de 14 à 28
+            If tailleOptimale < 6 Then tailleOptimale = 6    ' Police minimale à 6pt
     End Select
     
     ' Appliquer la taille
@@ -153,7 +153,7 @@ Sub CalculerTailleNumerosPDI(cellRange As Range, largeur As Double, hauteur As D
 End Sub
 
 Sub CalculerTailleVoies(cellRange As Range, largeur As Double, hauteur As Double, contenu As String)
-    ' Calcule la taille optimale pour les noms de voies
+    ' Calcule la taille MAXIMALE pour les noms de voies tout en gardant le contenu visible
     
     Dim tailleOptimale As Integer
     Dim largeurEnColonnes As Integer
@@ -167,26 +167,26 @@ Sub CalculerTailleVoies(cellRange As Range, largeur As Double, hauteur As Double
     ' Analyser le contenu
     Call AnalyserContenuPDI(contenu, largeurEnColonnes, longueurMaxLigne, nbLignes)
     
-    ' Calculer la taille basée sur les contraintes
-    tailleOptimale = CalculerTailleSelonContraintes(largeurEnColonnes, longueurMaxLigne, nbLignes, True)
+    ' Calculer la taille MAXIMALE basée sur les contraintes réelles
+    tailleOptimale = CalculerTailleMaximale(largeur, hauteur, longueurMaxLigne, nbLignes, True)
     
-    ' Appliquer avec limites spécifiques aux voies (plus généreuses)
+    ' Limites maximisées pour les voies (plus généreuses)
     Select Case largeurEnColonnes
         Case 1
-            If tailleOptimale > 9 Then tailleOptimale = 9
-            If tailleOptimale < 6 Then tailleOptimale = 6
+            If tailleOptimale > 18 Then tailleOptimale = 18  ' Augmenté de 9 à 18
+            If tailleOptimale < 6 Then tailleOptimale = 6    ' Police minimale à 6pt
         Case 2
-            If tailleOptimale > 11 Then tailleOptimale = 11
-            If tailleOptimale < 7 Then tailleOptimale = 7
+            If tailleOptimale > 22 Then tailleOptimale = 22  ' Augmenté de 11 à 22
+            If tailleOptimale < 6 Then tailleOptimale = 6    ' Police minimale à 6pt
         Case 3
-            If tailleOptimale > 13 Then tailleOptimale = 13
-            If tailleOptimale < 8 Then tailleOptimale = 8
+            If tailleOptimale > 26 Then tailleOptimale = 26  ' Augmenté de 13 à 26
+            If tailleOptimale < 6 Then tailleOptimale = 6    ' Police minimale à 6pt
         Case 4
-            If tailleOptimale > 15 Then tailleOptimale = 15
-            If tailleOptimale < 9 Then tailleOptimale = 9
+            If tailleOptimale > 30 Then tailleOptimale = 30  ' Augmenté de 15 à 30
+            If tailleOptimale < 6 Then tailleOptimale = 6    ' Police minimale à 6pt
         Case Else
-            If tailleOptimale > 18 Then tailleOptimale = 18
-            If tailleOptimale < 10 Then tailleOptimale = 10
+            If tailleOptimale > 36 Then tailleOptimale = 36  ' Augmenté de 18 à 36
+            If tailleOptimale < 6 Then tailleOptimale = 6    ' Police minimale à 6pt
     End Select
     
     ' Appliquer la taille
@@ -194,20 +194,20 @@ Sub CalculerTailleVoies(cellRange As Range, largeur As Double, hauteur As Double
 End Sub
 
 Sub AnalyserContenuPDI(contenu As String, largeurColonnes As Integer, ByRef longueurMaxLigne As Integer, ByRef nbLignes As Integer)
-    ' Analyse le contenu pour estimer la répartition en lignes
+    ' Analyse le contenu pour estimer la répartition en lignes avec PLUS de place par ligne
     
     Dim lignesExplicites As Variant
     Dim i As Integer
     Dim capaciteParLigne As Integer
     Dim ligneActuelle As String
     
-    ' Estimer la capacité par ligne selon la largeur
+    ' CAPACITÉS AUGMENTÉES pour permettre des polices plus grandes
     Select Case largeurColonnes
-        Case 1: capaciteParLigne = 6
-        Case 2: capaciteParLigne = 12
-        Case 3: capaciteParLigne = 18
-        Case 4: capaciteParLigne = 24
-        Case Else: capaciteParLigne = largeurColonnes * 6
+        Case 1: capaciteParLigne = 4   ' Réduit de 6 à 4 pour permettre plus gros caractères
+        Case 2: capaciteParLigne = 8   ' Réduit de 12 à 8
+        Case 3: capaciteParLigne = 12  ' Réduit de 18 à 12
+        Case 4: capaciteParLigne = 16  ' Réduit de 24 à 16
+        Case Else: capaciteParLigne = largeurColonnes * 4  ' Facteur réduit de 6 à 4
     End Select
     
     longueurMaxLigne = 0
@@ -245,8 +245,8 @@ Sub AnalyserContenuPDI(contenu As String, largeurColonnes As Integer, ByRef long
     If nbLignes < 1 Then nbLignes = 1
 End Sub
 
-Function CalculerTailleSelonContraintes(largeurColonnes As Integer, longueurMaxLigne As Integer, nbLignes As Integer, estVoie As Boolean) As Integer
-    ' Calcule la taille optimale selon les contraintes
+Function CalculerTailleMaximale(largeurReelle As Double, hauteurReelle As Double, longueurMaxLigne As Integer, nbLignes As Integer, estVoie As Boolean) As Integer
+    ' Calcule la taille MAXIMALE possible tout en gardant le contenu visible
     
     Dim espaceHorizontal As Double
     Dim espaceVertical As Double
@@ -254,37 +254,37 @@ Function CalculerTailleSelonContraintes(largeurColonnes As Integer, longueurMaxL
     Dim tailleParHauteur As Integer
     Dim margeSecurite As Double
     
-    margeSecurite = 0.8 ' Marge de sécurité
+    ' Marge de sécurité RÉDUITE pour maximiser la taille
+    margeSecurite = 0.95 ' Augmenté de 0.8 à 0.95 pour utiliser plus d'espace
     
-    ' Espace horizontal disponible
-    espaceHorizontal = largeurColonnes * 25 * margeSecurite
+    ' Espace horizontal disponible (utilise la largeur réelle de la cellule)
+    espaceHorizontal = largeurReelle * margeSecurite
     
-    ' Espace vertical disponible
-    If estVoie Then
-        espaceVertical = 35 * margeSecurite ' Hauteur des lignes de voies
-    Else
-        espaceVertical = 45 * margeSecurite ' Hauteur des lignes de numéros
-    End If
+    ' Espace vertical disponible (utilise la hauteur réelle de la cellule)
+    espaceVertical = hauteurReelle * margeSecurite
     
-    ' Contrainte horizontale
+    ' Contrainte horizontale - facteur réduit pour permettre plus gros caractères
     If longueurMaxLigne > 0 Then
-        tailleParLargeur = Int(espaceHorizontal / (longueurMaxLigne * 1.4))
+        tailleParLargeur = Int(espaceHorizontal / (longueurMaxLigne * 0.6)) ' Réduit de 1.4 à 0.6
     Else
-        tailleParLargeur = 10
+        tailleParLargeur = 20 ' Valeur par défaut augmentée
     End If
     
-    ' Contrainte verticale
+    ' Contrainte verticale - facteur réduit pour permettre plus gros caractères
     If nbLignes > 0 Then
-        tailleParHauteur = Int(espaceVertical / (nbLignes * 1.6))
+        tailleParHauteur = Int(espaceVertical / (nbLignes * 1.2)) ' Réduit de 1.6 à 1.2
     Else
-        tailleParHauteur = 10
+        tailleParHauteur = 20 ' Valeur par défaut augmentée
     End If
     
     ' Prendre la contrainte la plus restrictive
-    CalculerTailleSelonContraintes = Application.WorksheetFunction.Min(tailleParLargeur, tailleParHauteur)
+    CalculerTailleMaximale = Application.WorksheetFunction.Min(tailleParLargeur, tailleParHauteur)
     
-    ' Limite minimale absolue
-    If CalculerTailleSelonContraintes < 6 Then CalculerTailleSelonContraintes = 6
+    ' Limite minimale à 6pt comme demandé
+    If CalculerTailleMaximale < 6 Then CalculerTailleMaximale = 6 ' Police minimale à 6pt
+    
+    ' Limite maximale absolue pour éviter les débordements extrêmes
+    If CalculerTailleMaximale > 72 Then CalculerTailleMaximale = 72
 End Function
 
 Function ACelluleAvecBorduresFacade(cell As Range) As Boolean
