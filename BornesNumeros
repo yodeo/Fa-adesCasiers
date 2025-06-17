@@ -179,16 +179,21 @@ Function EstUnSymbole(valeur As String) As Boolean
         Exit Function
     End If
     
-    ' Vérifications spécifiques pour les symboles connus
+    ' Vérifications spécifiques pour les symboles connus avec ChrW pour Unicode
     Dim valeurTest As String
     valeurTest = valeur
     
-    ' Vérifier les codes Unicode des symboles
-    If InStr(valeurTest, Chr(9650)) > 0 Then EstUnSymbole = True  ' Triangle noir
-    If InStr(valeurTest, Chr(9632)) > 0 Then EstUnSymbole = True  ' Carré noir
-    If InStr(valeurTest, Chr(9675)) > 0 Then EstUnSymbole = True  ' Cercle blanc
+    ' Vérifier les codes Unicode des symboles avec ChrW
+    If InStr(valeurTest, ChrW(9650)) > 0 Then EstUnSymbole = True  ' Triangle noir
+    If InStr(valeurTest, ChrW(9632)) > 0 Then EstUnSymbole = True  ' Carré noir
+    If InStr(valeurTest, ChrW(9675)) > 0 Then EstUnSymbole = True  ' Cercle blanc
     
-    ' Vérifier aussi par code de caractère
+    ' Vérifier aussi les codes hexadécimaux utilisés dans votre code original
+    If InStr(valeurTest, ChrW(&H25B2)) > 0 Then EstUnSymbole = True  ' Triangle
+    If InStr(valeurTest, ChrW(&H25A0)) > 0 Then EstUnSymbole = True  ' Carré
+    If InStr(valeurTest, ChrW(&H25CB)) > 0 Then EstUnSymbole = True  ' Cercle blanc
+    
+    ' Vérifier par code de caractère pour les symboles courts
     If Len(valeurTest) <= 3 Then
         Dim i As Integer
         For i = 1 To Len(valeurTest)
@@ -196,7 +201,8 @@ Function EstUnSymbole(valeur As String) As Boolean
             codeChar = AscW(Mid(valeurTest, i, 1))
             ' Plage des symboles géométriques Unicode
             If (codeChar >= 9632 And codeChar <= 9727) Or _
-               (codeChar >= 8704 And codeChar <= 8959) Then
+               (codeChar >= 8704 And codeChar <= 8959) Or _
+               codeChar = 9650 Or codeChar = 9632 Or codeChar = 9675 Then
                 EstUnSymbole = True
                 Exit Function
             End If
@@ -283,10 +289,13 @@ Sub ExtraireNumerosPDI(valeur As String, ByRef numsP As Collection, ByRef numsI 
     Dim valeurNettoyee As String
     valeurNettoyee = valeur
     
-    ' Supprimer les symboles connus avant l'extraction
-    valeurNettoyee = Replace(valeurNettoyee, Chr(9650), " ")  ' Triangle
-    valeurNettoyee = Replace(valeurNettoyee, Chr(9632), " ")  ' Carré
-    valeurNettoyee = Replace(valeurNettoyee, Chr(9675), " ")  ' Cercle
+    ' Supprimer les symboles connus avant l'extraction avec ChrW
+    valeurNettoyee = Replace(valeurNettoyee, ChrW(9650), " ")    ' Triangle
+    valeurNettoyee = Replace(valeurNettoyee, ChrW(9632), " ")    ' Carré
+    valeurNettoyee = Replace(valeurNettoyee, ChrW(9675), " ")    ' Cercle
+    valeurNettoyee = Replace(valeurNettoyee, ChrW(&H25B2), " ")  ' Triangle hex
+    valeurNettoyee = Replace(valeurNettoyee, ChrW(&H25A0), " ")  ' Carré hex
+    valeurNettoyee = Replace(valeurNettoyee, ChrW(&H25CB), " ")  ' Cercle hex
     
     ' Supprimer aussi par code Unicode alternatif
     Dim i As Integer
@@ -300,7 +309,7 @@ Sub ExtraireNumerosPDI(valeur As String, ByRef numsP As Collection, ByRef numsI 
         If (codeChar >= 48 And codeChar <= 57) Or _
            (codeChar >= 65 And codeChar <= 90) Or _
            (codeChar >= 97 And codeChar <= 122) Or _
-           codeChar = 32 Or codeChar = 45 Or codeChar = 47 Then
+           codeChar = 32 Or codeChar = 45 Or codeChar = 47 Or codeChar = 10 Or codeChar = 13 Then
             nouvelleValeur = nouvelleValeur & Mid(valeurNettoyee, i, 1)
         Else
             nouvelleValeur = nouvelleValeur & " "
