@@ -1,0 +1,15 @@
+Sub VoirCodesSymboles()
+    Dim cellule As Range
+    Set cellule = Selection
+    
+    If cellule.Value <> "" Then
+        Dim premier As String
+        premier = Left(cellule.Value, 1)
+        Dim code As Long
+        code = AscW(premier)
+        
+        MsgBox "Premier caractère : " & premier & vbCrLf & _
+               "Code Unicode : " & code & vbCrLf & _
+               "Code Hex : &H" & Hex(code), vbInformation
+    End If
+End Sub
