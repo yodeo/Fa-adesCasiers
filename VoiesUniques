@@ -252,6 +252,7 @@ Sub InsererImagesDansCellulesVides()
     Dim compteurImages As Integer
     Dim cellulesVides As Integer
     Dim maxImages As Integer
+    Dim derniereLigne As Long
     
     ' Définir la feuille active
     Set ws = ActiveSheet
@@ -261,13 +262,19 @@ Sub InsererImagesDansCellulesVides()
         Exit Sub
     End If
     
-    ' Définir la plage (ajustez selon vos besoins)
-    On Error Resume Next
-    Set rng = ws.Range("A1:Z72")
-    If rng Is Nothing Then
-        Set rng = ws.UsedRange
-    End If
-    On Error GoTo 0
+    ' Trouver la dernière ligne non vide dans les colonnes A à Z
+    derniereLigne = 1
+    Dim col As Integer
+    For col = 1 To 26 ' Colonnes A à Z
+        Dim derniereLigneCol As Long
+        derniereLigneCol = ws.Cells(ws.Rows.Count, col).End(xlUp).Row
+        If derniereLigneCol > derniereLigne Then
+            derniereLigne = derniereLigneCol
+        End If
+    Next col
+    
+    ' Définir la plage de la façade casier : colonnes A à Z jusqu'à la dernière ligne non vide
+    Set rng = ws.Range("A1:Z" & derniereLigne)
     
     ' Demander le chemin de l'image
     chemin = Application.GetOpenFilename("Images (*.jpg;*.jpeg;*.png;*.bmp;*.gif),*.jpg;*.jpeg;*.png;*.bmp;*.gif", , "Sélectionner une image")
@@ -284,12 +291,14 @@ Sub InsererImagesDansCellulesVides()
         Exit Sub
     End If
     
-    ' Confirmation avec limite de sécurité
-    maxImages = 100 ' Limite de sécurité
-    If MsgBox("Voulez-vous insérer l'image sélectionnée dans les cellules vides ?" & vbCrLf & _
+    ' Confirmation avec informations sur la zone de traitement
+    maxImages = 500 ' Limite augmentée pour les grandes façades
+    If MsgBox("Insertion d'images dans la façade casier :" & vbCrLf & _
+              "Zone : Colonnes A à Z, lignes 1 à " & derniereLigne & vbCrLf & _
               "Fichier : " & chemin & vbCrLf & _
-              "Limite de sécurité : " & maxImages & " images maximum", _
-              vbQuestion + vbYesNo, "Confirmation") = vbNo Then
+              "L'image conservera ses dimensions originales." & vbCrLf & _
+              "Continuer ?", _
+              vbQuestion + vbYesNo, "Confirmation - Façade Casier") = vbNo Then
         Exit Sub
     End If
     
@@ -302,7 +311,7 @@ Sub InsererImagesDansCellulesVides()
     
     On Error GoTo ErrorHandler
     
-    ' Parcourir chaque cellule
+    ' Parcourir chaque cellule dans la zone façade casier
     For Each cell In rng
         ' Arrêter si on atteint la limite de sécurité
         If compteurImages >= maxImages Then
@@ -322,21 +331,20 @@ Sub InsererImagesDansCellulesVides()
                     posX = cell.MergeArea.Left
                     posY = cell.MergeArea.Top
                     
-                    ' Insérer l'image
+                    ' Insérer l'image avec ses dimensions originales
                     Set img = ws.Shapes.AddPicture(Filename:=chemin, _
                                                    LinkToFile:=msoFalse, _
                                                    SaveWithDocument:=msoTrue, _
                                                    Left:=posX, Top:=posY, _
-                                                   Width:=largeurCell * 0.8, _
-                                                   Height:=hauteurCell * 0.8)
+                                                   Width:=-1, Height:=-1)
                     
                     If Not img Is Nothing Then
                         With img
-                            ' Centrer l'image
+                            ' Centrer l'image dans la zone fusionnée sans changer ses dimensions
                             .Left = posX + (largeurCell - .Width) / 2
                             .Top = posY + (hauteurCell - .Height) / 2
                             .Placement = xlMoveAndSize
-                            .Name = "AutoImage_" & compteurImages + 1
+                            .Name = "FacadeImage_" & compteurImages + 1
                         End With
                         compteurImages = compteurImages + 1
                         Set img = Nothing
@@ -351,20 +359,20 @@ Sub InsererImagesDansCellulesVides()
                 
                 ' Vérifier que la cellule a une taille raisonnable
                 If largeurCell > 5 And hauteurCell > 5 Then
+                    ' Insérer l'image avec ses dimensions originales
                     Set img = ws.Shapes.AddPicture(Filename:=chemin, _
                                                    LinkToFile:=msoFalse, _
                                                    SaveWithDocument:=msoTrue, _
                                                    Left:=posX, Top:=posY, _
-                                                   Width:=largeurCell * 0.8, _
-                                                   Height:=hauteurCell * 0.8)
+                                                   Width:=-1, Height:=-1)
                     
                     If Not img Is Nothing Then
                         With img
-                            ' Centrer l'image
+                            ' Centrer l'image dans la cellule sans changer ses dimensions
                             .Left = posX + (largeurCell - .Width) / 2
                             .Top = posY + (hauteurCell - .Height) / 2
                             .Placement = xlMoveAndSize
-                            .Name = "AutoImage_" & compteurImages + 1
+                            .Name = "FacadeImage_" & compteurImages + 1
                         End With
                         compteurImages = compteurImages + 1
                         Set img = Nothing
@@ -386,13 +394,14 @@ CleanUp:
     Application.Calculation = xlCalculationAutomatic
     
     ' Message de résultat
-    MsgBox "Insertion d'images terminée :" & vbCrLf & _
+    MsgBox "Insertion d'images dans la façade casier terminée :" & vbCrLf & _
+           "Zone traitée : A1:Z" & derniereLigne & vbCrLf & _
            "Cellules vides trouvées : " & cellulesVides & vbCrLf & _
-           "Images insérées : " & compteurImages, vbInformation, "Résultat"
+           "Images insérées : " & compteurImages, vbInformation, "Résultat - Façade Casier"
 End Sub
 
-' Fonction utilitaire pour nettoyer les images automatiques
-Sub SupprimerImagesAutomatiques()
+' Fonction utilitaire pour nettoyer les images de façade automatiques
+Sub SupprimerImagesFacade()
     Dim ws As Worksheet
     Dim shp As Shape
     Dim compteur As Integer
@@ -406,7 +415,7 @@ Sub SupprimerImagesAutomatiques()
     Dim i As Integer
     For i = ws.Shapes.Count To 1 Step -1
         Set shp = ws.Shapes(i)
-        If Left(shp.Name, 10) = "AutoImage_" Then
+        If Left(shp.Name, 12) = "FacadeImage_" Then
             shp.Delete
             compteur = compteur + 1
         End If
@@ -414,7 +423,7 @@ Sub SupprimerImagesAutomatiques()
     
     Application.ScreenUpdating = True
     
-    MsgBox "Images automatiques supprimées : " & compteur, vbInformation
+    MsgBox "Images de façade supprimées : " & compteur, vbInformation
 End Sub
 
 ' Fonction pour appeler NomOngletActif si elle existe
