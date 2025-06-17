@@ -326,26 +326,30 @@ Sub SupprimerCelluleFacade(ws As Worksheet, positionInfo As String)
         largeur = 1
     End If
     
-    ' Définir les plages à supprimer (ligne du haut et ligne du bas)
-    Set rngHaut = ws.Range(ws.Cells(ligne, colonneDebut), ws.Cells(ligne, colonneFin))
-    Set rngBas = ws.Range(ws.Cells(ligne + 1, colonneDebut), ws.Cells(ligne + 1, colonneFin))
-    
-    ' Défusionner si nécessaire
-    If rngHaut.MergeCells Then
-        rngHaut.UnMerge
-    End If
-    
-    If rngBas.MergeCells Then
-        rngBas.UnMerge
-    End If
-    
-    ' Vider le contenu et le formatage pour toute la largeur
+    ' ÉTAPE 1 : Défusionner complètement toute la zone
+    ' Défusionner ligne du haut
     For i = colonneDebut To colonneFin
+        If ws.Cells(ligne, i).MergeCells Then
+            ws.Cells(ligne, i).MergeArea.UnMerge
+        End If
+    Next i
+    
+    ' Défusionner ligne du bas
+    For i = colonneDebut To colonneFin
+        If ws.Cells(ligne + 1, i).MergeCells Then
+            ws.Cells(ligne + 1, i).MergeArea.UnMerge
+        End If
+    Next i
+    
+    ' ÉTAPE 2 : Vider le contenu et le formatage cellule par cellule
+    For i = colonneDebut To colonneFin
+        ' Nettoyer ligne du haut
         With ws.Cells(ligne, i)
             .ClearContents
             .ClearFormats
         End With
         
+        ' Nettoyer ligne du bas
         With ws.Cells(ligne + 1, i)
             .ClearContents
             .ClearFormats
@@ -386,7 +390,6 @@ Sub CompacterLigneVersGauche(ws As Worksheet, ligne As Long)
     Dim rngHautDest As Range
     Dim rngBasDest As Range
     Dim largeurSource As Integer
-    Dim largeurDest As Integer
     Dim i As Long
     
     colDestination = 1
@@ -408,37 +411,49 @@ Sub CompacterLigneVersGauche(ws As Worksheet, ligne As Long)
             
             ' Si source et destination sont différentes, déplacer
             If colSource <> colDestination Then
-                ' Défusionner les cellules source
-                If rngHautSource.MergeCells Then
-                    rngHautSource.MergeArea.UnMerge
-                End If
-                If rngBasSource.MergeCells Then
-                    rngBasSource.MergeArea.UnMerge
-                End If
+                ' ÉTAPE 1 : Défusionner complètement les cellules source
+                For i = 0 To largeurSource - 1
+                    If ws.Cells(ligne, colSource + i).MergeCells Then
+                        ws.Cells(ligne, colSource + i).MergeArea.UnMerge
+                    End If
+                    If ws.Cells(ligne + 1, colSource + i).MergeCells Then
+                        ws.Cells(ligne + 1, colSource + i).MergeArea.UnMerge
+                    End If
+                Next i
                 
-                ' Copier cellule par cellule pour toute la largeur
+                ' ÉTAPE 2 : Copier cellule par cellule pour toute la largeur
                 For i = 0 To largeurSource - 1
                     Set rngHautDest = ws.Cells(ligne, colDestination + i)
                     Set rngBasDest = ws.Cells(ligne + 1, colDestination + i)
+                    
+                    ' S'assurer que la destination n'est pas fusionnée
+                    If rngHautDest.MergeCells Then
+                        rngHautDest.MergeArea.UnMerge
+                    End If
+                    If rngBasDest.MergeCells Then
+                        rngBasDest.MergeArea.UnMerge
+                    End If
                     
                     ' Copier le contenu et le formatage
                     Call CopierCelluleComplete(ws.Cells(ligne, colSource + i), rngHautDest)
                     Call CopierCelluleComplete(ws.Cells(ligne + 1, colSource + i), rngBasDest)
                     
-                    ' Vider la source
+                    ' Vider la source (maintenant défusionnée)
                     ws.Cells(ligne, colSource + i).ClearContents
                     ws.Cells(ligne, colSource + i).ClearFormats
                     ws.Cells(ligne + 1, colSource + i).ClearContents
                     ws.Cells(ligne + 1, colSource + i).ClearFormats
                 Next i
                 
-                ' Refusionner à la destination si nécessaire
+                ' ÉTAPE 3 : Refusionner à la destination si nécessaire
                 If largeurSource > 1 Then
+                    On Error Resume Next
                     Set rngHautDest = ws.Range(ws.Cells(ligne, colDestination), ws.Cells(ligne, colDestination + largeurSource - 1))
                     Set rngBasDest = ws.Range(ws.Cells(ligne + 1, colDestination), ws.Cells(ligne + 1, colDestination + largeurSource - 1))
                     
                     rngHautDest.Merge
                     rngBasDest.Merge
+                    On Error GoTo 0
                 End If
             End If
             
@@ -475,7 +490,7 @@ Sub CopierCelluleComplete(source As Range, destination As Range)
 End Sub
 
 ' =====================================================
-' SUB : Supprimer les lignes vides en fin de façade
+' SUB : Supprimer les lignes vides en fin de façade (gestion cellules fusionnées)
 ' =====================================================
 Sub SupprimerLignesVidesFinales(ws As Worksheet)
     Dim ligne As Long
@@ -489,17 +504,44 @@ Sub SupprimerLignesVidesFinales(ws As Worksheet)
     For ligne = derniereLigne To 1 Step -2
         ligneVide = True
         
-        ' Vérifier si la ligne est vide
-        For colonne = 1 To 26
-            If ws.Cells(ligne, colonne).Value <> "" Or ws.Cells(ligne + 1, colonne).Value <> "" Then
+        ' Vérifier si la ligne est vide (en tenant compte des cellules fusionnées)
+        colonne = 1
+        Do While colonne <= 26
+            Dim celluleHaut As Range
+            Dim celluleBas As Range
+            Set celluleHaut = ws.Cells(ligne, colonne)
+            Set celluleBas = ws.Cells(ligne + 1, colonne)
+            
+            ' Vérifier si les cellules ont du contenu
+            If celluleHaut.Value <> "" Or celluleBas.Value <> "" Then
                 ligneVide = False
-                Exit For
+                Exit Do
             End If
-        Next colonne
+            
+            ' Si c'est une cellule fusionnée, passer toute la largeur
+            If celluleHaut.MergeCells Then
+                colonne = colonne + celluleHaut.MergeArea.Columns.Count
+            Else
+                colonne = colonne + 1
+            End If
+        Loop
         
-        ' Si la ligne est vide, la supprimer
+        ' Si la ligne est vide, la supprimer (avec gestion d'erreur)
         If ligneVide Then
+            On Error Resume Next
+            ' Défusionner d'abord toutes les cellules de ces deux lignes
+            For colonne = 1 To 26
+                If ws.Cells(ligne, colonne).MergeCells Then
+                    ws.Cells(ligne, colonne).MergeArea.UnMerge
+                End If
+                If ws.Cells(ligne + 1, colonne).MergeCells Then
+                    ws.Cells(ligne + 1, colonne).MergeArea.UnMerge
+                End If
+            Next colonne
+            
+            ' Maintenant supprimer les lignes
             ws.Rows(ligne & ":" & (ligne + 1)).Delete
+            On Error GoTo 0
         Else
             ' Dès qu'on trouve une ligne non vide, on arrête
             Exit For
