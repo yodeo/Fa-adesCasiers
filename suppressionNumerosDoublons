@@ -41,17 +41,32 @@ Sub SupprimerDoublonsFacade()
     
     ' Parcourir toutes les lignes de numéros (lignes impaires : 1, 3, 5, etc.)
     For ligneActuelle = 1 To derniereLigne Step 2
-        For colonneActuelle = 1 To 26 ' Colonnes A à Z
+        colonneActuelle = 1
+        
+        Do While colonneActuelle <= 26 ' Colonnes A à Z
             Set rngCellule = wsFacade.Cells(ligneActuelle, colonneActuelle)
             
             ' Ignorer les cellules vides
             If rngCellule.Value <> "" Then
                 contenuCellule = CStr(rngCellule.Value)
                 
+                ' Déterminer la largeur de la cellule (fusionnée ou non)
+                Dim largeurCellule As Integer
+                If rngCellule.MergeCells Then
+                    largeurCellule = rngCellule.MergeArea.Columns.Count
+                Else
+                    largeurCellule = 1
+                End If
+                
                 ' Extraire le ou les numéros de la cellule
-                Call AnalyserContenuCellule(contenuCellule, dictNumeros, dictPositions, ligneActuelle, colonneActuelle)
+                Call AnalyserContenuCellule(contenuCellule, dictNumeros, dictPositions, ligneActuelle, colonneActuelle, largeurCellule)
+                
+                ' Passer à la colonne suivante après la zone fusionnée
+                colonneActuelle = colonneActuelle + largeurCellule
+            Else
+                colonneActuelle = colonneActuelle + 1
             End If
-        Next colonneActuelle
+        Loop
     Next ligneActuelle
     
     ' PHASE 2 : Identifier et traiter les doublons
@@ -112,7 +127,7 @@ End Sub
 ' =====================================================
 ' SUB : Analyser le contenu d'une cellule et extraire les numéros
 ' =====================================================
-Sub AnalyserContenuCellule(contenu As String, dictNumeros As Object, dictPositions As Object, ligne As Long, colonne As Long)
+Sub AnalyserContenuCellule(contenu As String, dictNumeros As Object, dictPositions As Object, ligne As Long, colonne As Long, largeur As Integer)
     Dim lignes As Variant
     Dim i As Integer
     Dim ligneTexte As String
@@ -135,9 +150,14 @@ Sub AnalyserContenuCellule(contenu As String, dictNumeros As Object, dictPositio
     ' Extraire tous les numéros de cette ligne
     Set numerosExtraits = ExtraireNumerosPDI(ligneTexte)
     
-    ' Ajouter chaque numéro au dictionnaire
-    positionInfo = "L" & ligne & "C" & colonne
+    ' Créer l'info de position avec la largeur pour les cellules fusionnées
+    If largeur > 1 Then
+        positionInfo = "L" & ligne & "C" & colonne & "-" & (colonne + largeur - 1) & " (largeur:" & largeur & ")"
+    Else
+        positionInfo = "L" & ligne & "C" & colonne
+    End If
     
+    ' Ajouter chaque numéro au dictionnaire
     For Each numero In numerosExtraits
         If Not dictNumeros.Exists(numero) Then
             ' Créer une nouvelle collection pour ce numéro
@@ -263,41 +283,74 @@ Function NormaliserNumeroPDI(numeroRaw As String) As String
 End Function
 
 ' =====================================================
-' SUB : Supprimer une cellule de la façade
+' SUB : Supprimer une cellule de la façade (gestion cellules fusionnées)
 ' =====================================================
 Sub SupprimerCelluleFacade(ws As Worksheet, positionInfo As String)
     Dim ligne As Long
-    Dim colonne As Long
+    Dim colonneDebut As Long
+    Dim colonneFin As Long
+    Dim largeur As Integer
     Dim rngHaut As Range
     Dim rngBas As Range
+    Dim i As Long
     
-    ' Extraire ligne et colonne de la position (format "L1C2")
-    ligne = CLng(Mid(positionInfo, 2, InStr(positionInfo, "C") - 2))
-    colonne = CLng(Mid(positionInfo, InStr(positionInfo, "C") + 1))
+    ' Parser l'information de position
+    If InStr(positionInfo, "-") > 0 Then
+        ' Format: "L1C2-5 (largeur:4)" pour cellules fusionnées
+        Dim parties As Variant
+        parties = Split(positionInfo, " ")
+        Dim coordonnees As String
+        coordonnees = parties(0) ' "L1C2-5"
+        
+        ' Extraire ligne
+        ligne = CLng(Mid(coordonnees, 2, InStr(coordonnees, "C") - 2))
+        
+        ' Extraire colonnes début et fin
+        Dim partieColonnes As String
+        partieColonnes = Mid(coordonnees, InStr(coordonnees, "C") + 1) ' "2-5"
+        
+        If InStr(partieColonnes, "-") > 0 Then
+            colonneDebut = CLng(Left(partieColonnes, InStr(partieColonnes, "-") - 1))
+            colonneFin = CLng(Mid(partieColonnes, InStr(partieColonnes, "-") + 1))
+            largeur = colonneFin - colonneDebut + 1
+        Else
+            colonneDebut = CLng(partieColonnes)
+            colonneFin = colonneDebut
+            largeur = 1
+        End If
+    Else
+        ' Format simple: "L1C2"
+        ligne = CLng(Mid(positionInfo, 2, InStr(positionInfo, "C") - 2))
+        colonneDebut = CLng(Mid(positionInfo, InStr(positionInfo, "C") + 1))
+        colonneFin = colonneDebut
+        largeur = 1
+    End If
     
-    ' Supprimer le contenu des deux cellules (haut et bas)
-    Set rngHaut = ws.Cells(ligne, colonne)
-    Set rngBas = ws.Cells(ligne + 1, colonne)
+    ' Définir les plages à supprimer (ligne du haut et ligne du bas)
+    Set rngHaut = ws.Range(ws.Cells(ligne, colonneDebut), ws.Cells(ligne, colonneFin))
+    Set rngBas = ws.Range(ws.Cells(ligne + 1, colonneDebut), ws.Cells(ligne + 1, colonneFin))
     
-    ' Si les cellules sont fusionnées, défusionner d'abord
+    ' Défusionner si nécessaire
     If rngHaut.MergeCells Then
-        rngHaut.MergeArea.UnMerge
+        rngHaut.UnMerge
     End If
     
     If rngBas.MergeCells Then
-        rngBas.MergeArea.UnMerge
+        rngBas.UnMerge
     End If
     
-    ' Vider le contenu et le formatage
-    With rngHaut
-        .ClearContents
-        .ClearFormats
-    End With
-    
-    With rngBas
-        .ClearContents
-        .ClearFormats
-    End With
+    ' Vider le contenu et le formatage pour toute la largeur
+    For i = colonneDebut To colonneFin
+        With ws.Cells(ligne, i)
+            .ClearContents
+            .ClearFormats
+        End With
+        
+        With ws.Cells(ligne + 1, i)
+            .ClearContents
+            .ClearFormats
+        End With
+    Next i
 End Sub
 
 ' =====================================================
@@ -323,7 +376,7 @@ Sub NettoyerEspacesVides(ws As Worksheet)
 End Sub
 
 ' =====================================================
-' SUB : Compacter une ligne vers la gauche
+' SUB : Compacter une ligne vers la gauche (gestion des cellules fusionnées)
 ' =====================================================
 Sub CompacterLigneVersGauche(ws As Worksheet, ligne As Long)
     Dim colSource As Long
@@ -332,35 +385,70 @@ Sub CompacterLigneVersGauche(ws As Worksheet, ligne As Long)
     Dim rngBasSource As Range
     Dim rngHautDest As Range
     Dim rngBasDest As Range
+    Dim largeurSource As Integer
+    Dim largeurDest As Integer
+    Dim i As Long
     
     colDestination = 1
+    colSource = 1
     
     ' Parcourir toutes les colonnes
-    For colSource = 1 To 26
+    Do While colSource <= 26
         Set rngHautSource = ws.Cells(ligne, colSource)
         Set rngBasSource = ws.Cells(ligne + 1, colSource)
         
         ' Si la cellule source n'est pas vide
         If rngHautSource.Value <> "" Then
-            ' Si source et destination sont différentes, déplacer
-            If colSource <> colDestination Then
-                Set rngHautDest = ws.Cells(ligne, colDestination)
-                Set rngBasDest = ws.Cells(ligne + 1, colDestination)
-                
-                ' Copier le contenu et le formatage
-                Call CopierCelluleComplete(rngHautSource, rngHautDest)
-                Call CopierCelluleComplete(rngBasSource, rngBasDest)
-                
-                ' Vider la source
-                rngHautSource.ClearContents
-                rngHautSource.ClearFormats
-                rngBasSource.ClearContents
-                rngBasSource.ClearFormats
+            ' Déterminer la largeur de la cellule source
+            If rngHautSource.MergeCells Then
+                largeurSource = rngHautSource.MergeArea.Columns.Count
+            Else
+                largeurSource = 1
             End If
             
-            colDestination = colDestination + 1
+            ' Si source et destination sont différentes, déplacer
+            If colSource <> colDestination Then
+                ' Défusionner les cellules source
+                If rngHautSource.MergeCells Then
+                    rngHautSource.MergeArea.UnMerge
+                End If
+                If rngBasSource.MergeCells Then
+                    rngBasSource.MergeArea.UnMerge
+                End If
+                
+                ' Copier cellule par cellule pour toute la largeur
+                For i = 0 To largeurSource - 1
+                    Set rngHautDest = ws.Cells(ligne, colDestination + i)
+                    Set rngBasDest = ws.Cells(ligne + 1, colDestination + i)
+                    
+                    ' Copier le contenu et le formatage
+                    Call CopierCelluleComplete(ws.Cells(ligne, colSource + i), rngHautDest)
+                    Call CopierCelluleComplete(ws.Cells(ligne + 1, colSource + i), rngBasDest)
+                    
+                    ' Vider la source
+                    ws.Cells(ligne, colSource + i).ClearContents
+                    ws.Cells(ligne, colSource + i).ClearFormats
+                    ws.Cells(ligne + 1, colSource + i).ClearContents
+                    ws.Cells(ligne + 1, colSource + i).ClearFormats
+                Next i
+                
+                ' Refusionner à la destination si nécessaire
+                If largeurSource > 1 Then
+                    Set rngHautDest = ws.Range(ws.Cells(ligne, colDestination), ws.Cells(ligne, colDestination + largeurSource - 1))
+                    Set rngBasDest = ws.Range(ws.Cells(ligne + 1, colDestination), ws.Cells(ligne + 1, colDestination + largeurSource - 1))
+                    
+                    rngHautDest.Merge
+                    rngBasDest.Merge
+                End If
+            End If
+            
+            ' Avancer les positions
+            colDestination = colDestination + largeurSource
+            colSource = colSource + largeurSource
+        Else
+            colSource = colSource + 1
         End If
-    Next colSource
+    Loop
 End Sub
 
 ' =====================================================
@@ -449,16 +537,32 @@ Sub AnalyserDoublonsSansSupprimer()
     
     msgAnalyse = "📊 ANALYSE DES DOUBLONS DANS LA FAÇADE" & vbCrLf & vbCrLf
     
-    ' Parcourir toutes les cellules
+    ' Parcourir toutes les cellules avec gestion des cellules fusionnées
     For ligneActuelle = 1 To derniereLigne Step 2
-        For colonneActuelle = 1 To 26
+        colonneActuelle = 1
+        
+        Do While colonneActuelle <= 26
             Set rngCellule = wsFacade.Cells(ligneActuelle, colonneActuelle)
             
             If rngCellule.Value <> "" Then
                 contenuCellule = CStr(rngCellule.Value)
-                Call AnalyserContenuCellule(contenuCellule, dictNumeros, dictPositions, ligneActuelle, colonneActuelle)
+                
+                ' Déterminer la largeur de la cellule
+                Dim largeurCellule As Integer
+                If rngCellule.MergeCells Then
+                    largeurCellule = rngCellule.MergeArea.Columns.Count
+                Else
+                    largeurCellule = 1
+                End If
+                
+                Call AnalyserContenuCellule(contenuCellule, dictNumeros, dictPositions, ligneActuelle, colonneActuelle, largeurCellule)
+                
+                ' Passer à la colonne suivante après la zone fusionnée
+                colonneActuelle = colonneActuelle + largeurCellule
+            Else
+                colonneActuelle = colonneActuelle + 1
             End If
-        Next colonneActuelle
+        Loop
     Next ligneActuelle
     
     ' Analyser les résultats
