@@ -1,80 +1,60 @@
 Option Explicit
 
-Sub AjusterTaillePolice()
-
-Call NomOngletActif
-    ' Macro permettant d'ajuster la taille de police en fonction de la hauteur et largeur des cellules
-    ' Particulièrement utile pour les tableaux d'association où les cellules de numéros de voies
-    ' ne contiennent qu'un numéro entier
+Sub AjusterTaillePoliceFacade()
+    ' Macro adaptée pour ajuster la taille de police dans la façade PDI
+    ' Compatible avec la structure spécifique de votre fichier
     
     Dim ws As Worksheet
     Dim cell As Range
-    Dim mergedCell As Range
     Dim plageTableau As Range
-    Dim largeurCell As Double
-    Dim hauteurCell As Double
-    Dim texteLength As Long
-    Dim estNumeroPair As Boolean
-    Dim cellValue As Variant
+    Dim derniereLigne As Long
+    Dim derniereColonne As Long
+    Dim nbCellulesAjustees As Long
     
-    ' Définir la feuille active
+    ' Vérifier qu'on est sur la bonne feuille
     Set ws = ActiveSheet
-    
-    ' Définir la plage du tableau fixe A1:Z43
-    Set plageTableau = ws.Range("A1:Z43")
+    If ws.Name <> "Facade_PDI" Then
+        If MsgBox("Vous n'êtes pas sur la feuille 'Facade_PDI'. Voulez-vous basculer vers cette feuille ?", _
+                  vbQuestion + vbYesNo, "Confirmation") = vbYes Then
+            On Error GoTo FeuilleInexistante
+            Set ws = ThisWorkbook.Sheets("Facade_PDI")
+            ws.Activate
+            On Error GoTo 0
+        Else
+            Exit Sub
+        End If
+    End If
     
     ' Désactiver la mise à jour de l'écran pour améliorer les performances
     Application.ScreenUpdating = False
+    
+    ' Déterminer automatiquement la plage utilisée (colonnes A à Z, lignes jusqu'à la dernière utilisée)
+    derniereLigne = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If derniereLigne < 40 Then derniereLigne = 40 ' Minimum pour couvrir la façade
+    
+    derniereColonne = 26 ' Colonne Z
+    Set plageTableau = ws.Range("A1:Z" & derniereLigne)
+    
+    nbCellulesAjustees = 0
     
     ' Parcourir chaque cellule de la plage
     For Each cell In plageTableau
         On Error Resume Next
         
-        ' Ignorer les lignes paires (libellés de voie)
-        If cell.Row Mod 2 = 0 Then
-            ' Ne rien faire pour les lignes paires
-        ' Pour les autres lignes, procéder normalement
-        ElseIf cell.MergeCells Then
-            ' Si c'est le cas, travailler avec la plage fusionnée complète
-            Set mergedCell = ws.Range(cell.MergeArea.Address)
-            ' Ne traiter que la première cellule de la zone fusionnée pour éviter les doublons
-            If cell.Address = mergedCell.Cells(1, 1).Address Then
-                ' Obtenir dimensions de la zone fusionnée
-                largeurCell = mergedCell.Width
-                hauteurCell = mergedCell.Height
-                
-                ' Calculer la taille de police appropriée pour la zone fusionnée
-                cellValue = mergedCell.Value
-                
-                ' Sécuriser la longueur du texte
-                If IsNull(cellValue) Or IsEmpty(cellValue) Then
-                    texteLength = 0
-                Else
-                    texteLength = Len(CStr(cellValue))
+        ' Traiter seulement les cellules avec du contenu et des bordures
+        If Not IsEmpty(cell.Value) And ACelluleAvecBorduresFacade(cell) Then
+            
+            ' Vérifier si c'est une cellule fusionnée
+            If cell.MergeCells Then
+                ' Ne traiter que la première cellule de la zone fusionnée
+                If cell.Address = cell.MergeArea.Cells(1, 1).Address Then
+                    Call TraiterCelluleFacade(cell, True)
+                    nbCellulesAjustees = nbCellulesAjustees + 1
                 End If
-                
-                Call CalculerEtAppliquerTaille(mergedCell, largeurCell, hauteurCell, texteLength, False)
-            End If
-        Else
-            ' Pour les lignes impaires uniquement
-            If cell.Row Mod 2 <> 0 Then
-                ' Obtenir dimensions de la cellule individuelle
-                largeurCell = cell.Width
-                hauteurCell = cell.Height
-                
-                ' Vérifier si la cellule a des bordures (est une "case")
-                If ACelluleAvecBordures(cell) Then
-                    cellValue = cell.Value
-                    
-                    ' Sécuriser la longueur du texte
-                    If IsNull(cellValue) Or IsEmpty(cellValue) Then
-                        texteLength = 0
-                    Else
-                        texteLength = Len(CStr(cellValue))
-                    End If
-                    
-                    Call CalculerEtAppliquerTaille(cell, largeurCell, hauteurCell, texteLength, False)
-                End If
+            Else
+                ' Cellule simple
+                Call TraiterCelluleFacade(cell, False)
+                nbCellulesAjustees = nbCellulesAjustees + 1
             End If
         End If
         
@@ -84,72 +64,276 @@ Call NomOngletActif
     ' Réactiver la mise à jour de l'écran
     Application.ScreenUpdating = True
     
-    MsgBox "Ajustement de la taille des polices terminé!", vbInformation
+    MsgBox "Ajustement terminé ! " & nbCellulesAjustees & " cellules ont été ajustées.", vbInformation, "Taille Police Façade"
+    
+    Exit Sub
+    
+FeuilleInexistante:
+    MsgBox "La feuille 'Facade_PDI' n'existe pas. Veuillez d'abord générer la façade.", vbExclamation
+    Application.ScreenUpdating = True
 End Sub
 
-Function ACelluleAvecBordures(cell As Range) As Boolean
-    ' Vérifie si une cellule est entourée de bordures
+Sub TraiterCelluleFacade(cell As Range, estFusionnee As Boolean)
+    ' Traite une cellule individuelle ou fusionnée de la façade
+    
+    Dim largeurCell As Double
+    Dim hauteurCell As Double
+    Dim contenu As String
+    Dim estLigneVoie As Boolean
+    Dim estLigneNumero As Boolean
+    Dim celluleReference As Range
+    
+    ' Déterminer si c'est une ligne de voie (paire) ou de numéro (impaire)
+    estLigneNumero = (cell.Row Mod 2 = 1)  ' Lignes impaires = numéros PDI
+    estLigneVoie = (cell.Row Mod 2 = 0)    ' Lignes paires = noms de voies
+    
+    ' Définir la cellule de référence pour les dimensions
+    If estFusionnee Then
+        Set celluleReference = cell.MergeArea
+        largeurCell = celluleReference.Width
+        hauteurCell = celluleReference.Height
+    Else
+        Set celluleReference = cell
+        largeurCell = cell.Width
+        hauteurCell = cell.Height
+    End If
+    
+    ' Récupérer le contenu de manière sécurisée
+    On Error Resume Next
+    contenu = CStr(celluleReference.Value)
+    If Err.Number <> 0 Then contenu = ""
+    On Error GoTo 0
+    
+    ' Calculer et appliquer la taille appropriée
+    If estLigneNumero Then
+        ' Pour les numéros PDI (lignes impaires)
+        Call CalculerTailleNumerosPDI(celluleReference, largeurCell, hauteurCell, contenu)
+    ElseIf estLigneVoie Then
+        ' Pour les noms de voies (lignes paires)
+        Call CalculerTailleVoies(celluleReference, largeurCell, hauteurCell, contenu)
+    End If
+End Sub
+
+Sub CalculerTailleNumerosPDI(cellRange As Range, largeur As Double, hauteur As Double, contenu As String)
+    ' Calcule la taille optimale pour les numéros PDI
+    
+    Dim tailleOptimale As Integer
+    Dim largeurEnColonnes As Integer
+    Dim nbLignes As Integer
+    Dim longueurMaxLigne As Integer
+    
+    ' Estimer la largeur en nombre de colonnes (approximation)
+    largeurEnColonnes = Int(largeur / 25) ' ~25 pixels par colonne
+    If largeurEnColonnes < 1 Then largeurEnColonnes = 1
+    
+    ' Analyser le contenu
+    Call AnalyserContenuPDI(contenu, largeurEnColonnes, longueurMaxLigne, nbLignes)
+    
+    ' Calculer la taille basée sur les contraintes
+    tailleOptimale = CalculerTailleSelonContraintes(largeurEnColonnes, longueurMaxLigne, nbLignes, False)
+    
+    ' Appliquer avec limites spécifiques aux numéros
+    Select Case largeurEnColonnes
+        Case 1
+            If tailleOptimale > 8 Then tailleOptimale = 8
+            If tailleOptimale < 6 Then tailleOptimale = 6
+        Case 2
+            If tailleOptimale > 10 Then tailleOptimale = 10
+            If tailleOptimale < 7 Then tailleOptimale = 7
+        Case 3
+            If tailleOptimale > 12 Then tailleOptimale = 12
+            If tailleOptimale < 8 Then tailleOptimale = 8
+        Case Else
+            If tailleOptimale > 14 Then tailleOptimale = 14
+            If tailleOptimale < 9 Then tailleOptimale = 9
+    End Select
+    
+    ' Appliquer la taille
+    cellRange.Font.Size = tailleOptimale
+End Sub
+
+Sub CalculerTailleVoies(cellRange As Range, largeur As Double, hauteur As Double, contenu As String)
+    ' Calcule la taille optimale pour les noms de voies
+    
+    Dim tailleOptimale As Integer
+    Dim largeurEnColonnes As Integer
+    Dim nbLignes As Integer
+    Dim longueurMaxLigne As Integer
+    
+    ' Estimer la largeur en nombre de colonnes
+    largeurEnColonnes = Int(largeur / 25)
+    If largeurEnColonnes < 1 Then largeurEnColonnes = 1
+    
+    ' Analyser le contenu
+    Call AnalyserContenuPDI(contenu, largeurEnColonnes, longueurMaxLigne, nbLignes)
+    
+    ' Calculer la taille basée sur les contraintes
+    tailleOptimale = CalculerTailleSelonContraintes(largeurEnColonnes, longueurMaxLigne, nbLignes, True)
+    
+    ' Appliquer avec limites spécifiques aux voies (plus généreuses)
+    Select Case largeurEnColonnes
+        Case 1
+            If tailleOptimale > 9 Then tailleOptimale = 9
+            If tailleOptimale < 6 Then tailleOptimale = 6
+        Case 2
+            If tailleOptimale > 11 Then tailleOptimale = 11
+            If tailleOptimale < 7 Then tailleOptimale = 7
+        Case 3
+            If tailleOptimale > 13 Then tailleOptimale = 13
+            If tailleOptimale < 8 Then tailleOptimale = 8
+        Case 4
+            If tailleOptimale > 15 Then tailleOptimale = 15
+            If tailleOptimale < 9 Then tailleOptimale = 9
+        Case Else
+            If tailleOptimale > 18 Then tailleOptimale = 18
+            If tailleOptimale < 10 Then tailleOptimale = 10
+    End Select
+    
+    ' Appliquer la taille
+    cellRange.Font.Size = tailleOptimale
+End Sub
+
+Sub AnalyserContenuPDI(contenu As String, largeurColonnes As Integer, ByRef longueurMaxLigne As Integer, ByRef nbLignes As Integer)
+    ' Analyse le contenu pour estimer la répartition en lignes
+    
+    Dim lignesExplicites As Variant
+    Dim i As Integer
+    Dim capaciteParLigne As Integer
+    Dim ligneActuelle As String
+    
+    ' Estimer la capacité par ligne selon la largeur
+    Select Case largeurColonnes
+        Case 1: capaciteParLigne = 6
+        Case 2: capaciteParLigne = 12
+        Case 3: capaciteParLigne = 18
+        Case 4: capaciteParLigne = 24
+        Case Else: capaciteParLigne = largeurColonnes * 6
+    End Select
+    
+    longueurMaxLigne = 0
+    nbLignes = 1
+    
+    If Len(contenu) = 0 Then Exit Sub
+    
+    ' Séparer par les sauts de ligne explicites
+    If InStr(contenu, vbCrLf) > 0 Then
+        lignesExplicites = Split(contenu, vbCrLf)
+        nbLignes = UBound(lignesExplicites) + 1
+        
+        ' Analyser chaque ligne
+        For i = 0 To UBound(lignesExplicites)
+            ligneActuelle = Trim(lignesExplicites(i))
+            If Len(ligneActuelle) > longueurMaxLigne Then
+                longueurMaxLigne = Len(ligneActuelle)
+            End If
+            
+            ' Si une ligne dépasse la capacité, elle se wrappe
+            If Len(ligneActuelle) > capaciteParLigne Then
+                nbLignes = nbLignes + Int(Len(ligneActuelle) / capaciteParLigne)
+            End If
+        Next i
+    Else
+        ' Une seule ligne, vérifier le wrap
+        longueurMaxLigne = Len(contenu)
+        If longueurMaxLigne > capaciteParLigne Then
+            nbLignes = Int(longueurMaxLigne / capaciteParLigne) + 1
+            longueurMaxLigne = capaciteParLigne
+        End If
+    End If
+    
+    If longueurMaxLigne = 0 Then longueurMaxLigne = 1
+    If nbLignes < 1 Then nbLignes = 1
+End Sub
+
+Function CalculerTailleSelonContraintes(largeurColonnes As Integer, longueurMaxLigne As Integer, nbLignes As Integer, estVoie As Boolean) As Integer
+    ' Calcule la taille optimale selon les contraintes
+    
+    Dim espaceHorizontal As Double
+    Dim espaceVertical As Double
+    Dim tailleParLargeur As Integer
+    Dim tailleParHauteur As Integer
+    Dim margeSecurite As Double
+    
+    margeSecurite = 0.8 ' Marge de sécurité
+    
+    ' Espace horizontal disponible
+    espaceHorizontal = largeurColonnes * 25 * margeSecurite
+    
+    ' Espace vertical disponible
+    If estVoie Then
+        espaceVertical = 35 * margeSecurite ' Hauteur des lignes de voies
+    Else
+        espaceVertical = 45 * margeSecurite ' Hauteur des lignes de numéros
+    End If
+    
+    ' Contrainte horizontale
+    If longueurMaxLigne > 0 Then
+        tailleParLargeur = Int(espaceHorizontal / (longueurMaxLigne * 1.4))
+    Else
+        tailleParLargeur = 10
+    End If
+    
+    ' Contrainte verticale
+    If nbLignes > 0 Then
+        tailleParHauteur = Int(espaceVertical / (nbLignes * 1.6))
+    Else
+        tailleParHauteur = 10
+    End If
+    
+    ' Prendre la contrainte la plus restrictive
+    CalculerTailleSelonContraintes = Application.WorksheetFunction.Min(tailleParLargeur, tailleParHauteur)
+    
+    ' Limite minimale absolue
+    If CalculerTailleSelonContraintes < 6 Then CalculerTailleSelonContraintes = 6
+End Function
+
+Function ACelluleAvecBorduresFacade(cell As Range) As Boolean
+    ' Vérifie si une cellule a des bordures (fait partie de la façade)
     On Error Resume Next
     
-    Dim aBordure As Boolean
+    ACelluleAvecBorduresFacade = False
     
-    aBordure = (cell.Borders(xlEdgeLeft).LineStyle <> xlNone) And _
-               (cell.Borders(xlEdgeRight).LineStyle <> xlNone) And _
-               (cell.Borders(xlEdgeTop).LineStyle <> xlNone) And _
-               (cell.Borders(xlEdgeBottom).LineStyle <> xlNone)
-               
-    ACelluleAvecBordures = aBordure
+    ' Vérifier s'il y a au moins une bordure
+    If cell.Borders(xlEdgeLeft).LineStyle <> xlNone Or _
+       cell.Borders(xlEdgeRight).LineStyle <> xlNone Or _
+       cell.Borders(xlEdgeTop).LineStyle <> xlNone Or _
+       cell.Borders(xlEdgeBottom).LineStyle <> xlNone Then
+        ACelluleAvecBorduresFacade = True
+    End If
     
     On Error GoTo 0
 End Function
 
-Sub CalculerEtAppliquerTaille(cellRange As Range, largeur As Double, hauteur As Double, longueurTexte As Long, estNumeroPair As Boolean)
-    ' Calcule et applique la taille de police appropriée en fonction des dimensions
-    On Error Resume Next
+' =====================================================
+' MACRO COMPLÉMENTAIRE : Réinitialiser les tailles de police
+' =====================================================
+Sub ReinitialiserTaillesPoliceFacade()
+    ' Remet toutes les polices à une taille standard pour recommencer
     
-    Dim nouvelleTaille As Double
-    Dim facteurAjustement As Double
-    Dim tailleMax As Double
-    Dim tailleMin As Double
+    Dim ws As Worksheet
+    Dim reponse As Integer
     
-    ' Définir les limites de taille
-    tailleMax = 18  ' Taille maximale de police
-    tailleMin = 6   ' Taille minimale de police
+    reponse = MsgBox("Voulez-vous remettre toutes les polices de la façade à la taille 10 ?", _
+                     vbQuestion + vbYesNo, "Réinitialisation")
     
-    ' Calculer le facteur d'ajustement - peut être modifié selon vos besoins
-    facteurAjustement = 0.4
+    If reponse = vbNo Then Exit Sub
     
-    If estNumeroPair Then
-        ' Pour les numéros entiers dans les lignes paires (numéros de voies)
-        ' On peut augmenter légèrement la taille
-        facteurAjustement = 0.5
+    Set ws = ActiveSheet
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Veuillez être sur la feuille 'Facade_PDI'", vbExclamation
+        Exit Sub
     End If
     
-    ' Calculer la nouvelle taille en fonction des dimensions
-    ' Cette formule peut être ajustée selon vos besoins spécifiques
-    If longueurTexte > 0 Then
-        nouvelleTaille = WorksheetFunction.Min(largeur / (longueurTexte * facteurAjustement), hauteur / 1.5)
-    Else
-        nouvelleTaille = WorksheetFunction.Min(largeur / facteurAjustement, hauteur / 1.5)
-    End If
+    Application.ScreenUpdating = False
     
-    ' Limiter la taille aux valeurs min/max
-    nouvelleTaille = WorksheetFunction.Min(tailleMax, WorksheetFunction.Max(tailleMin, nouvelleTaille))
+    ' Appliquer taille 10 à toute la plage utilisée
+    Dim derniereLigne As Long
+    derniereLigne = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    If derniereLigne < 40 Then derniereLigne = 40
     
-    ' Arrondir à la demi-unité près
-    nouvelleTaille = Round(nouvelleTaille * 2) / 2
+    ws.Range("A1:Z" & derniereLigne).Font.Size = 10
     
-    ' Appliquer la nouvelle taille de police
-    cellRange.Font.Size = nouvelleTaille
+    Application.ScreenUpdating = True
     
-    On Error GoTo 0
+    MsgBox "Toutes les polices ont été remises à la taille 10.", vbInformation
 End Sub
-
-Sub AjusterTailleTableauComplet()
-    ' Macro pour ajuster la police de tout le tableau d'association
-    ' Exécution directe sur la plage A1:Z43
-    
-    ' Exécuter l'ajustement sans demander de sélection
-    Call AjusterTaillePolice
-End Sub
-
