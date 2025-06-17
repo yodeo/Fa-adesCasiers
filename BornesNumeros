@@ -1,0 +1,179 @@
+Sub SimplificationBornesNum()
+
+    Call NomOngletActif
+    Dim ws As Worksheet: Set ws = ActiveSheet
+    Dim lastRow As Long: lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    
+    ' MODIFICATION : Définir lastCol pour traiter les colonnes A à Z
+    Dim lastCol As Long: lastCol = 26 ' Colonne Z = 26ème colonne
+
+    Dim dataParCellule As Object: Set dataParCellule = CreateObject("Scripting.Dictionary")
+    Dim i As Long, j As Long
+
+    ' === PASSAGE 1 : INDEXER TOUS LES NUMÉROS PAR CELLULE ===
+    For i = 1 To lastRow Step 2
+        For j = 1 To lastCol ' De A (1) à Z (26)
+            Dim val As String: val = Trim(ws.Cells(i, j).Value)
+            If val <> "" And InStr(val, "P:") = 0 And InStr(val, "I:") = 0 Then
+                Dim voie As String: voie = ObtenirLibelleVoie(ws, i, j)
+                If voie <> "" Then
+                    Dim adresse As String: adresse = ws.Cells(i, j).Address
+
+                    If Not dataParCellule.Exists(voie) Then dataParCellule.Add voie, CreateObject("Scripting.Dictionary")
+                    If Not dataParCellule(voie).Exists(adresse) Then
+                        Dim pairImp As Object: Set pairImp = CreateObject("Scripting.Dictionary")
+                        pairImp.Add "pairs", New Collection
+                        pairImp.Add "impairs", New Collection
+                        dataParCellule(voie).Add adresse, pairImp
+                    End If
+
+                    Dim cP As Collection: Set cP = New Collection
+                    Dim cI As Collection: Set cI = New Collection
+                    ExtraireNumeros val, cP, cI
+
+                    For Each num In cP: dataParCellule(voie)(adresse)("pairs").Add num: Next
+                    For Each num In cI: dataParCellule(voie)(adresse)("impairs").Add num: Next
+                End If
+            End If
+        Next j
+    Next i
+
+    ' === PASSAGE 2 : TRAITEMENT DES CELLULES ===
+    Dim nbModifiees As Long: nbModifiees = 0
+
+    For i = 1 To lastRow Step 2
+        For j = 1 To lastCol ' De A (1) à Z (26)
+            Dim cellule As Range: Set cellule = ws.Cells(i, j)
+            val = Trim(cellule.Value)
+            If val <> "" And InStr(val, "P:") = 0 And InStr(val, "I:") = 0 Then
+                voie = ObtenirLibelleVoie(ws, i, j)
+                adresse = cellule.Address
+
+                If voie <> "" And dataParCellule.Exists(voie) And dataParCellule(voie).Exists(adresse) Then
+                    Set cP = dataParCellule(voie)(adresse)("pairs")
+                    Set cI = dataParCellule(voie)(adresse)("impairs")
+
+                    ' Récupérer les numéros utilisés ailleurs
+                    Dim autresP As Object: Set autresP = CreateObject("Scripting.Dictionary")
+                    Dim autresI As Object: Set autresI = CreateObject("Scripting.Dictionary")
+
+                    Dim otherAdr As Variant
+                    For Each otherAdr In dataParCellule(voie).Keys
+                        If otherAdr <> adresse Then
+                            For Each num In dataParCellule(voie)(otherAdr)("pairs")
+                                autresP(num) = True
+                            Next
+                            For Each num In dataParCellule(voie)(otherAdr)("impairs")
+                                autresI(num) = True
+                            Next
+                        End If
+                    Next
+
+                    ' Traitement fusion
+                    Dim res As String: res = ""
+
+                    If cP.Count > 0 Then
+                        res = GenererBornesAvecExclusions(cP, autresP, True)
+                    End If
+                    If cI.Count > 0 Then
+                        Dim ri As String
+                        ri = GenererBornesAvecExclusions(cI, autresI, False)
+                        If res <> "" Then res = res & vbCrLf & ri Else res = ri
+                    End If
+
+                    If res <> "" And res <> cellule.Value Then
+                        cellule.Value = res
+                        nbModifiees = nbModifiees + 1
+                    End If
+                End If
+            End If
+        Next j
+    Next i
+
+    MsgBox nbModifiees & " cellule(s) modifiée(s).", vbInformation
+    
+    Call AjusterParametresImpression
+End Sub
+
+Sub ExtraireNumeros(valeur As String, ByRef numsP As Collection, ByRef numsI As Collection)
+    Dim reg As Object: Set reg = CreateObject("VBScript.RegExp")
+    reg.pattern = "\d+": reg.Global = True
+    Dim matches As Object: Set matches = reg.Execute(valeur)
+    Dim i As Long, n As Long
+    For i = 0 To matches.Count - 1
+        n = CLng(matches(i).Value)
+        If n Mod 2 = 0 Then numsP.Add n Else numsI.Add n
+    Next i
+End Sub
+
+Function GenererBornesAvecExclusions(coll As Collection, exclus As Object, estPair As Boolean) As String
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    Dim i As Long, k As Variant
+    For i = 1 To coll.Count
+        d(coll(i)) = True
+    Next i
+
+    Dim arr() As Long: ReDim arr(d.Count - 1)
+    i = 0: For Each k In d.Keys: arr(i) = k: i = i + 1: Next
+
+    ' Tri
+    Dim j As Long, temp As Long
+    For i = 0 To UBound(arr) - 1
+        For j = i + 1 To UBound(arr)
+            If arr(i) > arr(j) Then temp = arr(i): arr(i) = arr(j): arr(j) = temp
+        Next j
+    Next i
+
+    Dim plages As New Collection
+    Dim debut As Long, fin As Long
+    debut = arr(0): fin = arr(0)
+
+    For i = 1 To UBound(arr)
+        Dim actuel As Long: actuel = arr(i)
+        Dim ok As Boolean: ok = True
+        ' Dim k As Long
+        For k = fin + 1 To actuel - 1
+            If (k Mod 2 = 0) = estPair Then
+                If exclus.Exists(k) Then ok = False: Exit For
+            End If
+        Next k
+        If ok Then
+            fin = actuel
+        Else
+            If debut = fin Then plages.Add CStr(debut) Else plages.Add debut & " à " & fin
+            debut = actuel: fin = actuel
+        End If
+    Next i
+
+    If debut = fin Then plages.Add CStr(debut) Else plages.Add debut & " à " & fin
+
+    Dim res As String: res = ""
+    For i = 1 To plages.Count
+        If i > 1 Then res = res & ", "
+        res = res & plages(i)
+    Next i
+    GenererBornesAvecExclusions = res
+End Function
+
+Function ObtenirLibelleVoie(ws As Worksheet, ligne As Long, colonne As Long) As String
+    Dim val As String
+    If ligne + 1 > ws.Rows.Count Then Exit Function
+    val = ws.Cells(ligne + 1, colonne).Value
+    If val <> "" Then ObtenirLibelleVoie = val: Exit Function
+    If ws.Cells(ligne + 1, colonne).MergeCells Then
+        ObtenirLibelleVoie = ws.Cells(ligne + 1, colonne).MergeArea.Item(1).Value: Exit Function
+    End If
+
+    Dim offset As Long
+    For offset = 1 To 5
+        If colonne - offset > 0 Then
+            val = ws.Cells(ligne + 1, colonne - offset).Value
+            If val <> "" Then ObtenirLibelleVoie = val: Exit Function
+        End If
+        If colonne + offset <= ws.Columns.Count Then
+            val = ws.Cells(ligne + 1, colonne + offset).Value
+            If val <> "" Then ObtenirLibelleVoie = val: Exit Function
+        End If
+    Next offset
+    ObtenirLibelleVoie = ""
+End Function
