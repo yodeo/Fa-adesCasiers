@@ -1,0 +1,367 @@
+Sub OptimiserAffichageFacade()
+
+Call NomOngletActif
+    ' Déclaration des variables
+    Dim ws As Worksheet
+    Dim dictLibelles As Object
+    Dim cell As Range
+    Dim cellMerge As Range
+    Dim i As Long, j As Long
+    Dim nbSuppression As Long
+    Dim wsMergeInfo As Worksheet
+    Dim ligneMerge As Long
+    Dim cellsToEmpty As Object ' Variable pour stocker les cellules à vider
+    
+    ' Initialisation
+    Set ws = ActiveSheet
+    Set dictLibelles = CreateObject("Scripting.Dictionary")
+    Set cellsToEmpty = CreateObject("Scripting.Dictionary") ' Initialiser le dictionnaire des cellules à vider
+    nbSuppression = 0
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    
+    ' Créer une feuille temporaire pour stocker les informations de fusion
+    ' S'assurer qu'aucune feuille ne porte déjà ce nom
+    Dim tempSheetName As String
+    Dim sheetExists As Boolean
+    Dim counter As Integer
+    
+    tempSheetName = "TempMergeInfo"
+    counter = 0
+    
+    Do
+        sheetExists = False
+        For Each wsMergeInfo In ThisWorkbook.Worksheets
+            If wsMergeInfo.Name = tempSheetName Then
+                sheetExists = True
+                Exit For
+            End If
+        Next wsMergeInfo
+        
+        If sheetExists Then
+            counter = counter + 1
+            tempSheetName = "TempMergeInfo" & counter
+        End If
+    Loop While sheetExists
+    
+    ' Créer la feuille temporaire avec un nom unique
+    Set wsMergeInfo = ThisWorkbook.Worksheets.Add
+    wsMergeInfo.Name = tempSheetName
+    wsMergeInfo.Visible = xlSheetVeryHidden
+    
+    ' Stocker les informations de fusion
+    ligneMerge = 1
+    For Each cell In ws.UsedRange
+        If cell.mergeCells Then
+            If cell.Address = cell.MergeArea.Cells(1, 1).Address Then
+                wsMergeInfo.Cells(ligneMerge, 1).Value = cell.MergeArea.Address
+                
+                ' Pour les numéros contenant des tirets, stocker comme texte
+                If cell.Row Mod 2 = 1 Then ' Si c'est une ligne impaire (numéro)
+                    ' Stocker la valeur comme texte pour éviter conversion en date
+                    wsMergeInfo.Cells(ligneMerge, 2).Value = "'" & cell.Value
+                    ' Conserver le format original
+                    wsMergeInfo.Cells(ligneMerge, 3).Value = cell.NumberFormat
+                Else
+                    ' Pour les libellés, stocker normalement
+                    wsMergeInfo.Cells(ligneMerge, 2).Value = cell.Value
+                    wsMergeInfo.Cells(ligneMerge, 3).Value = cell.NumberFormat
+                End If
+                
+                ligneMerge = ligneMerge + 1
+            End If
+        End If
+    Next cell
+    
+    ' ÉTAPE 1: Préparation pour la défusion
+    Dim mergeDict As Object
+    Set mergeDict = CreateObject("Scripting.Dictionary")
+    Dim formatDict As Object
+    Set formatDict = CreateObject("Scripting.Dictionary")
+    
+    ' On stocke les informations sur les libellés de voie fusionnés et leurs numéros associés
+    For Each cell In ws.UsedRange
+        If cell.Row Mod 2 = 0 Then  ' Ligne paire (libellé de voie)
+            If cell.mergeCells Then
+                If cell.Address = cell.MergeArea.Cells(1, 1).Address Then
+                    ' Pour chaque cellule de la fusion du libellé
+                    For Each cellMerge In cell.MergeArea
+                        ' Vérifier si la cellule du dessus (numéro) n'est pas vide
+                        Dim cellAboveCheck As Range
+                        Set cellAboveCheck = ws.Cells(cellMerge.Row - 1, cellMerge.Column)
+                        
+                        ' On ne stocke la valeur que si la cellule du dessus n'est pas vide
+                        If Not IsEmpty(cellAboveCheck.Value) Then
+                            mergeDict.Add cellMerge.Address, cell.Value
+                            formatDict.Add cellMerge.Address, cell.NumberFormat
+                        End If
+                    Next cellMerge
+                End If
+            End If
+        End If
+    Next cell
+    
+    ' Défusionner toutes les cellules
+    ws.UsedRange.UnMerge
+    
+    ' Restaurer les valeurs dans les cellules concernées
+    Dim addr As Variant
+    For Each addr In mergeDict.Keys
+        ws.Range(addr).Value = mergeDict(addr)
+        ' Restaurer le format original si disponible
+        If formatDict.Exists(addr) Then
+            ws.Range(addr).NumberFormat = formatDict(addr)
+        End If
+    Next addr
+    
+    ' ÉTAPE 2: Compter les occurrences de chaque libellé sur les lignes paires
+    For Each cell In ws.UsedRange
+        If cell.Row Mod 2 = 0 Then  ' Si c'est une ligne paire (libellé de voie)
+            If Not IsEmpty(cell.Value) Then
+                If Not IsNumeric(cell.Value) Then  ' Confirmer que c'est un libellé non numérique
+                    Dim cleanedValue As String
+                    cleanedValue = Trim(cell.Value)
+                    
+                    ' Vérifier si la cellule du dessus (numéro) n'est pas vide
+                    Dim cellAbove As Range
+                    Set cellAbove = ws.Cells(cell.Row - 1, cell.Column)
+                    
+                    ' On ne compte que les libellés qui ont un numéro au-dessus
+                    If Not IsEmpty(cellAbove.Value) Then
+                        ' Ajout ou incrémentation dans le dictionnaire
+                        If dictLibelles.Exists(cleanedValue) Then
+                            dictLibelles(cleanedValue) = dictLibelles(cleanedValue) + 1
+                        Else
+                            dictLibelles.Add cleanedValue, 1
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next cell
+    
+    ' ÉTAPE 3: Supprimer les numéros pour les libellés uniques
+    For Each cell In ws.UsedRange
+        ' Protection: Ne considérer que les cellules sur des lignes paires (libellés)
+        If cell.Row Mod 2 = 0 Then  ' Si c'est une ligne paire (libellé de voie)
+            If Not IsEmpty(cell.Value) Then
+                If Not IsNumeric(cell.Value) Then  ' Confirmer que c'est un libellé non numérique
+                    Dim libelle As String
+                    libelle = Trim(cell.Value)
+                    
+                    ' Vérifier si la cellule du dessus (numéro) n'est pas vide
+                    Set cellAbove = ws.Cells(cell.Row - 1, cell.Column)
+                    
+                    ' On ne traite que les libellés qui ont un numéro au-dessus
+                    If Not IsEmpty(cellAbove.Value) Then
+                        ' Si ce libellé est unique dans toute la feuille
+                        If dictLibelles.Exists(libelle) And dictLibelles(libelle) = 1 Then
+                            ' Marquer la case juste au-dessus pour suppression (ligne impaire = numéro)
+                            If cellAbove.Row Mod 2 = 1 Then
+                                cellsToEmpty.Add cellAbove.Address, True
+                                nbSuppression = nbSuppression + 1
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next cell
+    
+    ' ÉTAPE 4: Mettre à jour la feuille temporaire pour éviter de restaurer le contenu des cellules à vider
+    For i = 1 To ligneMerge - 1
+        If Not IsEmpty(wsMergeInfo.Cells(i, 1).Value) Then
+            ' Récupérer la plage fusionnée
+            Dim mergeRange As Range
+            Set mergeRange = ws.Range(wsMergeInfo.Cells(i, 1).Value)
+            
+            ' Vérifier si la première cellule de la fusion doit être vidée
+            If cellsToEmpty.Exists(mergeRange.Cells(1, 1).Address) Then
+                ' Si oui, on modifie la valeur stockée pour cette fusion
+                wsMergeInfo.Cells(i, 2).Value = ""
+            End If
+        End If
+    Next i
+    
+    ' Vider les cellules marquées pour suppression
+    Dim adresse As Variant
+    For Each adresse In cellsToEmpty.Keys
+        ws.Range(adresse).Value = ""
+    Next adresse
+    
+    ' Restaurer les fusions de cellules avec les valeurs mises à jour
+    For i = 1 To ligneMerge - 1
+        If Not IsEmpty(wsMergeInfo.Cells(i, 1).Value) Then
+            Dim rangeToMerge As Range
+            Set rangeToMerge = ws.Range(wsMergeInfo.Cells(i, 1).Value)
+            
+            ' Effectuer la fusion
+            rangeToMerge.Merge
+            
+            ' Pour les numéros (lignes impaires), gérer comme texte pour éviter conversion
+            If rangeToMerge.Row Mod 2 = 1 Then
+                If Not IsEmpty(wsMergeInfo.Cells(i, 2).Value) Then
+                    ' Si la valeur commence par un apostrophe, le retirer pour l'affichage
+                    Dim cellValue As String
+                    cellValue = wsMergeInfo.Cells(i, 2).Value
+                    If Left(cellValue, 1) = "'" Then
+                        cellValue = mid(cellValue, 2)
+                    End If
+                    
+                    ' Définir d'abord le format de cellule comme texte
+                    rangeToMerge.NumberFormat = "@"
+                    ' Appliquer la valeur
+                    rangeToMerge.Cells(1, 1).Value = cellValue
+                    
+                    ' Si un format original était stocké, le restaurer
+                    If Not IsEmpty(wsMergeInfo.Cells(i, 3).Value) Then
+                        rangeToMerge.NumberFormat = wsMergeInfo.Cells(i, 3).Value
+                    End If
+                End If
+            Else
+                ' Pour les libellés, restaurer normalement
+                rangeToMerge.Cells(1, 1).Value = wsMergeInfo.Cells(i, 2).Value
+                If Not IsEmpty(wsMergeInfo.Cells(i, 3).Value) Then
+                    rangeToMerge.NumberFormat = wsMergeInfo.Cells(i, 3).Value
+                End If
+            End If
+        End If
+    Next i
+    
+    ' Supprimer la feuille temporaire
+    wsMergeInfo.Visible = xlSheetVisible
+    Application.DisplayAlerts = False
+    wsMergeInfo.Delete
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    
+    ' Message de confirmation
+    MsgBox "Optimisation de l'affichage terminée." & vbCrLf & _
+           "Nombre de numéros supprimés : " & nbSuppression, _
+           vbInformation, "Optimisation Façade"
+End Sub
+
+Sub InsererImagesDansCellulesVides()
+
+
+    Dim ws As Worksheet
+    Dim rng As Range, cell As Range
+    Dim chemin As String
+    Dim img As Shape
+    Dim largeurCell As Double, hauteurCell As Double
+    Dim posX As Double, posY As Double
+    Dim compteurImages As Integer
+    Dim cellulesVides As Integer
+    
+    ' Définir la feuille active
+    Set ws = ActiveSheet
+    
+    ' Définir la plage
+    Set rng = ws.Range("A1:Z72")
+    
+    ' Demander le chemin de l'image
+    chemin = Application.GetOpenFilename("Images (*.jpg;*.jpeg;*.png;*.bmp),*.jpg;*.jpeg;*.png;*.bmp", , "Sélectionner une image")
+    
+    ' Vérifier si l'utilisateur a sélectionné une image
+    If chemin = "False" Then
+        MsgBox "Aucune image sélectionnée. La macro va s'arrêter.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Vérifier si le fichier existe
+    If Dir(chemin) = "" Then
+        MsgBox "Le fichier image n'existe pas ou n'est pas accessible: " & chemin, vbExclamation
+        Exit Sub
+    End If
+    
+    ' Message de confirmation avec le chemin de l'image
+    If MsgBox("Vous avez sélectionné l'image: " & chemin & vbNewLine & _
+              "Voulez-vous continuer?", vbQuestion + vbYesNo) = vbNo Then
+        Exit Sub
+    End If
+    
+    ' Désactiver les mises à jour de l'écran pour améliorer les performances
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    
+    ' Initialiser les compteurs
+    compteurImages = 0
+    cellulesVides = 0
+    
+    ' Gérer les erreurs potentielles
+    On Error Resume Next
+    
+    ' Parcourir chaque cellule dans la plage
+    For Each cell In rng
+        ' Définition plus large de "cellule vide" (vide ou contenant seulement des espaces)
+        If Len(Trim(cell.Value)) = 0 Then
+            cellulesVides = cellulesVides + 1
+            
+            ' Réinitialiser les dimensions pour chaque cellule
+            If cell.mergeCells Then
+                ' Pour les cellules fusionnées, vérifier si c'est la première cellule
+                If cell.Address = cell.MergeArea.Item(1, 1).Address Then
+                    ' Obtenir les dimensions et position de la zone fusionnée
+                    largeurCell = cell.MergeArea.Width
+                    hauteurCell = cell.MergeArea.Height
+                    posX = cell.MergeArea.Left
+                    posY = cell.MergeArea.Top
+                    
+                    ' Insérer l'image
+                    Err.Clear
+                    Set img = ws.Shapes.AddPicture(Filename:=chemin, LinkToFile:=msoFalse, _
+                                    SaveWithDocument:=msoTrue, Left:=posX, Top:=posY, Width:=-1, Height:=-1)
+                    
+                    If Err.Number = 0 Then
+                        ' Centrer l'image dans la cellule fusionnée
+                        With img
+                            .Left = posX + (largeurCell - .Width) / 2
+                            .Top = posY + (hauteurCell - .Height) / 2
+                            .Placement = xlMoveAndSize
+                        End With
+                        compteurImages = compteurImages + 1
+                    Else
+                        MsgBox "Erreur lors de l'insertion dans une cellule fusionnée: " & Err.Description, vbExclamation
+                    End If
+                End If
+            Else
+                ' Pour les cellules simples
+                largeurCell = cell.Width
+                hauteurCell = cell.Height
+                posX = cell.Left
+                posY = cell.Top
+                
+                ' Insérer l'image
+                Err.Clear
+                Set img = ws.Shapes.AddPicture(Filename:=chemin, LinkToFile:=msoFalse, _
+                                SaveWithDocument:=msoTrue, Left:=posX, Top:=posY, Width:=-1, Height:=-1)
+                
+                If Err.Number = 0 Then
+                    ' Centrer l'image dans la cellule
+                    With img
+                        .Left = posX + (largeurCell - .Width) / 2
+                        .Top = posY + (hauteurCell - .Height) / 2
+                        .Placement = xlMoveAndSize
+                    End With
+                    compteurImages = compteurImages + 1
+                Else
+                    MsgBox "Erreur lors de l'insertion dans une cellule simple: " & Err.Description, vbExclamation
+                End If
+            End If
+        End If
+    Next cell
+    
+    ' Désactiver la gestion d'erreurs
+    On Error GoTo 0
+    
+    ' Réactiver les mises à jour de l'écran
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+    
+    ' Afficher un message de résultat
+    MsgBox "Résultat:" & vbNewLine & _
+           "Cellules vides trouvées: " & cellulesVides & vbNewLine & _
+           "Images insérées avec succès: " & compteurImages, vbInformation
+           
+End Sub
