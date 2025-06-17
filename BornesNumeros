@@ -164,8 +164,8 @@ End Sub
 Function EstUnSymbole(valeur As String) As Boolean
     EstUnSymbole = False
     If Len(valeur) <= 2 Then
-        If InStr(valeur, ChrW(&H25B2)) > 0 Or _  ' Triangle
-           InStr(valeur, ChrW(&H25A0)) > 0 Then   ' Carré
+        If InStr(valeur, ChrW(&H25B2)) > 0 Or _
+           InStr(valeur, ChrW(&H25A0)) > 0 Then
             EstUnSymbole = True
         End If
     End If
