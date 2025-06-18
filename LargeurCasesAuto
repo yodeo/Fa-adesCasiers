@@ -395,11 +395,14 @@ Sub VerificationFinaleEtAjustement(ws As Worksheet, listePDI As Object, capacite
         statutOptimisation = "Optimisation partielle"
     End If
     
+    ' Construire le message
+    Dim messageResultat As String
+    messageResultat = "Résultat de l'optimisation :" & vbCrLf
+    messageResultat = messageResultat & "Capacité totale : " & capaciteTotale & vbCrLf
+    messageResultat = messageResultat & "Largeur utilisée : " & nouvelleLargeurTotale & vbCrLf
+    messageResultat = messageResultat & "PDI actifs : " & totalePDIActifs & vbCrLf
+    messageResultat = messageResultat & "Statut : " & statutOptimisation
+    
     ' Afficher le résultat
-    MsgBox "Résultat de l'optimisation :" & vbCrLf & _
-           "Capacité totale : " & capaciteTotale & vbCrLf & _
-           "Largeur utilisée : " & nouvelleLargeurTotale & vbCrLf & _
-           "PDI actifs : " & totalePDIActifs & vbCrLf & _
-           "Statut : " & statutOptimisation, _
-           vbInformation, "Résultat optimisation"
+    MsgBox messageResultat, vbInformation, "Résultat optimisation"
 End Sub
