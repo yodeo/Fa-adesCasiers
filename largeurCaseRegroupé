@@ -1,0 +1,215 @@
+Sub RegrouperPDIMemesVoies()
+    '=====================================================
+    ' MACRO : Regrouper les PDI avec mêmes voies
+    ' - Met la largeur à 4 pour le premier PDI d'un groupe
+    ' - Met la largeur à 0 pour les suivants de même voie
+    ' - Ignore les PDI rattachés
+    '=====================================================
+    
+    Dim wsAccueil As Worksheet
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim voieActuelle As String
+    Dim voiePrecedente As String
+    Dim typePDI As String
+    Dim numPDI As String
+    Dim nbModifications As Long
+    Dim nbGroupes As Long
+    Dim debutGroupe As Boolean
+    
+    ' Désactiver les mises à jour écran pour améliorer les performances
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False ' Désactiver les événements pour éviter les recalculs
+    
+    ' Définir la feuille Accueil
+    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
+    
+    ' Trouver la dernière ligne avec des données
+    derniereLigne = wsAccueil.Cells(wsAccueil.Rows.Count, "A").End(xlUp).Row
+    
+    ' Initialiser les compteurs
+    nbModifications = 0
+    nbGroupes = 0
+    voiePrecedente = ""
+    
+    ' Message de confirmation avant de commencer
+    If MsgBox("Cette macro va regrouper les PDI ayant la même voie consécutive." & vbCrLf & _
+              "- Premier PDI du groupe : largeur = 4" & vbCrLf & _
+              "- PDI suivants même voie : largeur = 0" & vbCrLf & _
+              "- Les PDI rattachés seront ignorés" & vbCrLf & vbCrLf & _
+              "Voulez-vous continuer ?", vbQuestion + vbYesNo, "Confirmation") = vbNo Then
+        Exit Sub
+    End If
+    
+    ' Parcourir les lignes à partir de la ligne 7
+    For i = 7 To derniereLigne
+        ' Lire les données de la ligne actuelle
+        numPDI = CStr(wsAccueil.Cells(i, 1).Text) ' Colonne A - Numéro PDI
+        voieActuelle = CStr(wsAccueil.Cells(i, 2).Text) ' Colonne B - Nom de voie
+        typePDI = CStr(wsAccueil.Cells(i, 6).Text) ' Colonne F - Type PDI
+        
+        ' Vérifier si c'est un PDI rattaché (à ignorer)
+        If EstPDIRattache(typePDI) Then
+            ' Réinitialiser la voie précédente pour ne pas continuer le regroupement
+            voiePrecedente = ""
+        Else
+            ' PDI non rattaché - appliquer la logique de regroupement
+            If voieActuelle <> "" Then ' S'assurer qu'il y a une voie
+                If voieActuelle = voiePrecedente Then
+                    ' Même voie que la précédente : largeur = 0
+                    If wsAccueil.Cells(i, 7).Value <> 0 Then
+                        wsAccueil.Cells(i, 7).Value = 0
+                        nbModifications = nbModifications + 1
+                    End If
+                Else
+                    ' Nouvelle voie ou première occurrence : largeur = 4
+                    If wsAccueil.Cells(i, 7).Value <> 4 Then
+                        wsAccueil.Cells(i, 7).Value = 4
+                        nbModifications = nbModifications + 1
+                    End If
+                    nbGroupes = nbGroupes + 1
+                    voiePrecedente = voieActuelle
+                End If
+            Else
+                ' Pas de voie définie, réinitialiser
+                voiePrecedente = ""
+            End If
+        End If
+    Next i
+    
+    ' Réactiver les mises à jour
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+    
+    ' Message de confirmation
+    MsgBox "Regroupement terminé !" & vbCrLf & vbCrLf & _
+           "Nombre de lignes modifiées : " & nbModifications & vbCrLf & _
+           "Nombre de groupes créés : " & nbGroupes & vbCrLf & _
+           "Total de lignes traitées : " & (derniereLigne - 6), _
+           vbInformation, "Regroupement PDI"
+    
+End Sub
+
+Function EstPDIRattache(typePDI As String) As Boolean
+    '=====================================================
+    ' FONCTION : Déterminer si un PDI est rattaché
+    ' Retourne True si le type est "rattaché C" ou "rattaché P"
+    '=====================================================
+    
+    Dim typeClean As String
+    
+    ' Nettoyer le type (enlever espaces en trop, mettre en majuscules)
+    typeClean = UCase(Trim(typePDI))
+    
+    ' Vérifier si c'est exactement "RATTACHÉ C" ou "RATTACHÉ P"
+    ' On accepte aussi "RATTACHE" sans accent
+    Select Case typeClean
+        Case "RATTACHÉ C", "RATTACHE C", "RATTACHÉ P", "RATTACHE P"
+            EstPDIRattache = True
+        Case Else
+            ' On peut aussi accepter avec des espaces multiples
+            If typeClean = "RATTACHÉ  C" Or typeClean = "RATTACHE  C" Or _
+               typeClean = "RATTACHÉ  P" Or typeClean = "RATTACHE  P" Or _
+               typeClean = "RATTACHÉ   C" Or typeClean = "RATTACHE   C" Or _
+               typeClean = "RATTACHÉ   P" Or typeClean = "RATTACHE   P" Then
+                EstPDIRattache = True
+            Else
+                EstPDIRattache = False
+            End If
+    End Select
+    
+End Function
+
+Sub AfficherApercuRegroupement()
+    '=====================================================
+    ' SUB : Afficher un aperçu du regroupement sans modifier
+    '=====================================================
+    
+    Dim wsAccueil As Worksheet
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim voieActuelle As String
+    Dim voiePrecedente As String
+    Dim typePDI As String
+    Dim numPDI As String
+    Dim msg As String
+    Dim compteurLignes As Long
+    Dim debutGroupe As Long
+    
+    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
+    derniereLigne = wsAccueil.Cells(wsAccueil.Rows.Count, "A").End(xlUp).Row
+    
+    msg = "APERÇU DU REGROUPEMENT (10 premiers groupes)" & vbCrLf & vbCrLf
+    voiePrecedente = ""
+    compteurLignes = 0
+    debutGroupe = 0
+    
+    For i = 7 To derniereLigne
+        numPDI = CStr(wsAccueil.Cells(i, 1).Text)
+        voieActuelle = CStr(wsAccueil.Cells(i, 2).Text)
+        typePDI = CStr(wsAccueil.Cells(i, 6).Text)
+        
+        If Not EstPDIRattache(typePDI) And voieActuelle <> "" Then
+            If voieActuelle <> voiePrecedente Then
+                ' Nouveau groupe
+                If compteurLignes < 10 Then
+                    msg = msg & "GROUPE " & (compteurLignes + 1) & " - " & voieActuelle & vbCrLf
+                    msg = msg & "  Ligne " & i & " : PDI " & numPDI & " → Largeur 4" & vbCrLf
+                End If
+                voiePrecedente = voieActuelle
+                compteurLignes = compteurLignes + 1
+                debutGroupe = i
+            Else
+                ' Même groupe
+                If compteurLignes <= 10 And i <= debutGroupe + 3 Then ' Limiter l'affichage
+                    msg = msg & "  Ligne " & i & " : PDI " & numPDI & " → Largeur 0" & vbCrLf
+                ElseIf compteurLignes <= 10 And i = debutGroupe + 4 Then
+                    msg = msg & "  ..." & vbCrLf
+                End If
+            End If
+        Else
+            voiePrecedente = ""
+        End If
+    Next i
+    
+    msg = msg & vbCrLf & "Utilisez la macro 'RegrouperPDIMemesVoies' pour appliquer ces changements."
+    
+    MsgBox msg, vbInformation, "Aperçu du regroupement"
+    
+End Sub
+
+Sub RestaurerLargeursOriginales()
+    '=====================================================
+    ' SUB : Restaurer toutes les largeurs à leur valeur d'origine
+    ' Utile pour annuler le regroupement
+    '=====================================================
+    
+    Dim wsAccueil As Worksheet
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim reponse As VbMsgBoxResult
+    
+    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
+    derniereLigne = wsAccueil.Cells(wsAccueil.Rows.Count, "A").End(xlUp).Row
+    
+    reponse = MsgBox("Cette action va mettre toutes les largeurs de PDI non-rattachés à 4." & vbCrLf & _
+                     "Voulez-vous continuer ?", vbQuestion + vbYesNo, "Restauration")
+    
+    If reponse = vbYes Then
+        Application.ScreenUpdating = False
+        Application.EnableEvents = False
+        
+        For i = 7 To derniereLigne
+            If Not EstPDIRattache(CStr(wsAccueil.Cells(i, 6).Text)) And _
+               wsAccueil.Cells(i, 2).Text <> "" Then ' Si pas rattaché et a une voie
+                wsAccueil.Cells(i, 7).Value = 4
+            End If
+        Next i
+        
+        Application.EnableEvents = True
+        Application.ScreenUpdating = True
+        
+        MsgBox "Restauration terminée !", vbInformation
+    End If
+    
+End Sub
