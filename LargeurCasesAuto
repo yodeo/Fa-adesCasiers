@@ -272,16 +272,21 @@ Sub AppliquerLargeursOptimisees(ws As Worksheet, listePDI As Object, groupes As 
     Dim largeurPourGroupe As Integer
     Dim i As Long
     
-    ' Déterminer la largeur de base selon la largeur moyenne
+    ' Déterminer la largeur de base - MODIFIÉ POUR DÉFAUT À 4
     Dim largeurBase As Integer
-    If largeurMoyenne >= 4 Then
-        largeurBase = 4
-    ElseIf largeurMoyenne >= 3 Then
-        largeurBase = 3
-    ElseIf largeurMoyenne >= 2 Then
-        largeurBase = 2
-    Else
+    
+    ' Logique simplifiée : commencer par 4 par défaut
+    largeurBase = 4
+    
+    ' Ajuster seulement si on a vraiment trop peu d'espace
+    If largeurMoyenneOptimale < 2 Then
         largeurBase = 1
+    ElseIf largeurMoyenneOptimale < 3 Then
+        largeurBase = 2
+    ElseIf largeurMoyenneOptimale < 4 Then
+        largeurBase = 3
+    Else
+        largeurBase = 4 ' Valeur par défaut souhaitée
     End If
     
     ' Traiter les groupes
