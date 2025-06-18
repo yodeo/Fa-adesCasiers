@@ -387,10 +387,19 @@ Sub VerificationFinaleEtAjustement(ws As Worksheet, listePDI As Object, capacite
         End If
     Next cle
     
+    ' Déterminer le statut
+    Dim statutOptimisation As String
+    If nouvelleLargeurTotale <= capaciteTotale Then
+        statutOptimisation = "OK (pas de HC)"
+    Else
+        statutOptimisation = "Optimisation partielle"
+    End If
+    
+    ' Afficher le résultat
     MsgBox "Résultat de l'optimisation :" & vbCrLf & _
            "Capacité totale : " & capaciteTotale & vbCrLf & _
            "Largeur utilisée : " & nouvelleLargeurTotale & vbCrLf & _
            "PDI actifs : " & totalePDIActifs & vbCrLf & _
-           "Statut : " & IIf(nouvelleLargeurTotale <= capaciteTotale, "OK (pas de HC)", "Optimisation partielle"), _
+           "Statut : " & statutOptimisation, _
            vbInformation, "Résultat optimisation"
 End Sub
