@@ -1,8 +1,12 @@
 ' =====================================================
-' SUB MODIFIÉE : Ajouter les boutons avec macros intégrées
+' SUB MODIFIÉE : Ajouter les boutons avec macros intégrées - DISPOSITION VERTICALE COLONNE AC
 ' =====================================================
 Sub AjouterBoutonsSeulement(wsFacade As Worksheet)
     Dim btn As Object
+    Dim positionX As Double
+    Dim espacement As Double
+    Dim largeurBouton As Double
+    Dim hauteurBouton As Double
     
     ' Supprimer les boutons existants s'ils existent
     Dim shp As Shape
@@ -10,76 +14,64 @@ Sub AjouterBoutonsSeulement(wsFacade As Worksheet)
         If shp.Type = msoFormControl Then shp.Delete
     Next shp
     
-    ' Bouton "Régénérer Façade"
-    Set btn = wsFacade.Buttons.Add(10, 10, 120, 25)
-    With btn
-        .Characters.Text = "🔄 Régénérer Façade"
-        .OnAction = "RegénérerFaçadeFromButton"
-        .Font.Bold = True
-        .Font.Size = 10
-    End With
+    ' Configuration de la disposition verticale en colonne AC
+    positionX = wsFacade.Columns("AC").Left + 2  ' Position X en colonne AC avec petite marge
+    largeurBouton = wsFacade.Columns("AC").Width - 4  ' Largeur adaptée à la colonne moins marges
+    hauteurBouton = 25  ' Hauteur standard des boutons
+    espacement = 30     ' Espacement vertical entre les boutons
     
-    ' Bouton "Retour Accueil"
-    Set btn = wsFacade.Buttons.Add(140, 10, 100, 25)
-    With btn
-        .Characters.Text = "🏠 Accueil"
-        .OnAction = "RetourAccueilFromButton"
-        .Font.Bold = True
-        .Font.Size = 10
-    End With
-    
-    ' Bouton "Aide Navigation"
-    Set btn = wsFacade.Buttons.Add(250, 10, 120, 25)
-    With btn
-        .Characters.Text = "❓ Aide Navigation"
-        .OnAction = "AfficherAideNavigation"
-        .Font.Bold = True
-        .Font.Size = 10
-    End With
-    
-    ' NOUVEAU BOUTON : Optimiser Affichage
-    Set btn = wsFacade.Buttons.Add(380, 10, 130, 25)
+    ' BOUTON 1 : Optimiser Affichage
+    Set btn = wsFacade.Buttons.Add(positionX, 10, largeurBouton, hauteurBouton)
     With btn
         .Characters.Text = "⚡ Optimiser Affichage"
         .OnAction = "OptimiserAffichageFromButton"
         .Font.Bold = True
-        .Font.Size = 10
+        .Font.Size = 9
     End With
     
-    ' NOUVEAU BOUTON : Simplifier Bornes
-    Set btn = wsFacade.Buttons.Add(520, 10, 120, 25)
+    ' BOUTON 2 : Simplifier Bornes
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + espacement, largeurBouton, hauteurBouton)
     With btn
         .Characters.Text = "📊 Simplifier Bornes"
         .OnAction = "SimplifierBornesFromButton"
         .Font.Bold = True
-        .Font.Size = 10
+        .Font.Size = 9
     End With
     
-    ' NOUVEAU BOUTON : Ajuster Polices
-    Set btn = wsFacade.Buttons.Add(650, 10, 120, 25)
+    ' BOUTON 3 : Ajuster Polices Intelligentes
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 2), largeurBouton, hauteurBouton)
     With btn
         .Characters.Text = "🔤 Ajuster Polices"
         .OnAction = "AjusterPolicesFromButton"
         .Font.Bold = True
-        .Font.Size = 10
+        .Font.Size = 9
     End With
     
-    ' NOUVEAU BOUTON : Insérer Images
-    Set btn = wsFacade.Buttons.Add(780, 10, 120, 25)
+    ' BOUTON 4 : Ajuster Taille Police (NOUVEAU)
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 3), largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "📏 Taille Police"
+        .OnAction = "AjusterTaillePoliceFromButton"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+    
+    ' BOUTON 5 : Insérer Images
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 4), largeurBouton, hauteurBouton)
     With btn
         .Characters.Text = "🖼️ Insérer Images"
         .OnAction = "InsererImagesFromButton"
         .Font.Bold = True
-        .Font.Size = 10
+        .Font.Size = 9
     End With
     
-    ' NOUVEAU BOUTON : Navigation Manuelle (repositionné)
-    Set btn = wsFacade.Buttons.Add(910, 10, 130, 25)
+    ' BOUTON 6 : Navigation Manuelle
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 5), largeurBouton, hauteurBouton)
     With btn
         .Characters.Text = "🎯 Navigation Manuelle"
         .OnAction = "NavigationManuelle"
         .Font.Bold = True
-        .Font.Size = 10
+        .Font.Size = 9
     End With
     
 End Sub
@@ -169,6 +161,27 @@ Sub InsererImagesFromButton()
         
         ' Exécuter la macro d'insertion d'images
         Call InsererImagesDansCellulesVides
+    End If
+End Sub
+
+Sub AjusterTaillePoliceFromButton()
+    ' Macro appelée par le bouton "Taille Police"
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Confirmation avant exécution
+    If MsgBox("Voulez-vous ajuster la taille des polices selon les dimensions des cellules ?" & vbCrLf & _
+              "Cette action va optimiser automatiquement la lisibilité.", _
+              vbQuestion + vbYesNo, "Ajuster Taille Police") = vbYes Then
+        
+        ' Exécuter la macro d'ajustement de taille de police
+        Call AjusterTailleTableauComplet
     End If
 End Sub
 
