@@ -1,4 +1,4 @@
-ub MiseEnPageFacade(Feuille)
+Sub MiseEnPageFacade(Feuille)
  With Feuille
  'hauteur de ligne faite à la volée lors de la façadisation utile que si on utilise pas modèle
     '.Columns("A:B").ColumnWidth = 5.43 '5.57
