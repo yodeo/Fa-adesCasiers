@@ -178,19 +178,41 @@ Function CreerGroupesVoiesConsecutives(listePDI As Object) As Object
     clePrecedente = ""
     compteurDansGroupe = 0
     
-    ' Parcourir les PDI dans l'ordre des lignes
-    Dim tableauCles As Object
-    Set tableauCles = CreateObject("System.Collections.ArrayList")
+    ' Créer un tableau trié des clés par numéro de ligne
+    Dim tableauCles() As Long
+    Dim nbCles As Long
+    nbCles = 0
     
+    ' Compter et collecter les PDI non rattachés
     For Each cle In listePDI.Keys
-        tableauCles.Add cle
+        Set infoPDI = listePDI(cle)
+        If Not infoPDI("rattache") Then
+            nbCles = nbCles + 1
+        End If
     Next cle
     
-    ' Trier les clés par numéro de ligne
-    For i = 0 To tableauCles.Count - 2
-        For j = i + 1 To tableauCles.Count - 1
-            If CLng(tableauCles(i)) > CLng(tableauCles(j)) Then
-                Dim temp As Variant
+    If nbCles = 0 Then
+        Set CreerGroupesVoiesConsecutives = groupes
+        Exit Function
+    End If
+    
+    ReDim tableauCles(1 To nbCles)
+    Dim index As Long
+    index = 1
+    
+    For Each cle In listePDI.Keys
+        Set infoPDI = listePDI(cle)
+        If Not infoPDI("rattache") Then
+            tableauCles(index) = CLng(cle)
+            index = index + 1
+        End If
+    Next cle
+    
+    ' Trier par ligne
+    Dim i As Long, j As Long, temp As Long
+    For i = 1 To nbCles - 1
+        For j = i + 1 To nbCles
+            If tableauCles(i) > tableauCles(j) Then
                 temp = tableauCles(i)
                 tableauCles(i) = tableauCles(j)
                 tableauCles(j) = temp
@@ -198,48 +220,45 @@ Function CreerGroupesVoiesConsecutives(listePDI As Object) As Object
         Next j
     Next i
     
-    ' Créer les groupes
-    For i = 0 To tableauCles.Count - 1
+    ' Créer les groupes en parcourant dans l'ordre
+    For i = 1 To nbCles
         cle = tableauCles(i)
         Set infoPDI = listePDI(cle)
         
-        ' Ignorer les PDI rattachés pour les groupes
-        If Not infoPDI("rattache") Then
-            Dim peutEtreGroupe As Boolean
-            peutEtreGroupe = False
+        Dim peutEtreGroupe As Boolean
+        peutEtreGroupe = False
+        
+        ' Vérifier si on peut grouper avec le précédent
+        If clePrecedente <> "" Then
+            Set infoPDIPrecedent = listePDI(clePrecedente)
             
-            ' Vérifier si on peut grouper avec le précédent
-            If clePrecedente <> "" Then
-                Set infoPDIPrecedent = listePDI(clePrecedente)
-                
-                ' Conditions pour grouper :
-                ' 1. Même voie
-                ' 2. Pas plus de 10 PDI dans le groupe
-                ' 3. PDI consécutifs
-                If infoPDI("voie") = infoPDIPrecedent("voie") And _
-                   infoPDI("voie") <> "" And _
-                   compteurDansGroupe < 10 And _
-                   (CLng(cle) - CLng(clePrecedente)) <= 3 Then ' Tolérance de 3 lignes
-                    peutEtreGroupe = True
-                End If
+            ' CONDITIONS POUR GROUPER (debug simplifié) :
+            ' 1. Même voie ET voie non vide
+            ' 2. Pas plus de 10 PDI dans le groupe
+            ' 3. Lignes proches (écart max 5 lignes)
+            If infoPDI("voie") = infoPDIPrecedent("voie") And _
+               Trim(infoPDI("voie")) <> "" And _
+               compteurDansGroupe < 10 And _
+               (CLng(cle) - CLng(clePrecedente)) <= 5 Then
+                peutEtreGroupe = True
             End If
-            
-            If peutEtreGroupe Then
-                ' Ajouter au groupe existant
-                infoPDI("groupe") = numeroGroupe
-                compteurDansGroupe = compteurDansGroupe + 1
-            Else
-                ' Créer un nouveau groupe
-                numeroGroupe = numeroGroupe + 1
-                infoPDI("groupe") = numeroGroupe
-                compteurDansGroupe = 1
-            End If
-            
-            clePrecedente = cle
         End If
+        
+        If peutEtreGroupe Then
+            ' Ajouter au groupe existant
+            infoPDI("groupe") = numeroGroupe
+            compteurDansGroupe = compteurDansGroupe + 1
+        Else
+            ' Créer un nouveau groupe
+            numeroGroupe = numeroGroupe + 1
+            infoPDI("groupe") = numeroGroupe
+            compteurDansGroupe = 1
+        End If
+        
+        clePrecedente = cle
     Next i
     
-    ' Organiser les groupes
+    ' Organiser les informations de groupes
     For Each cle In listePDI.Keys
         Set infoPDI = listePDI(cle)
         If Not infoPDI("rattache") And infoPDI("groupe") > 0 Then
@@ -294,7 +313,7 @@ Sub AppliquerLargeursOptimisees(ws As Worksheet, listePDI As Object, groupes As 
         Set groupe = groupes(numeroGroupe)
         
         If groupe("membres").Count > 1 Then
-            ' Groupe de plusieurs PDI : premier PDI prend la largeur, autres à 0
+            ' Groupe de plusieurs PDI de même voie : REGROUPEMENT !
             largeurPourGroupe = largeurBase
             
             ' Ajuster la largeur selon la taille du groupe
@@ -307,17 +326,17 @@ Sub AppliquerLargeursOptimisees(ws As Worksheet, listePDI As Object, groupes As 
             ' S'assurer que la largeur ne dépasse pas 26 colonnes (A-Z)
             If largeurPourGroupe > 26 Then largeurPourGroupe = 26
             
-            ' Appliquer : premier PDI du groupe prend la largeur, autres à 0
+            ' Appliquer : PREMIER PDI du groupe prend la largeur, AUTRES à 0
             For i = 0 To groupe("membres").Count - 1
                 cle = groupe("membres")(i)
                 Set infoPDI = listePDI(cle)
                 
                 If i = 0 Then
-                    ' Premier PDI du groupe
+                    ' PREMIER PDI du groupe : prend toute la largeur
                     infoPDI("largeurOptimisee") = largeurPourGroupe
                     ws.Cells(infoPDI("ligne"), 7).Value = largeurPourGroupe
                 Else
-                    ' PDI suivants du groupe
+                    ' PDI SUIVANTS du groupe : largeur 0 (seront accumulés)
                     infoPDI("largeurOptimisee") = 0
                     ws.Cells(infoPDI("ligne"), 7).Value = 0
                 End If
@@ -331,7 +350,7 @@ Sub AppliquerLargeursOptimisees(ws As Worksheet, listePDI As Object, groupes As 
         End If
     Next numeroGroupe
     
-    ' Traiter les PDI qui ne sont dans aucun groupe
+    ' Traiter les PDI qui ne sont dans aucun groupe (PDI isolés)
     For Each cle In listePDI.Keys
         Set infoPDI = listePDI(cle)
         If Not infoPDI("rattache") And infoPDI("groupe") <= 0 Then
