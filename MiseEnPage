@@ -1,53 +1,242 @@
-Sub MiseEnPageFacade(Feuille)
- With Feuille
- 'hauteur de ligne faite à la volée lors de la façadisation utile que si on utilise pas modèle
-    '.Columns("A:B").ColumnWidth = 5.43 '5.57
-    '.Columns("C:X").ColumnWidth = 4.29
-    '.Columns("Y:Z").ColumnWidth = 5.43 '5.57
-    '.Columns("AA").ColumnWidth = 3.29
+' =====================================================
+' SUB : Mise en page optimisée pour la façade PDI
+' =====================================================
+Sub MiseEnPageFacadePDI(Optional feuille As Worksheet = Nothing)
+    Dim ws As Worksheet
+    Dim wsAccueil As Worksheet
     
-    ' largeur en cm
-    'Call RangeSize(Union(.Columns("A:B"), .Columns("Y:Z")), 1.15, , Centimètre)
-    'Call RangeSize(.Columns("C:X"), 0.96, , Centimètre)
-    '.Columns("AA").ColumnWidth = 3.29
-
-    With .Cells
-        .Cells.NumberFormat = "@"
-        .Cells.Font.Size = 8
-        .HorizontalAlignment = xlCenter
-        .VerticalAlignment = xlTop
-        .WrapText = True
-        .Orientation = 0
-        .AddIndent = False
-        .IndentLevel = 0
-        .ShrinkToFit = False
-        .ReadingOrder = xlContext
+    ' Déterminer la feuille à traiter
+    If feuille Is Nothing Then
+        ' Si pas de feuille spécifiée, utiliser la feuille active
+        Set ws = ActiveSheet
+        ' Vérifier qu'on est bien sur une feuille Facade_PDI
+        If ws.Name <> "Facade_PDI" Then
+            MsgBox "Cette macro doit être exécutée sur la feuille 'Facade_PDI'", vbExclamation
+            Exit Sub
+        End If
+    Else
+        Set ws = feuille
+    End If
+    
+    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
+    
+    Application.ScreenUpdating = False
+    Application.PrintCommunication = False
+    
+    ' === CONFIGURATION DES COLONNES ===
+    With ws
+        ' Colonnes latérales (A, B, Y, Z) - Plus larges pour l'équilibre visuel
+        .Columns("A:B").ColumnWidth = 5.57
+        .Columns("Y:Z").ColumnWidth = 5.57
+        
+        ' Colonnes centrales (C à X) - Cases PDI standard
+        .Columns("C:X").ColumnWidth = 4.29
+        
+        ' Colonne codes caisson (AA) - Plus étroite
+        .Columns("AA").ColumnWidth = 3.29
+        
+        ' === FORMATAGE GLOBAL DES CELLULES ===
+        With .Cells
+            .NumberFormat = "@"  ' Format texte pour préserver les numéros avec tirets
+            .Font.Name = "Calibri"  ' Police standard et lisible
+            .Font.Size = 8  ' Taille de base (sera ajustée automatiquement)
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter  ' Centrage vertical au lieu de xlTop
+            .WrapText = True
+            .Orientation = 0
+            .AddIndent = False
+            .IndentLevel = 0
+            .ShrinkToFit = False
+            .ReadingOrder = xlContext
+        End With
+        
+        ' === FORMATAGE SPÉCIFIQUE COLONNE CODES CAISSON ===
+        .Columns("AA").VerticalAlignment = xlCenter
+        .Columns("AA").Font.Bold = True
+        .Columns("AA").Font.Size = 10  ' Légèrement plus grand pour les codes
+        
+        ' === HAUTEURS DE LIGNES OPTIMALES ===
+        ' Les hauteurs sont déjà définies dans GenererFacadePDI, mais on peut les ajuster ici si nécessaire
+        Dim i As Long
+        For i = 1 To .UsedRange.Rows.Count Step 2
+            ' Ligne du haut (numéros + observations) - Plus haute
+            .Rows(i).RowHeight = 48.75
+            ' Ligne du bas (noms de voies) - Plus basse
+            If i + 1 <= .UsedRange.Rows.Count Then
+                .Rows(i + 1).RowHeight = 39
+            End If
+        Next i
+        
+        ' === MASQUER LE QUADRILLAGE ===
+        ActiveWindow.DisplayGridlines = False
+        
+        ' === PROTECTION VISUELLE ===
+        ' Figer les volets si nécessaire (optionnel)
+        ' .Range("A1").Select
+        ' ActiveWindow.FreezePanes = True
     End With
-    .Columns("AA").VerticalAlignment = xlCenter
-End With
-
-Application.PrintCommunication = False
-    With Feuille.PageSetup
-        .LeftMargin = Application.InchesToPoints(0.236220472440945)
-        .RightMargin = Application.InchesToPoints(0.236220472440945)
-        .TopMargin = Application.InchesToPoints(0.31496062992126)
-        .BottomMargin = Application.InchesToPoints(0.236220472440945)
-        .HeaderMargin = Application.InchesToPoints(0.31496062992126)
-        '.FooterMargin = Application.InchesToPoints(0.31496062992126) ' sur certaines impressions, le pied de page est sur le casier, utiliser valeur ci dessous ?
-        .FooterMargin = Application.InchesToPoints(0.118110236220472)
-        .PrintComments = xlPrintNoComments
-        .LeftFooter = "&8 " & "Façade " & Right(Feuille.Name, 4) & " Créée le " & Now
-        .CenterHorizontally = False
-        .CenterVertically = True
-        .PrintComments = xlPrintNoComments
-        .Orientation = xlLandscape
-        .Draft = False
+    
+    ' === CONFIGURATION D'IMPRESSION ===
+    With ws.PageSetup
+        ' Marges optimisées pour A4 paysage
+        .LeftMargin = Application.InchesToPoints(0.236220472440945)     ' ~0.6 cm
+        .RightMargin = Application.InchesToPoints(0.236220472440945)    ' ~0.6 cm
+        .TopMargin = Application.InchesToPoints(0.31496062992126)       ' ~0.8 cm
+        .BottomMargin = Application.InchesToPoints(0.236220472440945)   ' ~0.6 cm
+        .HeaderMargin = Application.InchesToPoints(0.31496062992126)    ' ~0.8 cm
+        .FooterMargin = Application.InchesToPoints(0.118110236220472)   ' ~0.3 cm (réduit pour éviter conflits)
+        
+        ' Orientation et format
+        .Orientation = xlLandscape  ' Paysage obligatoire pour les façades
         .PaperSize = xlPaperA4
-        .FirstPageNumber = xlAutomatic
-        .Order = xlDownThenOver
+        
+        ' Options d'impression
+        .PrintComments = xlPrintNoComments
+        .CenterHorizontally = True   ' Centrage horizontal activé
+        .CenterVertically = False    ' Pas de centrage vertical pour garder en haut
+        .Draft = False
         .BlackAndWhite = False
         .Zoom = 100
+        .FitToPagesWide = 1         ' Tenir sur une page en largeur
+        .FitToPagesTall = False     ' Laisser la hauteur libre
+        .FirstPageNumber = xlAutomatic
+        .Order = xlDownThenOver
+        
+        ' Pied de page avec informations utiles
+        .LeftFooter = "&8Façade " & Right(ws.Name, 4) & " - Créée le " & Format(Now, "dd/mm/yyyy hh:mm")
+        .CenterFooter = ""
+        .RightFooter = "&8Page &P / &N"
+        
+        ' En-tête avec titre (optionnel)
+        .LeftHeader = ""
+        .CenterHeader = "&14&BFaçade PDI - " & wsAccueil.Range("B1").Value & "&B"  ' Titre depuis feuille Accueil
+        .RightHeader = ""
     End With
-Application.PrintCommunication = True
-Feuille.DisplayPageBreaks = False
+    
+    ' === OPTIMISATIONS SPÉCIFIQUES AUX FAÇADES PDI ===
+    
+    ' Masquer les sauts de page pour une vue plus propre
+    ws.DisplayPageBreaks = False
+    
+    ' Optimiser l'affichage
+    With ActiveWindow
+        .DisplayHeadings = False        ' Masquer les en-têtes de lignes/colonnes
+        .DisplayHorizontalScrollBar = True
+        .DisplayVerticalScrollBar = True
+        .DisplayWorkbookTabs = True
+    End With
+    
+    ' === AJUSTEMENT AUTOMATIQUE DES TAILLES DE POLICE ===
+    ' Appliquer les ajustements de taille déjà intégrés dans GenererFacadePDI
+    ' (pas besoin de refaire ici car déjà optimisé)
+    
+    Application.PrintCommunication = True
+    Application.ScreenUpdating = True
+    
+    ' Message de confirmation
+    MsgBox "Mise en page de la façade PDI appliquée avec succès !" & vbCrLf & _
+           "• Format A4 paysage optimisé" & vbCrLf & _
+           "• Colonnes ajustées pour impression" & vbCrLf & _
+           "• Marges et en-têtes configurés", _
+           vbInformation, "Mise en page terminée"
+End Sub
+
+' =====================================================
+' SUB : Appliquer la mise en page depuis un bouton ou menu
+' =====================================================
+Sub AppliquerMiseEnPageFacade()
+    ' Version simplifiée pour appel depuis bouton ou raccourci
+    Call MiseEnPageFacadePDI
+End Sub
+
+' =====================================================
+' SUB : Mise en page avec options avancées
+' =====================================================
+Sub MiseEnPageFacadeAvecOptions()
+    Dim ws As Worksheet
+    Dim reponse As VbMsgBoxResult
+    Dim zoomPersonnalise As String
+    
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette macro doit être exécutée sur la feuille 'Facade_PDI'", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Demander les options à l'utilisateur
+    reponse = MsgBox("Voulez-vous appliquer un zoom personnalisé pour l'affichage ?", vbYesNo + vbQuestion, "Options de mise en page")
+    
+    ' Appliquer la mise en page standard
+    Call MiseEnPageFacadePDI(ws)
+    
+    ' Options personnalisées
+    If reponse = vbYes Then
+        zoomPersonnalise = InputBox("Entrez le pourcentage de zoom souhaité (50-200) :", "Zoom personnalisé", "85")
+        If IsNumeric(zoomPersonnalise) Then
+            Dim zoomValue As Integer
+            zoomValue = CInt(zoomPersonnalise)
+            If zoomValue >= 50 And zoomValue <= 200 Then
+                ActiveWindow.Zoom = zoomValue
+            End If
+        End If
+    End If
+    
+    ' Option pour ajuster automatiquement à la fenêtre
+    reponse = MsgBox("Voulez-vous ajuster l'affichage à la fenêtre ?", vbYesNo + vbQuestion, "Ajustement fenêtre")
+    If reponse = vbYes Then
+        ActiveWindow.Zoom = True  ' Zoom automatique pour ajuster à la fenêtre
+    End If
+End Sub
+
+' =====================================================
+' SUB : Aperçu avant impression avec mise en page
+' =====================================================
+Sub ApercuImpressionFacade()
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette macro doit être exécutée sur la feuille 'Facade_PDI'", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Appliquer la mise en page d'abord
+    Call MiseEnPageFacadePDI(ws)
+    
+    ' Ouvrir l'aperçu avant impression
+    ws.PrintPreview
+End Sub
+
+' =====================================================
+' SUB : Imprimer avec mise en page automatique
+' =====================================================
+Sub ImprimerFacadeAvecMiseEnPage()
+    Dim ws As Worksheet
+    Dim reponse As VbMsgBoxResult
+    
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette macro doit être exécutée sur la feuille 'Facade_PDI'", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Confirmer l'impression
+    reponse = MsgBox("Voulez-vous imprimer la façade PDI ?" & vbCrLf & _
+                     "(La mise en page sera automatiquement appliquée)", _
+                     vbYesNo + vbQuestion, "Impression façade")
+    
+    If reponse = vbYes Then
+        ' Appliquer la mise en page
+        Call MiseEnPageFacadePDI(ws)
+        
+        ' Imprimer
+        ws.PrintOut
+        
+        MsgBox "Impression lancée avec succès !", vbInformation
+    End If
 End Sub
