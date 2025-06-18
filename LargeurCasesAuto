@@ -1,210 +1,10 @@
 ' =====================================================
-' MACRO : Mettre la largeur à 4 pour tous les PDI, 0 pour les rattachés
-' =====================================================
-Sub DefinirLargeur4PourTousLesNonRattaches()
-    Dim wsAccueil As Worksheet
-    Dim derniereLigne As Long
-    Dim i As Long
-    Dim numPDI As String
-    Dim compteurModifies4 As Long
-    Dim compteurModifies0 As Long
-    
-    ' Initialisation
-    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
-    compteurModifies4 = 0
-    compteurModifies0 = 0
-    
-    ' Désactiver les mises à jour pour améliorer les performances
-    Application.ScreenUpdating = False
-    Application.EnableEvents = False
-    
-    ' Trouver la dernière ligne avec des données
-    derniereLigne = wsAccueil.Cells(wsAccueil.Rows.Count, "A").End(xlUp).Row
-    
-    ' Parcourir les données à partir de la ligne 7
-    For i = 7 To derniereLigne
-        ' Lire le numéro PDI de la colonne A
-        numPDI = CStr(wsAccueil.Cells(i, 1).Text)
-        
-        ' Vérifier si ce n'est pas une ligne vide
-        If numPDI <> "" Then
-            If EstPDIRattache(numPDI, i) Then
-                ' PDI rattaché : mettre à 0
-                wsAccueil.Cells(i, 7).Value = 0
-                compteurModifies0 = compteurModifies0 + 1
-            Else
-                ' PDI principal : mettre à 4
-                wsAccueil.Cells(i, 7).Value = 4
-                compteurModifies4 = compteurModifies4 + 1
-            End If
-        End If
-    Next i
-    
-    ' Réactiver les mises à jour
-    Application.ScreenUpdating = True
-    Application.EnableEvents = True
-    
-    ' Message de confirmation
-    MsgBox "Largeurs mises à jour :" & vbCrLf & _
-           "- " & compteurModifies4 & " PDI principaux mis à 4" & vbCrLf & _
-           "- " & compteurModifies0 & " PDI rattachés mis à 0", _
-           vbInformation, "Mise à jour terminée"
-End Sub
-
-' =====================================================
-' MACRO : Mettre la largeur à 2 pour tous les PDI, 0 pour les rattachés
-' =====================================================
-Sub DefinirLargeur2PourTousLesNonRattaches()
-    Dim wsAccueil As Worksheet
-    Dim derniereLigne As Long
-    Dim i As Long
-    Dim numPDI As String
-    Dim compteurModifies2 As Long
-    Dim compteurModifies0 As Long
-    
-    ' Initialisation
-    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
-    compteurModifies2 = 0
-    compteurModifies0 = 0
-    
-    ' Désactiver les mises à jour pour améliorer les performances
-    Application.ScreenUpdating = False
-    Application.EnableEvents = False
-    
-    ' Trouver la dernière ligne avec des données
-    derniereLigne = wsAccueil.Cells(wsAccueil.Rows.Count, "A").End(xlUp).Row
-    
-    ' Parcourir les données à partir de la ligne 7
-    For i = 7 To derniereLigne
-        ' Lire le numéro PDI de la colonne A
-        numPDI = CStr(wsAccueil.Cells(i, 1).Text)
-        
-        ' Vérifier si ce n'est pas une ligne vide
-        If numPDI <> "" Then
-            If EstPDIRattache(numPDI, i) Then
-                ' PDI rattaché : mettre à 0
-                wsAccueil.Cells(i, 7).Value = 0
-                compteurModifies0 = compteurModifies0 + 1
-            Else
-                ' PDI principal : mettre à 2
-                wsAccueil.Cells(i, 7).Value = 2
-                compteurModifies2 = compteurModifies2 + 1
-            End If
-        End If
-    Next i
-    
-    ' Réactiver les mises à jour
-    Application.ScreenUpdating = True
-    Application.EnableEvents = True
-    
-    ' Message de confirmation
-    MsgBox "Largeurs mises à jour :" & vbCrLf & _
-           "- " & compteurModifies2 & " PDI principaux mis à 2" & vbCrLf & _
-           "- " & compteurModifies0 & " PDI rattachés mis à 0", _
-           vbInformation, "Mise à jour terminée"
-End Sub
-
-' =====================================================
-' FONCTION : Déterminer si un PDI est rattaché (basé sur colonne F)
-' =====================================================
-Function EstPDIRattache(numPDI As String, ligneActuelle As Long) As Boolean
-    ' Cette fonction détermine si un PDI est "rattaché" en vérifiant
-    ' la valeur de la colonne F (TYPE PDI)
-    
-    Dim wsAccueil As Worksheet
-    Dim typePDI As String
-    
-    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
-    
-    ' Lire la valeur de la colonne F (TYPE PDI) - colonne 6
-    typePDI = UCase(Trim(wsAccueil.Cells(ligneActuelle, 6).Text))
-    
-    ' Vérifier si le type PDI contient "RATTACHÉ C" ou "RATTACHÉ P"
-    If typePDI = "RATTACHÉ C" Or typePDI = "RATTACHÉ P" Then
-        EstPDIRattache = True
-    Else
-        EstPDIRattache = False
-    End If
-End Function
-
-
-
-' =====================================================
-' MACRO : Version avec choix de largeur via boîte de dialogue
-' =====================================================
-Sub DefinirLargeurPersonnalisee()
-    Dim wsAccueil As Worksheet
-    Dim derniereLigne As Long
-    Dim i As Long
-    Dim numPDI As String
-    Dim compteurModifiesPrincipaux As Long
-    Dim compteurModifies0 As Long
-    Dim nouvelleLargeur As String
-    Dim largeurNumerique As Integer
-    
-    ' Demander à l'utilisateur la largeur souhaitée
-    nouvelleLargeur = InputBox("Quelle largeur souhaitez-vous appliquer aux PDI principaux ?" & vbCrLf & _
-                              "(Les PDI rattachés seront automatiquement mis à 0)", _
-                              "Définir largeur personnalisée", "4")
-    
-    ' Vérifier si l'utilisateur a annulé ou entré une valeur invalide
-    If nouvelleLargeur = "" Then Exit Sub
-    
-    largeurNumerique = ConvertirEnEntier(nouvelleLargeur, -1)
-    If largeurNumerique < 1 Or largeurNumerique > 26 Then
-        MsgBox "Veuillez entrer une largeur entre 1 et 26.", vbExclamation
-        Exit Sub
-    End If
-    
-    ' Initialisation
-    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
-    compteurModifiesPrincipaux = 0
-    compteurModifies0 = 0
-    
-    ' Désactiver les mises à jour pour améliorer les performances
-    Application.ScreenUpdating = False
-    Application.EnableEvents = False
-    
-    ' Trouver la dernière ligne avec des données
-    derniereLigne = wsAccueil.Cells(wsAccueil.Rows.Count, "A").End(xlUp).Row
-    
-    ' Parcourir les données à partir de la ligne 7
-    For i = 7 To derniereLigne
-        ' Lire le numéro PDI de la colonne A
-        numPDI = CStr(wsAccueil.Cells(i, 1).Text)
-        
-        ' Vérifier si ce n'est pas une ligne vide
-        If numPDI <> "" Then
-            If EstPDIRattache(numPDI, i) Then
-                ' PDI rattaché : mettre à 0
-                wsAccueil.Cells(i, 7).Value = 0
-                compteurModifies0 = compteurModifies0 + 1
-            Else
-                ' PDI principal : mettre à la largeur personnalisée
-                wsAccueil.Cells(i, 7).Value = largeurNumerique
-                compteurModifiesPrincipaux = compteurModifiesPrincipaux + 1
-            End If
-        End If
-    Next i
-    
-    ' Réactiver les mises à jour
-    Application.ScreenUpdating = True
-    Application.EnableEvents = True
-    
-    ' Message de confirmation
-    MsgBox "Largeurs mises à jour :" & vbCrLf & _
-           "- " & compteurModifiesPrincipaux & " PDI principaux mis à " & largeurNumerique & vbCrLf & _
-           "- " & compteurModifies0 & " PDI rattachés mis à 0", _
-           vbInformation, "Mise à jour terminée"
-End Sub
-
-' =====================================================
 ' MACRO PRINCIPALE : Optimiser les largeurs pour éviter HC
 ' =====================================================
 Sub OptimiserLargeursPoUrEviterHC()
     Dim wsAccueil As Worksheet
-    Dim nbColonnesFacade As Integer
     Dim maxParCaisson As Integer
+    Dim nbColonnesFacade As Integer
     Dim capaciteTotale As Long
     Dim derniereLigne As Long
     Dim i As Long
@@ -212,13 +12,32 @@ Sub OptimiserLargeursPoUrEviterHC()
     ' Initialisation
     Set wsAccueil = ThisWorkbook.Sheets("Accueil")
     
-    ' Lire les paramètres depuis la feuille Accueil
-    nbColonnesFacade = ConvertirEnEntier(wsAccueil.Range("C1").Value, 26)
-    maxParCaisson = ConvertirEnEntier(wsAccueil.Range("C1").Value, 4) ' Même valeur que nbColonnes pour simplicité
+    ' Lire le paramètre depuis la feuille Accueil
+    maxParCaisson = ConvertirEnEntier(wsAccueil.Range("C1").Value, 4)
+    nbColonnesFacade = 26 ' Toujours 26 colonnes (A à Z)
     
     ' Vérifier les paramètres
-    If nbColonnesFacade < 1 Or nbColonnesFacade > 26 Then
-        MsgBox "Erreur : Le nombre de colonnes en C1 doit être entre 1 et 26.", vbExclamation
+    If maxParCaisson < 1 Or maxParCaisson > 20 Then
+        MsgBox "Erreur : La valeur max par caisson en C1 doit être entre 1 et 20.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Calculer la capacité totale avant HC :
+    ' 4 lettres (A, B, C, D) × maxParCaisson × 26 colonnes
+    ' Exemple : si C1=7, capacité = 4 × 7 × 26 = 728 cases avant HC
+    capaciteTotale = 4 * maxParCaisson * nbColonnesFacade
+    
+    ' Désactiver les mises à jour
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    
+    ' Message d'information
+    MsgBox "Optimisation en cours..." & vbCrLf & _
+           "Max par caisson (C1) : " & maxParCaisson & vbCrLf & _
+           "Limite avant HC : " & maxParCaisson & "D" & vbCrLf & _
+           "Colonnes façade : A à Z (" & nbColonnesFacade & ")" & vbCrLf & _
+           "Capacité totale : " & capaciteTotale & " cases", _
+           vbInformation, "Optimisation des largeurs"et 26.", vbExclamation
         Exit Sub
     End If
     
@@ -299,7 +118,7 @@ End Function
 ' =====================================================
 ' SUB : Appliquer l'optimisation
 ' =====================================================
-Sub AppliquerOptimisation(ws As Worksheet, listePDI As Object, capaciteTotale As Long, nbColonnes As Integer)
+Sub AppliquerOptimisation(ws As Worksheet, listePDI As Object, capaciteTotale As Long, maxParCaisson As Integer)
     Dim cle As Variant
     Dim infoPDI As Object
     Dim groupes As Object
@@ -336,7 +155,7 @@ Sub AppliquerOptimisation(ws As Worksheet, listePDI As Object, capaciteTotale As
     End If
     
     ' ÉTAPE 5 : Appliquer l'optimisation selon les groupes
-    Call AppliquerLargeursOptimisees(ws, listePDI, groupes, largeurMoyenneOptimale, nbColonnes)
+    Call AppliquerLargeursOptimisees(ws, listePDI, groupes, largeurMoyenneOptimale, maxParCaisson)
     
     ' ÉTAPE 6 : Vérification finale et ajustement si nécessaire
     Call VerificationFinaleEtAjustement(ws, listePDI, capaciteTotale)
@@ -445,7 +264,7 @@ End Function
 ' =====================================================
 ' SUB : Appliquer les largeurs optimisées
 ' =====================================================
-Sub AppliquerLargeursOptimisees(ws As Worksheet, listePDI As Object, groupes As Object, largeurMoyenne As Double, nbColonnes As Integer)
+Sub AppliquerLargeursOptimisees(ws As Worksheet, listePDI As Object, groupes As Object, largeurMoyenne As Double, maxParCaisson As Integer)
     Dim cle As Variant
     Dim infoPDI As Object
     Dim numeroGroupe As Variant
@@ -480,8 +299,8 @@ Sub AppliquerLargeursOptimisees(ws As Worksheet, listePDI As Object, groupes As 
                 largeurPourGroupe = largeurBase + 1
             End If
             
-            ' S'assurer que la largeur ne dépasse pas les colonnes disponibles
-            If largeurPourGroupe > nbColonnes Then largeurPourGroupe = nbColonnes
+            ' S'assurer que la largeur ne dépasse pas 26 colonnes (A-Z)
+            If largeurPourGroupe > 26 Then largeurPourGroupe = 26
             
             ' Appliquer : premier PDI du groupe prend la largeur, autres à 0
             For i = 0 To groupe("membres").Count - 1
