@@ -197,3 +197,381 @@ Sub DefinirLargeurPersonnalisee()
            "- " & compteurModifies0 & " PDI rattachés mis à 0", _
            vbInformation, "Mise à jour terminée"
 End Sub
+
+' =====================================================
+' MACRO PRINCIPALE : Optimiser les largeurs pour éviter HC
+' =====================================================
+Sub OptimiserLargeursPoUrEviterHC()
+    Dim wsAccueil As Worksheet
+    Dim nbColonnesFacade As Integer
+    Dim maxParCaisson As Integer
+    Dim capaciteTotale As Long
+    Dim derniereLigne As Long
+    Dim i As Long
+    
+    ' Initialisation
+    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
+    
+    ' Lire les paramètres depuis la feuille Accueil
+    nbColonnesFacade = ConvertirEnEntier(wsAccueil.Range("C1").Value, 26)
+    maxParCaisson = ConvertirEnEntier(wsAccueil.Range("C1").Value, 4) ' Même valeur que nbColonnes pour simplicité
+    
+    ' Vérifier les paramètres
+    If nbColonnesFacade < 1 Or nbColonnesFacade > 26 Then
+        MsgBox "Erreur : Le nombre de colonnes en C1 doit être entre 1 et 26.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Calculer la capacité totale (4 lettres A-D * maxParCaisson * nbColonnes)
+    capaciteTotale = 4 * maxParCaisson * nbColonnesFacade
+    
+    ' Désactiver les mises à jour
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+    
+    ' Message d'information
+    MsgBox "Optimisation en cours..." & vbCrLf & _
+           "Colonnes façade : " & nbColonnesFacade & vbCrLf & _
+           "Capacité totale : " & capaciteTotale & " cases", _
+           vbInformation, "Optimisation des largeurs"
+    
+    ' ÉTAPE 1 : Identifier tous les PDI et les classer
+    Dim listePDI As Object
+    Set listePDI = CreerListePDIOptimisee(wsAccueil)
+    
+    ' ÉTAPE 2 : Appliquer les règles d'optimisation
+    Call AppliquerOptimisation(wsAccueil, listePDI, capaciteTotale, nbColonnesFacade)
+    
+    ' Réactiver les mises à jour
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+    
+    ' Message de fin
+    MsgBox "Optimisation terminée !" & vbCrLf & _
+           "Les largeurs ont été ajustées pour éviter les dépassements HC.", _
+           vbInformation, "Optimisation réussie"
+End Sub
+
+' =====================================================
+' FONCTION : Créer la liste des PDI pour optimisation
+' =====================================================
+Function CreerListePDIOptimisee(ws As Worksheet) As Object
+    Dim dictPDI As Object
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim numPDI As String
+    Dim nomVoie As String
+    Dim typePDI As String
+    Dim estRattache As Boolean
+    
+    Set dictPDI = CreateObject("Scripting.Dictionary")
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Parcourir tous les PDI
+    For i = 7 To derniereLigne
+        numPDI = Trim(ws.Cells(i, 1).Text)
+        nomVoie = Trim(ws.Cells(i, 2).Text)
+        typePDI = Trim(ws.Cells(i, 6).Text)
+        
+        If numPDI <> "" Then
+            ' Vérifier si c'est un PDI rattaché
+            estRattache = (UCase(typePDI) = "RATTACHÉ C" Or UCase(typePDI) = "RATTACHÉ P")
+            
+            ' Créer l'entrée PDI
+            Dim infoPDI As Object
+            Set infoPDI = CreateObject("Scripting.Dictionary")
+            infoPDI.Add "ligne", i
+            infoPDI.Add "numero", numPDI
+            infoPDI.Add "voie", nomVoie
+            infoPDI.Add "type", typePDI
+            infoPDI.Add "rattache", estRattache
+            infoPDI.Add "largeurOriginale", ConvertirEnEntier(ws.Cells(i, 7).Value, 1)
+            infoPDI.Add "largeurOptimisee", 0 ' À calculer
+            infoPDI.Add "groupe", -1 ' Numéro de groupe (-1 = pas encore assigné)
+            
+            dictPDI.Add i, infoPDI
+        End If
+    Next i
+    
+    Set CreerListePDIOptimisee = dictPDI
+End Function
+
+' =====================================================
+' SUB : Appliquer l'optimisation
+' =====================================================
+Sub AppliquerOptimisation(ws As Worksheet, listePDI As Object, capaciteTotale As Long, nbColonnes As Integer)
+    Dim cle As Variant
+    Dim infoPDI As Object
+    Dim groupes As Object
+    Dim totaleLargeurRequise As Long
+    Dim totalePDIActifs As Long
+    
+    ' ÉTAPE 1 : Marquer tous les PDI rattachés à largeur 0
+    For Each cle In listePDI.Keys
+        Set infoPDI = listePDI(cle)
+        If infoPDI("rattache") Then
+            infoPDI("largeurOptimisee") = 0
+            ws.Cells(infoPDI("ligne"), 7).Value = 0
+        End If
+    Next cle
+    
+    ' ÉTAPE 2 : Créer des groupes pour les PDI de même voie consécutifs
+    Set groupes = CreerGroupesVoiesConsecutives(listePDI)
+    
+    ' ÉTAPE 3 : Calculer le nombre total de PDI actifs (non rattachés)
+    totalePDIActifs = 0
+    For Each cle In listePDI.Keys
+        Set infoPDI = listePDI(cle)
+        If Not infoPDI("rattache") Then
+            totalePDIActifs = totalePDIActifs + 1
+        End If
+    Next cle
+    
+    ' ÉTAPE 4 : Calculer la largeur moyenne optimale
+    Dim largeurMoyenneOptimale As Double
+    If totalePDIActifs > 0 Then
+        largeurMoyenneOptimale = capaciteTotale / totalePDIActifs
+    Else
+        Exit Sub ' Aucun PDI à traiter
+    End If
+    
+    ' ÉTAPE 5 : Appliquer l'optimisation selon les groupes
+    Call AppliquerLargeursOptimisees(ws, listePDI, groupes, largeurMoyenneOptimale, nbColonnes)
+    
+    ' ÉTAPE 6 : Vérification finale et ajustement si nécessaire
+    Call VerificationFinaleEtAjustement(ws, listePDI, capaciteTotale)
+End Sub
+
+' =====================================================
+' FONCTION : Créer des groupes pour PDI consécutifs de même voie
+' =====================================================
+Function CreerGroupesVoiesConsecutives(listePDI As Object) As Object
+    Dim groupes As Object
+    Dim cle As Variant
+    Dim infoPDI As Object
+    Dim infoPDIPrecedent As Object
+    Dim numeroGroupe As Long
+    Dim clePrecedente As Variant
+    Dim compteurDansGroupe As Long
+    
+    Set groupes = CreateObject("Scripting.Dictionary")
+    numeroGroupe = 1
+    clePrecedente = ""
+    compteurDansGroupe = 0
+    
+    ' Parcourir les PDI dans l'ordre des lignes
+    Dim tableauCles As Object
+    Set tableauCles = CreateObject("System.Collections.ArrayList")
+    
+    For Each cle In listePDI.Keys
+        tableauCles.Add cle
+    Next cle
+    
+    ' Trier les clés par numéro de ligne
+    For i = 0 To tableauCles.Count - 2
+        For j = i + 1 To tableauCles.Count - 1
+            If CLng(tableauCles(i)) > CLng(tableauCles(j)) Then
+                Dim temp As Variant
+                temp = tableauCles(i)
+                tableauCles(i) = tableauCles(j)
+                tableauCles(j) = temp
+            End If
+        Next j
+    Next i
+    
+    ' Créer les groupes
+    For i = 0 To tableauCles.Count - 1
+        cle = tableauCles(i)
+        Set infoPDI = listePDI(cle)
+        
+        ' Ignorer les PDI rattachés pour les groupes
+        If Not infoPDI("rattache") Then
+            Dim peutEtreGroupe As Boolean
+            peutEtreGroupe = False
+            
+            ' Vérifier si on peut grouper avec le précédent
+            If clePrecedente <> "" Then
+                Set infoPDIPrecedent = listePDI(clePrecedente)
+                
+                ' Conditions pour grouper :
+                ' 1. Même voie
+                ' 2. Pas plus de 10 PDI dans le groupe
+                ' 3. PDI consécutifs
+                If infoPDI("voie") = infoPDIPrecedent("voie") And _
+                   infoPDI("voie") <> "" And _
+                   compteurDansGroupe < 10 And _
+                   (CLng(cle) - CLng(clePrecedente)) <= 3 Then ' Tolérance de 3 lignes
+                    peutEtreGroupe = True
+                End If
+            End If
+            
+            If peutEtreGroupe Then
+                ' Ajouter au groupe existant
+                infoPDI("groupe") = numeroGroupe
+                compteurDansGroupe = compteurDansGroupe + 1
+            Else
+                ' Créer un nouveau groupe
+                numeroGroupe = numeroGroupe + 1
+                infoPDI("groupe") = numeroGroupe
+                compteurDansGroupe = 1
+            End If
+            
+            clePrecedente = cle
+        End If
+    Next i
+    
+    ' Organiser les groupes
+    For Each cle In listePDI.Keys
+        Set infoPDI = listePDI(cle)
+        If Not infoPDI("rattache") And infoPDI("groupe") > 0 Then
+            Dim numGroupe As Long
+            numGroupe = infoPDI("groupe")
+            
+            If Not groupes.Exists(numGroupe) Then
+                Dim nouveauGroupe As Object
+                Set nouveauGroupe = CreateObject("Scripting.Dictionary")
+                nouveauGroupe.Add "membres", CreateObject("System.Collections.ArrayList")
+                nouveauGroupe.Add "voie", infoPDI("voie")
+                groupes.Add numGroupe, nouveauGroupe
+            End If
+            
+            groupes(numGroupe)("membres").Add cle
+        End If
+    Next cle
+    
+    Set CreerGroupesVoiesConsecutives = groupes
+End Function
+
+' =====================================================
+' SUB : Appliquer les largeurs optimisées
+' =====================================================
+Sub AppliquerLargeursOptimisees(ws As Worksheet, listePDI As Object, groupes As Object, largeurMoyenne As Double, nbColonnes As Integer)
+    Dim cle As Variant
+    Dim infoPDI As Object
+    Dim numeroGroupe As Variant
+    Dim groupe As Object
+    Dim largeurPourGroupe As Integer
+    Dim i As Long
+    
+    ' Déterminer la largeur de base selon la largeur moyenne
+    Dim largeurBase As Integer
+    If largeurMoyenne >= 4 Then
+        largeurBase = 4
+    ElseIf largeurMoyenne >= 3 Then
+        largeurBase = 3
+    ElseIf largeurMoyenne >= 2 Then
+        largeurBase = 2
+    Else
+        largeurBase = 1
+    End If
+    
+    ' Traiter les groupes
+    For Each numeroGroupe In groupes.Keys
+        Set groupe = groupes(numeroGroupe)
+        
+        If groupe("membres").Count > 1 Then
+            ' Groupe de plusieurs PDI : premier PDI prend la largeur, autres à 0
+            largeurPourGroupe = largeurBase
+            
+            ' Ajuster la largeur selon la taille du groupe
+            If groupe("membres").Count >= 8 Then
+                largeurPourGroupe = largeurBase + 2
+            ElseIf groupe("membres").Count >= 5 Then
+                largeurPourGroupe = largeurBase + 1
+            End If
+            
+            ' S'assurer que la largeur ne dépasse pas les colonnes disponibles
+            If largeurPourGroupe > nbColonnes Then largeurPourGroupe = nbColonnes
+            
+            ' Appliquer : premier PDI du groupe prend la largeur, autres à 0
+            For i = 0 To groupe("membres").Count - 1
+                cle = groupe("membres")(i)
+                Set infoPDI = listePDI(cle)
+                
+                If i = 0 Then
+                    ' Premier PDI du groupe
+                    infoPDI("largeurOptimisee") = largeurPourGroupe
+                    ws.Cells(infoPDI("ligne"), 7).Value = largeurPourGroupe
+                Else
+                    ' PDI suivants du groupe
+                    infoPDI("largeurOptimisee") = 0
+                    ws.Cells(infoPDI("ligne"), 7).Value = 0
+                End If
+            Next i
+        Else
+            ' PDI isolé : appliquer la largeur de base
+            cle = groupe("membres")(0)
+            Set infoPDI = listePDI(cle)
+            infoPDI("largeurOptimisee") = largeurBase
+            ws.Cells(infoPDI("ligne"), 7).Value = largeurBase
+        End If
+    Next numeroGroupe
+    
+    ' Traiter les PDI qui ne sont dans aucun groupe
+    For Each cle In listePDI.Keys
+        Set infoPDI = listePDI(cle)
+        If Not infoPDI("rattache") And infoPDI("groupe") <= 0 Then
+            infoPDI("largeurOptimisee") = largeurBase
+            ws.Cells(infoPDI("ligne"), 7).Value = largeurBase
+        End If
+    Next cle
+End Sub
+
+' =====================================================
+' SUB : Vérification finale et ajustement
+' =====================================================
+Sub VerificationFinaleEtAjustement(ws As Worksheet, listePDI As Object, capaciteTotale As Long)
+    Dim cle As Variant
+    Dim infoPDI As Object
+    Dim totaleLargeurUtilisee As Long
+    Dim totalePDIActifs As Long
+    
+    ' Calculer la largeur totale utilisée
+    totaleLargeurUtilisee = 0
+    totalePDIActifs = 0
+    
+    For Each cle In listePDI.Keys
+        Set infoPDI = listePDI(cle)
+        If Not infoPDI("rattache") Then
+            totaleLargeurUtilisee = totaleLargeurUtilisee + infoPDI("largeurOptimisee")
+            If infoPDI("largeurOptimisee") > 0 Then
+                totalePDIActifs = totalePDIActifs + 1
+            End If
+        End If
+    Next cle
+    
+    ' Si on dépasse encore, réduire proportionnellement
+    If totaleLargeurUtilisee > capaciteTotale Then
+        Dim facteurReduction As Double
+        facteurReduction = capaciteTotale / totaleLargeurUtilisee
+        
+        For Each cle In listePDI.Keys
+            Set infoPDI = listePDI(cle)
+            If Not infoPDI("rattache") And infoPDI("largeurOptimisee") > 0 Then
+                Dim nouvelleLargeur As Integer
+                nouvelleLargeur = Int(infoPDI("largeurOptimisee") * facteurReduction)
+                If nouvelleLargeur < 1 Then nouvelleLargeur = 1
+                
+                infoPDI("largeurOptimisee") = nouvelleLargeur
+                ws.Cells(infoPDI("ligne"), 7).Value = nouvelleLargeur
+            End If
+        Next cle
+    End If
+    
+    ' Afficher le résultat
+    Dim nouvelleLargeurTotale As Long
+    nouvelleLargeurTotale = 0
+    For Each cle In listePDI.Keys
+        Set infoPDI = listePDI(cle)
+        If Not infoPDI("rattache") Then
+            nouvelleLargeurTotale = nouvelleLargeurTotale + infoPDI("largeurOptimisee")
+        End If
+    Next cle
+    
+    MsgBox "Résultat de l'optimisation :" & vbCrLf & _
+           "Capacité totale : " & capaciteTotale & vbCrLf & _
+           "Largeur utilisée : " & nouvelleLargeurTotale & vbCrLf & _
+           "PDI actifs : " & totalePDIActifs & vbCrLf & _
+           "Statut : " & IIf(nouvelleLargeurTotale <= capaciteTotale, "✅ OK (pas de HC)", "⚠️ Optimisation partielle"), _
+           vbInformation, "Résultat optimisation"
+End Sub
