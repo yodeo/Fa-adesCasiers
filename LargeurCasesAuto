@@ -33,7 +33,8 @@ Sub OptimiserLargeursPoUrEviterHC()
     
     ' Message d'information
     MsgBox "Optimisation en cours..." & vbCrLf & _
-           "Max par caisson (C1) : " & maxParCaisson & vbCrLf & _
+           "Multiplicateur (C1) : " & multiplicateur & vbCrLf & _
+           "Nombre max de caissons : " & maxParCaisson & " (" & multiplicateur & " × 4)" & vbCrLf & _
            "Limite avant HC : " & maxParCaisson & "D" & vbCrLf & _
            "Colonnes façade : A à Z (" & nbColonnesFacade & ")" & vbCrLf & _
            "Capacité totale : " & capaciteTotale & " cases", _
