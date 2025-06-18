@@ -1,0 +1,322 @@
+' =====================================================
+' SUB MODIFIÉE : Ajouter les boutons avec macros intégrées
+' =====================================================
+Sub AjouterBoutonsSeulement(wsFacade As Worksheet)
+    Dim btn As Object
+    
+    ' Supprimer les boutons existants s'ils existent
+    Dim shp As Shape
+    For Each shp In wsFacade.Shapes
+        If shp.Type = msoFormControl Then shp.Delete
+    Next shp
+    
+    ' Bouton "Régénérer Façade"
+    Set btn = wsFacade.Buttons.Add(10, 10, 120, 25)
+    With btn
+        .Characters.Text = "🔄 Régénérer Façade"
+        .OnAction = "RegénérerFaçadeFromButton"
+        .Font.Bold = True
+        .Font.Size = 10
+    End With
+    
+    ' Bouton "Retour Accueil"
+    Set btn = wsFacade.Buttons.Add(140, 10, 100, 25)
+    With btn
+        .Characters.Text = "🏠 Accueil"
+        .OnAction = "RetourAccueilFromButton"
+        .Font.Bold = True
+        .Font.Size = 10
+    End With
+    
+    ' Bouton "Aide Navigation"
+    Set btn = wsFacade.Buttons.Add(250, 10, 120, 25)
+    With btn
+        .Characters.Text = "❓ Aide Navigation"
+        .OnAction = "AfficherAideNavigation"
+        .Font.Bold = True
+        .Font.Size = 10
+    End With
+    
+    ' NOUVEAU BOUTON : Optimiser Affichage
+    Set btn = wsFacade.Buttons.Add(380, 10, 130, 25)
+    With btn
+        .Characters.Text = "⚡ Optimiser Affichage"
+        .OnAction = "OptimiserAffichageFromButton"
+        .Font.Bold = True
+        .Font.Size = 10
+    End With
+    
+    ' NOUVEAU BOUTON : Simplifier Bornes
+    Set btn = wsFacade.Buttons.Add(520, 10, 120, 25)
+    With btn
+        .Characters.Text = "📊 Simplifier Bornes"
+        .OnAction = "SimplifierBornesFromButton"
+        .Font.Bold = True
+        .Font.Size = 10
+    End With
+    
+    ' NOUVEAU BOUTON : Ajuster Polices
+    Set btn = wsFacade.Buttons.Add(650, 10, 120, 25)
+    With btn
+        .Characters.Text = "🔤 Ajuster Polices"
+        .OnAction = "AjusterPolicesFromButton"
+        .Font.Bold = True
+        .Font.Size = 10
+    End With
+    
+    ' NOUVEAU BOUTON : Insérer Images
+    Set btn = wsFacade.Buttons.Add(780, 10, 120, 25)
+    With btn
+        .Characters.Text = "🖼️ Insérer Images"
+        .OnAction = "InsererImagesFromButton"
+        .Font.Bold = True
+        .Font.Size = 10
+    End With
+    
+    ' NOUVEAU BOUTON : Navigation Manuelle (repositionné)
+    Set btn = wsFacade.Buttons.Add(910, 10, 130, 25)
+    With btn
+        .Characters.Text = "🎯 Navigation Manuelle"
+        .OnAction = "NavigationManuelle"
+        .Font.Bold = True
+        .Font.Size = 10
+    End With
+    
+End Sub
+
+' =====================================================
+' NOUVELLES MACROS POUR LES BOUTONS
+' =====================================================
+
+Sub OptimiserAffichageFromButton()
+    ' Macro appelée par le bouton "Optimiser Affichage"
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Confirmation avant exécution
+    If MsgBox("Voulez-vous optimiser l'affichage de la façade ?" & vbCrLf & _
+              "Cette action va supprimer les numéros uniques pour simplifier la vue.", _
+              vbQuestion + vbYesNo, "Optimiser Affichage") = vbYes Then
+        
+        ' Exécuter la macro d'optimisation
+        Call OptimiserAffichageFacade
+    End If
+End Sub
+
+Sub SimplifierBornesFromButton()
+    ' Macro appelée par le bouton "Simplifier Bornes"
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Confirmation avant exécution
+    If MsgBox("Voulez-vous simplifier les bornes de numéros ?" & vbCrLf & _
+              "Cette action va regrouper les numéros consécutifs en plages.", _
+              vbQuestion + vbYesNo, "Simplifier Bornes") = vbYes Then
+        
+        ' Exécuter la macro de simplification des bornes
+        Call SimplificationBornesNum
+    End If
+End Sub
+
+Sub AjusterPolicesFromButton()
+    ' Macro appelée par le bouton "Ajuster Polices"
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Confirmation avant exécution
+    If MsgBox("Voulez-vous ajuster automatiquement la taille des polices ?" & vbCrLf & _
+              "Cette action va optimiser la lisibilité selon la taille des cellules.", _
+              vbQuestion + vbYesNo, "Ajuster Polices") = vbYes Then
+        
+        ' Exécuter la macro d'ajustement des polices
+        Call AjusterTaillePolice
+    End If
+End Sub
+
+Sub InsererImagesFromButton()
+    ' Macro appelée par le bouton "Insérer Images"
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Message d'information et confirmation
+    If MsgBox("Voulez-vous insérer des images dans les cellules vides ?" & vbCrLf & _
+              "Vous devrez sélectionner un fichier image à utiliser.", _
+              vbQuestion + vbYesNo, "Insérer Images") = vbYes Then
+        
+        ' Exécuter la macro d'insertion d'images
+        Call InsererImagesDansCellulesVides
+    End If
+End Sub
+
+' =====================================================
+' MACRO UTILITAIRE : Ajuster paramètres d'impression
+' =====================================================
+Sub AjusterParametresImpression()
+    ' Fonction utilitaire pour optimiser l'impression de la façade
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Configuration de l'impression
+    With ws.PageSetup
+        .Orientation = xlLandscape
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .CenterHorizontally = True
+        .CenterVertically = False
+        .PrintArea = "A1:AA" & ws.UsedRange.Rows.Count
+        .LeftMargin = Application.InchesToPoints(0.25)
+        .RightMargin = Application.InchesToPoints(0.25)
+        .TopMargin = Application.InchesToPoints(0.25)
+        .BottomMargin = Application.InchesToPoints(0.25)
+        .HeaderMargin = Application.InchesToPoints(0.1)
+        .FooterMargin = Application.InchesToPoints(0.1)
+    End With
+End Sub
+
+' =====================================================
+' FONCTION UTILITAIRE : Obtenir le nom de l'onglet actif
+' =====================================================
+Sub NomOngletActif()
+    ' Fonction utilitaire utilisée par les autres macros
+    ' (Cette fonction semble être une dépendance des macros importées)
+    Dim nomOnglet As String
+    nomOnglet = ActiveSheet.Name
+    ' Vous pouvez ajouter ici du code si nécessaire
+End Sub
+
+' =====================================================
+' MACRO AVANCÉE : Menu contextuel intelligent
+' =====================================================
+Sub AjouterMenuContextuelAvance(ws As Worksheet)
+    ' Version avancée du menu contextuel avec plus d'options
+    Dim codeModule As Object
+    Dim codeVBA As String
+    
+    On Error GoTo ErreurAccesVBA
+    
+    Set codeModule = ThisWorkbook.VBProject.VBComponents(ws.CodeName).codeModule
+    
+    ' Supprimer l'ancien code s'il existe
+    If codeModule.CountOfLines > 0 Then
+        codeModule.DeleteLines 1, codeModule.CountOfLines
+    End If
+    
+    ' Code VBA avancé pour le menu contextuel
+    codeVBA = "Private Sub Worksheet_BeforeRightClick(ByVal Target As Range, Cancel As Boolean)" & vbCrLf
+    codeVBA = codeVBA & "    Call AjouterMenuContextuelIntelligent(Target)" & vbCrLf
+    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
+    
+    codeVBA = codeVBA & "Private Sub Worksheet_Deactivate()" & vbCrLf
+    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
+    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
+    
+    codeVBA = codeVBA & "Private Sub Worksheet_Activate()" & vbCrLf
+    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
+    codeVBA = codeVBA & "End Sub"
+    
+    ' Insérer le code
+    codeModule.InsertLines 1, codeVBA
+    
+    Exit Sub
+    
+ErreurAccesVBA:
+    ' Si erreur d'accès VBA, ne rien faire
+End Sub
+
+' =====================================================
+' MENU CONTEXTUEL INTELLIGENT
+' =====================================================
+Sub AjouterMenuContextuelIntelligent(Target As Range)
+    Dim menuContextuel As CommandBar
+    Dim nouvelleOption As CommandBarButton
+    
+    ' Supprimer les options existantes
+    Call SupprimerOptionMenuContextuel
+    
+    ' Vérifier la zone cliquée
+    If Target.Column = 27 Then Exit Sub ' Colonne des codes caisson
+    
+    Set menuContextuel = Application.CommandBars("Cell")
+    
+    ' Option principale de navigation
+    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
+    With nouvelleOption
+        .Caption = "🎯 Naviguer vers ligne Accueil"
+        .OnAction = "NaviguerDepuisMenuContextuel"
+        .Tag = "NavigationPDI"
+        .FaceId = 1695
+    End With
+    
+    ' Séparateur
+    menuContextuel.Controls.Add Type:=msoControlButton, before:=2
+    menuContextuel.Controls(2).BeginGroup = True
+    
+    ' Options d'optimisation si cellule non vide
+    If Not IsEmpty(Target.Value) Then
+        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
+        With nouvelleOption
+            .Caption = "⚡ Optimiser cette zone"
+            .OnAction = "OptimiserZoneSelectionnee"
+            .Tag = "NavigationPDI"
+        End With
+    End If
+    
+    ' Option pour cellules vides
+    If IsEmpty(Target.Value) Then
+        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
+        With nouvelleOption
+            .Caption = "🖼️ Insérer image ici"
+            .OnAction = "InsererImageCellule"
+            .Tag = "NavigationPDI"
+        End With
+    End If
+End Sub
+
+' =====================================================
+' MACROS POUR LES OPTIONS DU MENU CONTEXTUEL
+' =====================================================
+Sub OptimiserZoneSelectionnee()
+    ' Optimise la zone autour de la cellule sélectionnée
+    Dim cellule As Range
+    Set cellule = Selection
+    
+    MsgBox "Optimisation de la zone autour de " & cellule.Address, vbInformation
+    ' Ici vous pouvez ajouter la logique d'optimisation locale
+End Sub
+
+Sub InsererImageCellule()
+    ' Insère une image dans la cellule sélectionnée uniquement
+    Dim cellule As Range
+    Set cellule = Selection
+    
+    If IsEmpty(cellule.Value) Then
+        MsgBox "Insertion d'image dans " & cellule.Address, vbInformation
+        ' Appel à une version modifiée d'insertion d'image pour une seule cellule
+    Else
+        MsgBox "Cette cellule n'est pas vide", vbExclamation
+    End If
+End Sub
