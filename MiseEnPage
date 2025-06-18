@@ -41,6 +41,15 @@ Sub AjusterParametresImpression()
     ' Activer la feuille Facade_PDI
     wsFacade.Activate
     
+    ' IMPORTANT : Forcer Excel à rafraîchir la feuille
+    DoEvents
+    Application.ScreenUpdating = True
+    Application.ScreenUpdating = False
+    Application.ScreenUpdating = True
+    
+    ' Attendre un court instant pour que Excel stabilise la feuille
+    Application.Wait (Now + TimeValue("0:00:01"))
+    
     ' Configurer les paramètres d'impression
     With wsFacade.PageSetup
         ' 1. Format A4 recto (pas de recto-verso)
