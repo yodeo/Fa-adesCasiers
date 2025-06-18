@@ -1,0 +1,53 @@
+ub MiseEnPageFacade(Feuille)
+ With Feuille
+ 'hauteur de ligne faite à la volée lors de la façadisation utile que si on utilise pas modèle
+    '.Columns("A:B").ColumnWidth = 5.43 '5.57
+    '.Columns("C:X").ColumnWidth = 4.29
+    '.Columns("Y:Z").ColumnWidth = 5.43 '5.57
+    '.Columns("AA").ColumnWidth = 3.29
+    
+    ' largeur en cm
+    'Call RangeSize(Union(.Columns("A:B"), .Columns("Y:Z")), 1.15, , Centimètre)
+    'Call RangeSize(.Columns("C:X"), 0.96, , Centimètre)
+    '.Columns("AA").ColumnWidth = 3.29
+
+    With .Cells
+        .Cells.NumberFormat = "@"
+        .Cells.Font.Size = 8
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlTop
+        .WrapText = True
+        .Orientation = 0
+        .AddIndent = False
+        .IndentLevel = 0
+        .ShrinkToFit = False
+        .ReadingOrder = xlContext
+    End With
+    .Columns("AA").VerticalAlignment = xlCenter
+End With
+
+Application.PrintCommunication = False
+    With Feuille.PageSetup
+        .LeftMargin = Application.InchesToPoints(0.236220472440945)
+        .RightMargin = Application.InchesToPoints(0.236220472440945)
+        .TopMargin = Application.InchesToPoints(0.31496062992126)
+        .BottomMargin = Application.InchesToPoints(0.236220472440945)
+        .HeaderMargin = Application.InchesToPoints(0.31496062992126)
+        '.FooterMargin = Application.InchesToPoints(0.31496062992126) ' sur certaines impressions, le pied de page est sur le casier, utiliser valeur ci dessous ?
+        .FooterMargin = Application.InchesToPoints(0.118110236220472)
+        .PrintComments = xlPrintNoComments
+        .LeftFooter = "&8 " & "Façade " & Right(Feuille.Name, 4) & " Créée le " & Now
+        .CenterHorizontally = False
+        .CenterVertically = True
+        .PrintComments = xlPrintNoComments
+        .Orientation = xlLandscape
+        .Draft = False
+        .PaperSize = xlPaperA4
+        .FirstPageNumber = xlAutomatic
+        .Order = xlDownThenOver
+        .BlackAndWhite = False
+        .Zoom = 100
+    End With
+Application.PrintCommunication = True
+Feuille.DisplayPageBreaks = False
+End Sub
