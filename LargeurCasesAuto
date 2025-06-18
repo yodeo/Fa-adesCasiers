@@ -391,6 +391,6 @@ Sub VerificationFinaleEtAjustement(ws As Worksheet, listePDI As Object, capacite
            "Capacité totale : " & capaciteTotale & vbCrLf & _
            "Largeur utilisée : " & nouvelleLargeurTotale & vbCrLf & _
            "PDI actifs : " & totalePDIActifs & vbCrLf & _
-           "Statut : " & IIf(nouvelleLargeurTotale <= capaciteTotale, "✅ OK (pas de HC)", "⚠️ Optimisation partielle"), _
+           "Statut : " & IIf(nouvelleLargeurTotale <= capaciteTotale, "OK (pas de HC)", "Optimisation partielle"), _
            vbInformation, "Résultat optimisation"
 End Sub
