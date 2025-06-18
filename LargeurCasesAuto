@@ -1,16 +1,18 @@
 ' =====================================================
-' MACRO : Mettre la largeur à 4 pour tous les PDI non rattachés
+' MACRO : Mettre la largeur à 4 pour tous les PDI, 0 pour les rattachés
 ' =====================================================
-Sub DefinirLargeur4PourNonRattaches()
+Sub DefinirLargeur4PourTousLesNonRattaches()
     Dim wsAccueil As Worksheet
     Dim derniereLigne As Long
     Dim i As Long
     Dim numPDI As String
-    Dim compteurModifies As Long
+    Dim compteurModifies4 As Long
+    Dim compteurModifies0 As Long
     
     ' Initialisation
     Set wsAccueil = ThisWorkbook.Sheets("Accueil")
-    compteurModifies = 0
+    compteurModifies4 = 0
+    compteurModifies0 = 0
     
     ' Désactiver les mises à jour pour améliorer les performances
     Application.ScreenUpdating = False
@@ -24,11 +26,17 @@ Sub DefinirLargeur4PourNonRattaches()
         ' Lire le numéro PDI de la colonne A
         numPDI = CStr(wsAccueil.Cells(i, 1).Text)
         
-        ' Vérifier si ce n'est pas une ligne vide et si ce n'est pas un PDI rattaché
-        If numPDI <> "" And Not EstPDIRattache(numPDI) Then
-            ' Mettre la largeur à 4 en colonne G (colonne 7)
-            wsAccueil.Cells(i, 7).Value = 4
-            compteurModifies = compteurModifies + 1
+        ' Vérifier si ce n'est pas une ligne vide
+        If numPDI <> "" Then
+            If EstPDIRattache(numPDI, i) Then
+                ' PDI rattaché : mettre à 0
+                wsAccueil.Cells(i, 7).Value = 0
+                compteurModifies0 = compteurModifies0 + 1
+            Else
+                ' PDI principal : mettre à 4
+                wsAccueil.Cells(i, 7).Value = 4
+                compteurModifies4 = compteurModifies4 + 1
+            End If
         End If
     Next i
     
@@ -37,23 +45,27 @@ Sub DefinirLargeur4PourNonRattaches()
     Application.EnableEvents = True
     
     ' Message de confirmation
-    MsgBox "Largeur mise à 4 pour " & compteurModifies & " PDI non rattachés.", _
+    MsgBox "Largeurs mises à jour :" & vbCrLf & _
+           "- " & compteurModifies4 & " PDI principaux mis à 4" & vbCrLf & _
+           "- " & compteurModifies0 & " PDI rattachés mis à 0", _
            vbInformation, "Mise à jour terminée"
 End Sub
 
 ' =====================================================
-' MACRO : Mettre la largeur à 2 pour tous les PDI non rattachés
+' MACRO : Mettre la largeur à 2 pour tous les PDI, 0 pour les rattachés
 ' =====================================================
-Sub DefinirLargeur2PourNonRattaches()
+Sub DefinirLargeur2PourTousLesNonRattaches()
     Dim wsAccueil As Worksheet
     Dim derniereLigne As Long
     Dim i As Long
     Dim numPDI As String
-    Dim compteurModifies As Long
+    Dim compteurModifies2 As Long
+    Dim compteurModifies0 As Long
     
     ' Initialisation
     Set wsAccueil = ThisWorkbook.Sheets("Accueil")
-    compteurModifies = 0
+    compteurModifies2 = 0
+    compteurModifies0 = 0
     
     ' Désactiver les mises à jour pour améliorer les performances
     Application.ScreenUpdating = False
@@ -67,11 +79,17 @@ Sub DefinirLargeur2PourNonRattaches()
         ' Lire le numéro PDI de la colonne A
         numPDI = CStr(wsAccueil.Cells(i, 1).Text)
         
-        ' Vérifier si ce n'est pas une ligne vide et si ce n'est pas un PDI rattaché
-        If numPDI <> "" And Not EstPDIRattache(numPDI) Then
-            ' Mettre la largeur à 2 en colonne G (colonne 7)
-            wsAccueil.Cells(i, 7).Value = 2
-            compteurModifies = compteurModifies + 1
+        ' Vérifier si ce n'est pas une ligne vide
+        If numPDI <> "" Then
+            If EstPDIRattache(numPDI, i) Then
+                ' PDI rattaché : mettre à 0
+                wsAccueil.Cells(i, 7).Value = 0
+                compteurModifies0 = compteurModifies0 + 1
+            Else
+                ' PDI principal : mettre à 2
+                wsAccueil.Cells(i, 7).Value = 2
+                compteurModifies2 = compteurModifies2 + 1
+            End If
         End If
     Next i
     
@@ -80,70 +98,36 @@ Sub DefinirLargeur2PourNonRattaches()
     Application.EnableEvents = True
     
     ' Message de confirmation
-    MsgBox "Largeur mise à 2 pour " & compteurModifies & " PDI non rattachés.", _
+    MsgBox "Largeurs mises à jour :" & vbCrLf & _
+           "- " & compteurModifies2 & " PDI principaux mis à 2" & vbCrLf & _
+           "- " & compteurModifies0 & " PDI rattachés mis à 0", _
            vbInformation, "Mise à jour terminée"
 End Sub
 
 ' =====================================================
-' FONCTION : Déterminer si un PDI est rattaché
+' FONCTION : Déterminer si un PDI est rattaché (basé sur colonne F)
 ' =====================================================
-Function EstPDIRattache(numPDI As String) As Boolean
-    ' Cette fonction détermine si un PDI est "rattaché" en se basant sur
-    ' différents critères que vous pouvez adapter selon vos besoins
+Function EstPDIRattache(numPDI As String, ligneActuelle As Long) As Boolean
+    ' Cette fonction détermine si un PDI est "rattaché" en vérifiant
+    ' la valeur de la colonne F (TYPE PDI)
     
     Dim wsAccueil As Worksheet
-    Dim ligneActuelle As Long
-    Dim derniereLigne As Long
-    Dim i As Long
-    Dim largeurActuelle As Variant
+    Dim typePDI As String
     
     Set wsAccueil = ThisWorkbook.Sheets("Accueil")
-    derniereLigne = wsAccueil.Cells(wsAccueil.Rows.Count, "A").End(xlUp).Row
     
-    ' Trouver la ligne correspondant à ce numéro PDI
-    For i = 7 To derniereLigne
-        If CStr(wsAccueil.Cells(i, 1).Text) = numPDI Then
-            ligneActuelle = i
-            Exit For
-        End If
-    Next i
+    ' Lire la valeur de la colonne F (TYPE PDI) - colonne 6
+    typePDI = UCase(Trim(wsAccueil.Cells(ligneActuelle, 6).Text))
     
-    ' Si on n'a pas trouvé la ligne, ce n'est pas rattaché
-    If ligneActuelle = 0 Then
-        EstPDIRattache = False
-        Exit Function
-    End If
-    
-    ' CRITÈRE 1 : Si la largeur en colonne G est 0, c'est un PDI rattaché
-    largeurActuelle = wsAccueil.Cells(ligneActuelle, 7).Value
-    If ConvertirEnEntier(largeurActuelle, -1) = 0 Then
+    ' Vérifier si le type PDI contient "RATTACHÉ C" ou "RATTACHÉ P"
+    If typePDI = "RATTACHÉ C" Or typePDI = "RATTACHÉ P" Then
         EstPDIRattache = True
-        Exit Function
+    Else
+        EstPDIRattache = False
     End If
-    
-    ' CRITÈRE 2 : Vérifier si la ligne précédente a une largeur > 0
-    ' (cela indiquerait que ce PDI fait partie d'un groupe avec le précédent)
-    If ligneActuelle > 7 Then
-        Dim largeurPrecedente As Variant
-        largeurPrecedente = wsAccueil.Cells(ligneActuelle - 1, 7).Value
-        If ConvertirEnEntier(largeurPrecedente, 0) > 0 And ConvertirEnEntier(largeurActuelle, 0) = 0 Then
-            EstPDIRattache = True
-            Exit Function
-        End If
-    End If
-    
-    ' CRITÈRE 3 : Vous pouvez ajouter d'autres critères ici
-    ' Par exemple, vérifier une colonne spécifique qui indiquerait le rattachement
-    ' Exemple : Si colonne E contient "RATTACHÉ" ou "R"
-    ' If UCase(Trim(wsAccueil.Cells(ligneActuelle, 5).Text)) = "RATTACHÉ" Or _
-    '    UCase(Trim(wsAccueil.Cells(ligneActuelle, 5).Text)) = "R" Then
-    '     EstPDIRattache = True
-    '     Exit Function
-    ' End If
-    
-    ' Par défaut, si aucun critère n'est rempli, le PDI n'est pas rattaché
-    EstPDIRattache = False
 End Function
+
+
 
 ' =====================================================
 ' MACRO : Version avec choix de largeur via boîte de dialogue
@@ -153,26 +137,29 @@ Sub DefinirLargeurPersonnalisee()
     Dim derniereLigne As Long
     Dim i As Long
     Dim numPDI As String
-    Dim compteurModifies As Long
+    Dim compteurModifiesPrincipaux As Long
+    Dim compteurModifies0 As Long
     Dim nouvelleLargeur As String
     Dim largeurNumerique As Integer
     
     ' Demander à l'utilisateur la largeur souhaitée
-    nouvelleLargeur = InputBox("Quelle largeur souhaitez-vous appliquer aux PDI non rattachés ?", _
+    nouvelleLargeur = InputBox("Quelle largeur souhaitez-vous appliquer aux PDI principaux ?" & vbCrLf & _
+                              "(Les PDI rattachés seront automatiquement mis à 0)", _
                               "Définir largeur personnalisée", "4")
     
     ' Vérifier si l'utilisateur a annulé ou entré une valeur invalide
     If nouvelleLargeur = "" Then Exit Sub
     
     largeurNumerique = ConvertirEnEntier(nouvelleLargeur, -1)
-    If largeurNumerique < 0 Or largeurNumerique > 26 Then
-        MsgBox "Veuillez entrer une largeur entre 0 et 26.", vbExclamation
+    If largeurNumerique < 1 Or largeurNumerique > 26 Then
+        MsgBox "Veuillez entrer une largeur entre 1 et 26.", vbExclamation
         Exit Sub
     End If
     
     ' Initialisation
     Set wsAccueil = ThisWorkbook.Sheets("Accueil")
-    compteurModifies = 0
+    compteurModifiesPrincipaux = 0
+    compteurModifies0 = 0
     
     ' Désactiver les mises à jour pour améliorer les performances
     Application.ScreenUpdating = False
@@ -186,11 +173,17 @@ Sub DefinirLargeurPersonnalisee()
         ' Lire le numéro PDI de la colonne A
         numPDI = CStr(wsAccueil.Cells(i, 1).Text)
         
-        ' Vérifier si ce n'est pas une ligne vide et si ce n'est pas un PDI rattaché
-        If numPDI <> "" And Not EstPDIRattache(numPDI) Then
-            ' Mettre la largeur personnalisée en colonne G (colonne 7)
-            wsAccueil.Cells(i, 7).Value = largeurNumerique
-            compteurModifies = compteurModifies + 1
+        ' Vérifier si ce n'est pas une ligne vide
+        If numPDI <> "" Then
+            If EstPDIRattache(numPDI, i) Then
+                ' PDI rattaché : mettre à 0
+                wsAccueil.Cells(i, 7).Value = 0
+                compteurModifies0 = compteurModifies0 + 1
+            Else
+                ' PDI principal : mettre à la largeur personnalisée
+                wsAccueil.Cells(i, 7).Value = largeurNumerique
+                compteurModifiesPrincipaux = compteurModifiesPrincipaux + 1
+            End If
         End If
     Next i
     
@@ -199,6 +192,8 @@ Sub DefinirLargeurPersonnalisee()
     Application.EnableEvents = True
     
     ' Message de confirmation
-    MsgBox "Largeur mise à " & largeurNumerique & " pour " & compteurModifies & " PDI non rattachés.", _
+    MsgBox "Largeurs mises à jour :" & vbCrLf & _
+           "- " & compteurModifiesPrincipaux & " PDI principaux mis à " & largeurNumerique & vbCrLf & _
+           "- " & compteurModifies0 & " PDI rattachés mis à 0", _
            vbInformation, "Mise à jour terminée"
 End Sub
