@@ -7,7 +7,7 @@ Sub GenererFacadePDI()
     
     Dim wsSource As Worksheet, wsDest As Worksheet
     Dim derniereLigne As Long, i As Long
-    Dim numPDI As String, observations As String, nomVoie As String
+    Dim numPDI As String, Observations As String, nomVoie As String
     Dim largeurPDI As Integer
     Dim ligneActuelle As Long, colonneActuelle As Long
     Dim rngHaut As Range, rngBas As Range, rngCaisson As Range
@@ -100,7 +100,7 @@ Sub GenererFacadePDI()
         ' Lire les données de la ligne actuelle
         numPDI = CStr(wsSource.Cells(i, 1).Text)
         nomVoie = CStr(wsSource.Cells(i, 2).Text)
-        observations = CStr(wsSource.Cells(i, 4).Text)
+        Observations = CStr(wsSource.Cells(i, 4).Text)
         valeurLargeur = wsSource.Cells(i, 7).Value
         largeurPDI = ConvertirEnEntier(valeurLargeur, 0)
         
@@ -119,7 +119,7 @@ Sub GenererFacadePDI()
             
             ' Initialiser l'accumulation pour ce bloc
             numAccumule = numPDI
-            obsAccumulees = observations
+            obsAccumulees = Observations
             voieAccumulee = nomVoie
             largeurBloc = largeurPDI
             
@@ -462,10 +462,10 @@ Sub GenererFacadePDI()
     ' Appeler la macro d'ajustement d'impression
     'Call AjusterParametresImpression
     
-    Call MettreEnFormeAccueil
+    'Call MettreEnFormeAccueil
     
     ' Appliquer les hachures multivoies
-    Call AppliquerHachuresMultivoies(wsDest)
+    'Call AppliquerHachuresMultivoies(wsDest)
     
     ' Message de confirmation
     MsgBox "La façade PDI a été générée avec succès !" & vbCrLf & _
@@ -532,6 +532,8 @@ Sub RecalculerCellulesVidesParCaisson(ws As Worksheet)
     horsCapacitePermanent = False
     derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     ligneDebutCaisson = 7
+    
+    Call EnleverProtectionFeuille
     
     ' Effacer d'abord toute la colonne W
     ws.Range("W7:W" & derniereLigne).ClearContents
@@ -1715,26 +1717,26 @@ End Function
 ' SUB AMÉLIORÉE : Mettre à jour la colonne H avec couleur
 ' =====================================================
 Sub MettreAJourColonneHAvecCouleur(wsSource As Worksheet, dictCodes As Object, dictHorsCapacite As Object)
-    Dim ligne As Long
+    Dim Ligne As Long
     Dim cle As Variant
     
     ' Parcourir toutes les clés du dictionnaire (numéros de ligne)
     For Each cle In dictCodes.Keys
-        ligne = CLng(cle)
+        Ligne = CLng(cle)
         
         ' Mettre à jour la colonne H (colonne 8) avec le code calculé
-        wsSource.Cells(ligne, 8).Value = dictCodes(cle)
+        wsSource.Cells(Ligne, 8).Value = dictCodes(cle)
         
         ' Si cette ligne est hors capacité, la colorer en rouge
-        If dictHorsCapacite.Exists(ligne) Then
-            With wsSource.Cells(ligne, 8)
+        If dictHorsCapacite.Exists(Ligne) Then
+            With wsSource.Cells(Ligne, 8)
                 .Interior.Color = RGB(255, 0, 0) ' Fond rouge
                 .Font.Color = RGB(255, 255, 255) ' Texte blanc
                 .Font.Bold = True
             End With
         Else
             ' Réinitialiser le formatage pour les cases normales
-            With wsSource.Cells(ligne, 8)
+            With wsSource.Cells(Ligne, 8)
                 .Interior.pattern = xlNone ' Pas de couleur de fond
                 .Font.Color = RGB(0, 0, 0) ' Texte noir
                 .Font.Bold = False
@@ -1746,7 +1748,7 @@ End Sub
 ' =====================================================
 ' FONCTION : Compter les cellules vides en fin de ligne
 ' =====================================================
-Function CompterCellulesVidesFinLigne(ws As Worksheet, ligne As Long) As Integer
+Function CompterCellulesVidesFinLigne(ws As Worksheet, Ligne As Long) As Integer
     Dim compte As Integer
     Dim col As Integer
     
@@ -1755,10 +1757,10 @@ Function CompterCellulesVidesFinLigne(ws As Worksheet, ligne As Long) As Integer
     ' Parcourir de la colonne Z (26) vers la gauche
     For col = 26 To 1 Step -1
         ' Vérifier les deux lignes du caisson
-        If ws.Cells(ligne, col).Value = "" And ws.Cells(ligne + 1, col).Value = "" Then
+        If ws.Cells(Ligne, col).Value = "" And ws.Cells(Ligne + 1, col).Value = "" Then
             ' Si la cellule n'est pas fusionnée ou fait partie d'une zone vide
-            If Not ws.Cells(ligne, col).MergeCells Or _
-               (ws.Cells(ligne, col).MergeCells And ws.Cells(ligne, col).MergeArea.Cells(1, 1).Value = "") Then
+            If Not ws.Cells(Ligne, col).MergeCells Or _
+               (ws.Cells(Ligne, col).MergeCells And ws.Cells(Ligne, col).MergeArea.Cells(1, 1).Value = "") Then
                 compte = compte + 1
             Else
                 ' On a trouvé une cellule non vide, on arrête
@@ -1842,11 +1844,11 @@ End Function
 ' =====================================================
 ' SUB : Ajouter le code caisson en colonne AA
 ' =====================================================
-Sub AjouterCodeCaisson(ws As Worksheet, ligne As Long, code As String)
+Sub AjouterCodeCaisson(ws As Worksheet, Ligne As Long, code As String)
     Dim rngCode As Range
     
     ' Fusionner les 2 lignes en colonne AA
-    Set rngCode = ws.Range(ws.Cells(ligne, 27), ws.Cells(ligne + 1, 27))
+    Set rngCode = ws.Range(ws.Cells(Ligne, 27), ws.Cells(Ligne + 1, 27))
     rngCode.Merge
     
     ' Ajouter le code
@@ -2305,7 +2307,7 @@ Function ObtenirCouleurDistinctePourVoie(nomVoie As String, paletteCouleurs As O
 End Function
 
 ' Obtient une couleur distincte pour une voie avec vérification d'adjacence (NOUVELLE VERSION AMÉLIORÉE)
-Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, paletteCouleurs As Object, dictCouleursExistantes As Object, colonne As Long, ws As Worksheet, ligne As Long) As Long
+Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, paletteCouleurs As Object, dictCouleursExistantes As Object, colonne As Long, ws As Worksheet, Ligne As Long) As Long
     Dim hashVoie As Long
     Dim i As Integer
     Dim indexCouleur As Integer
@@ -2325,8 +2327,8 @@ Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, palette
     Next i
     
     ' Obtenir les couleurs des voies adjacentes
-    couleurGauche = ObtenirCouleurVoieAdjacente(ws, ligne, colonne - 1)
-    couleurDroite = ObtenirCouleurVoieAdjacente(ws, ligne, colonne + 1)
+    couleurGauche = ObtenirCouleurVoieAdjacente(ws, Ligne, colonne - 1)
+    couleurDroite = ObtenirCouleurVoieAdjacente(ws, Ligne, colonne + 1)
     
     ' Essayer de trouver une couleur avec suffisamment de contraste
     tentatives = 0
@@ -2371,7 +2373,7 @@ Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, palette
 End Function
 
 ' Fonction utilitaire pour obtenir la couleur d'une voie adjacente
-Function ObtenirCouleurVoieAdjacente(ws As Worksheet, ligne As Long, colonne As Long) As Long
+Function ObtenirCouleurVoieAdjacente(ws As Worksheet, Ligne As Long, colonne As Long) As Long
     On Error GoTo ErrorHandler
     
     ' Vérifier que la colonne est dans les limites
@@ -2382,7 +2384,7 @@ Function ObtenirCouleurVoieAdjacente(ws As Worksheet, ligne As Long, colonne As 
     
     ' Vérifier la cellule de voie (ligne + 1 pour la ligne des voies)
     Dim celluleVoie As Range
-    Set celluleVoie = ws.Cells(ligne + 1, colonne)
+    Set celluleVoie = ws.Cells(Ligne + 1, colonne)
     
     ' Si la cellule contient une voie (pas vide, pas numérique)
     If Not IsEmpty(celluleVoie.Value) And Not IsNumeric(celluleVoie.Value) Then
@@ -2484,7 +2486,7 @@ End Sub
 ' Fonction de diagnostic pour vérifier les couleurs adjacentes
 Sub DiagnostiquerCouleursAdjacentes()
     Dim ws As Worksheet
-    Dim ligne As Long, colonne As Long
+    Dim Ligne As Long, colonne As Long
     Dim rapport As String
     Dim celluleVoie As Range, celluleVoieGauche As Range, celluleVoieDroite As Range
     Dim nomVoie As String, nomVoieGauche As String, nomVoieDroite As String
@@ -2503,9 +2505,9 @@ Sub DiagnostiquerCouleursAdjacentes()
     problemesDetectes = 0
     
     ' Parcourir les lignes de voies (lignes paires)
-    For ligne = 2 To ws.UsedRange.Rows.Count Step 2
+    For Ligne = 2 To ws.UsedRange.Rows.Count Step 2
         For colonne = 1 To 26 ' Colonnes A à Z
-            Set celluleVoie = ws.Cells(ligne, colonne)
+            Set celluleVoie = ws.Cells(Ligne, colonne)
             
             ' Si la cellule contient une voie
             If Not IsEmpty(celluleVoie.Value) And Not IsNumeric(celluleVoie.Value) Then
@@ -2514,7 +2516,7 @@ Sub DiagnostiquerCouleursAdjacentes()
                 
                 ' Vérifier la voie à droite
                 If colonne < 26 Then
-                    Set celluleVoieDroite = ws.Cells(ligne, colonne + 1)
+                    Set celluleVoieDroite = ws.Cells(Ligne, colonne + 1)
                     If Not IsEmpty(celluleVoieDroite.Value) And Not IsNumeric(celluleVoieDroite.Value) Then
                         nomVoieDroite = Trim(CStr(celluleVoieDroite.Value))
                         couleurDroite = celluleVoieDroite.Interior.Color
@@ -2538,13 +2540,13 @@ Sub DiagnostiquerCouleursAdjacentes()
                 End If
             End If
         Next colonne
-    Next ligne
+    Next Ligne
     
     If problemesDetectes = 0 Then
-        rapport = rapport & "✅ Aucun problème de contraste détecté !" & vbCrLf
+        rapport = rapport & "? Aucun problème de contraste détecté !" & vbCrLf
         rapport = rapport & "Toutes les voies adjacentes ont des couleurs suffisamment distinctes."
     Else
-        rapport = rapport & "⚠️ " & problemesDetectes & " problème(s) de contraste détecté(s)." & vbCrLf
+        rapport = rapport & "?? " & problemesDetectes & " problème(s) de contraste détecté(s)." & vbCrLf
         rapport = rapport & "Relancez la génération de façade pour corriger automatiquement."
     End If
     
@@ -2559,3 +2561,4 @@ End Sub
 Sub LancerImportBDC()
     Call ImporterBDC
 End Sub
+
