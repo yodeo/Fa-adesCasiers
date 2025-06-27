@@ -242,20 +242,17 @@ CleanUp:
            vbInformation, "Optimisation Façade"
 End Sub
 
-' Fonction pour identifier les cases multivoies
+' Fonction pour identifier les cases multivoies (CORRIGÉE)
 Function IdentifierCasesMultivoies(ws As Worksheet) As Object
     Dim dictMultivoies As Object
-    Dim dictVoiesParNum As Object
     Dim cell As Range
     Dim numeroPDI As String
     Dim voie As String
-    Dim cellAbove As Range
     Dim cellBelow As Range
     
     Set dictMultivoies = CreateObject("Scripting.Dictionary")
-    Set dictVoiesParNum = CreateObject("Scripting.Dictionary")
     
-    ' Analyser toutes les cellules pour identifier les voies par numéro PDI
+    ' Analyser chaque cellule individuellement pour détecter les vraies cases multivoies
     For Each cell In ws.UsedRange
         If cell.Row Mod 2 = 1 Then ' Lignes impaires (numéros PDI)
             If Not IsEmpty(cell.Value) And cell.Value <> "" Then
@@ -268,20 +265,28 @@ Function IdentifierCasesMultivoies(ws As Worksheet) As Object
                     
                     ' Ne pas traiter les valeurs numériques comme des voies
                     If Not IsNumeric(voie) Then
-                        ' Construire la clé unique pour ce numéro PDI
-                        Dim cle As String
-                        cle = numeroPDI & "|" & cell.Address
+                        ' LOGIQUE CORRIGÉE: Vérifier si cette cellule spécifique contient plusieurs voies
+                        Dim estMultivoie As Boolean
+                        estMultivoie = False
                         
-                        ' Stocker la voie pour ce numéro PDI
-                        If Not dictVoiesParNum.Exists(numeroPDI) Then
-                            dictVoiesParNum.Add numeroPDI, CreateObject("Scripting.Dictionary")
+                        ' Méthode 1: Détecter les séparateurs dans la voie (point-virgule, virgule, etc.)
+                        If InStr(voie, ";") > 0 Or InStr(voie, ",") > 0 Or InStr(voie, " / ") > 0 Or InStr(voie, " et ") > 0 Then
+                            estMultivoie = True
                         End If
                         
-                        ' Ajouter la voie à la liste des voies pour ce numéro
-                        If Not dictVoiesParNum(numeroPDI).Exists(voie) Then
-                            dictVoiesParNum(numeroPDI).Add voie, 1
-                        Else
-                            dictVoiesParNum(numeroPDI)(voie) = dictVoiesParNum(numeroPDI)(voie) + 1
+                        ' Méthode 2: Vérifier si la cellule fait partie d'une fusion qui englobe plusieurs voies distinctes
+                        If Not estMultivoie And cellBelow.MergeCells Then
+                            estMultivoie = AnalyserFusionMultivoies(ws, cellBelow)
+                        End If
+                        
+                        ' Méthode 3: Détecter les cases avec même numéro PDI mais dans des colonnes adjacentes avec voies différentes
+                        If Not estMultivoie Then
+                            estMultivoie = DetecterVoisinsMultivoies(ws, cell, numeroPDI)
+                        End If
+                        
+                        ' Si cette case spécifique est multivoie, l'ajouter au dictionnaire
+                        If estMultivoie Then
+                            dictMultivoies.Add cell.Address, voie
                         End If
                     End If
                 End If
@@ -289,38 +294,87 @@ Function IdentifierCasesMultivoies(ws As Worksheet) As Object
         End If
     Next cell
     
-    ' Identifier les cases multivoies (numéros PDI avec plusieurs voies différentes)
-    Dim numero As Variant
-    For Each numero In dictVoiesParNum.Keys
-        If dictVoiesParNum(numero).Count > 1 Then
-            ' Ce numéro PDI appartient à plusieurs voies différentes
-            For Each cell In ws.UsedRange
-                If cell.Row Mod 2 = 1 Then ' Lignes impaires (numéros PDI)
-                    If Not IsEmpty(cell.Value) And Trim(CStr(cell.Value)) = numero Then
-                        dictMultivoies.Add cell.Address, True
-                    End If
-                End If
-            Next cell
-        End If
-    Next numero
-    
     Set IdentifierCasesMultivoies = dictMultivoies
 End Function
 
-' Fonction pour appliquer les hachures aux cases multivoies
+' Fonction auxiliaire pour analyser les fusions multivoies
+Function AnalyserFusionMultivoies(ws As Worksheet, cellVoie As Range) As Boolean
+    Dim cellFusion As Range
+    Dim voiesDistinctes As Object
+    Dim voie As String
+    
+    Set voiesDistinctes = CreateObject("Scripting.Dictionary")
+    
+    ' Analyser toutes les cellules dans la zone de fusion
+    For Each cellFusion In cellVoie.MergeArea
+        If cellFusion.Row Mod 2 = 0 Then ' Lignes paires (voies)
+            If Not IsEmpty(cellFusion.Value) And cellFusion.Value <> "" Then
+                voie = Trim(CStr(cellFusion.Value))
+                If Not IsNumeric(voie) And Not voiesDistinctes.Exists(voie) Then
+                    voiesDistinctes.Add voie, True
+                End If
+            End If
+        End If
+    Next cellFusion
+    
+    ' Si plus d'une voie distincte trouvée dans la fusion, c'est multivoie
+    AnalyserFusionMultivoies = (voiesDistinctes.Count > 1)
+End Function
+
+' Fonction auxiliaire pour détecter les voisins avec voies différentes
+Function DetecterVoisinsMultivoies(ws As Worksheet, cellNum As Range, numeroPDI As String) As Boolean
+    Dim colGauche As Integer, colDroite As Integer
+    Dim cellGauche As Range, cellDroite As Range
+    Dim voieActuelle As String, voieGauche As String, voieDroite As String
+    
+    ' Obtenir la voie de la cellule actuelle
+    voieActuelle = Trim(CStr(ws.Cells(cellNum.Row + 1, cellNum.Column).Value))
+    
+    ' Vérifier les colonnes adjacentes
+    colGauche = cellNum.Column - 1
+    colDroite = cellNum.Column + 1
+    
+    ' Vérifier à gauche
+    If colGauche >= 1 Then
+        Set cellGauche = ws.Cells(cellNum.Row, colGauche)
+        If Not IsEmpty(cellGauche.Value) And Trim(CStr(cellGauche.Value)) = numeroPDI Then
+            voieGauche = Trim(CStr(ws.Cells(cellNum.Row + 1, colGauche).Value))
+            If voieGauche <> "" And voieGauche <> voieActuelle And Not IsNumeric(voieGauche) Then
+                DetecterVoisinsMultivoies = True
+                Exit Function
+            End If
+        End If
+    End If
+    
+    ' Vérifier à droite
+    If colDroite <= ws.Columns.Count Then
+        Set cellDroite = ws.Cells(cellNum.Row, colDroite)
+        If Not IsEmpty(cellDroite.Value) And Trim(CStr(cellDroite.Value)) = numeroPDI Then
+            voieDroite = Trim(CStr(ws.Cells(cellNum.Row + 1, colDroite).Value))
+            If voieDroite <> "" And voieDroite <> voieActuelle And Not IsNumeric(voieDroite) Then
+                DetecterVoisinsMultivoies = True
+                Exit Function
+            End If
+        End If
+    End If
+    
+    DetecterVoisinsMultivoies = False
+End Function
+
+' Fonction pour appliquer les hachures aux cases multivoies (AMÉLIORÉE)
 Sub AppliquerHachuresMultivoies(ws As Worksheet)
     Dim dictMultivoies As Object
     Dim cell As Range
     Dim adresse As Variant
     Dim compteur As Integer
     
-    ' Identifier les cases multivoies
-    Set dictMultivoies = IdentifierCasesMultivoies(ws)
-    
-    If dictMultivoies.Count = 0 Then
-        MsgBox "Aucune case multivoie détectée.", vbInformation, "Hachures Multivoies"
+    ' Validation avant application
+    If Not ValiderAvantHachures(ws) Then
         Exit Sub
     End If
+    
+    ' Identifier les cases multivoies (nouvelle logique corrigée)
+    Set dictMultivoies = IdentifierCasesMultivoies(ws)
     
     Application.ScreenUpdating = False
     compteur = 0
@@ -348,7 +402,9 @@ Sub AppliquerHachuresMultivoies(ws As Worksheet)
     
     Application.ScreenUpdating = True
     
-    MsgBox "Hachures appliquées à " & compteur & " cases multivoies.", vbInformation, "Hachures Multivoies"
+    MsgBox "Hachures appliquées à " & compteur & " cases multivoies." & vbCrLf & _
+           "Seules les cases réellement multivoies ont été hachurées.", _
+           vbInformation, "Hachures Multivoies - Corrigé"
 End Sub
 
 ' Fonction utilitaire pour supprimer les hachures multivoies
@@ -569,6 +625,94 @@ Sub SupprimerImagesFacade()
     
     MsgBox "Images de façade supprimées : " & compteur, vbInformation
 End Sub
+
+' Fonction de diagnostic pour valider la détection des cases multivoies
+Sub DiagnostiquerCasesMultivoies()
+    Dim ws As Worksheet
+    Dim dictMultivoies As Object
+    Dim adresse As Variant
+    Dim cell As Range
+    Dim cellBelow As Range
+    Dim rapport As String
+    Dim compteur As Integer
+    
+    Set ws = ActiveSheet
+    
+    If ws Is Nothing Then
+        MsgBox "Aucune feuille active détectée.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Obtenir les cases multivoies détectées
+    Set dictMultivoies = IdentifierCasesMultivoies(ws)
+    
+    rapport = "DIAGNOSTIC DES CASES MULTIVOIES" & vbCrLf & vbCrLf
+    rapport = rapport & "Cases détectées comme multivoies : " & dictMultivoies.Count & vbCrLf & vbCrLf
+    
+    If dictMultivoies.Count = 0 Then
+        rapport = rapport & "Aucune case multivoie détectée."
+    Else
+        compteur = 0
+        For Each adresse In dictMultivoies.Keys
+            compteur = compteur + 1
+            Set cell = ws.Range(adresse)
+            Set cellBelow = ws.Cells(cell.Row + 1, cell.Column)
+            
+            rapport = rapport & compteur & ". Case " & adresse & vbCrLf
+            rapport = rapport & "   Numéro PDI : " & cell.Value & vbCrLf
+            rapport = rapport & "   Voie(s) : " & cellBelow.Value & vbCrLf
+            rapport = rapport & "   Raison : " & dictMultivoies(adresse) & vbCrLf & vbCrLf
+            
+            ' Limiter l'affichage pour éviter les messages trop longs
+            If compteur >= 10 Then
+                rapport = rapport & "... (et " & (dictMultivoies.Count - 10) & " autres)" & vbCrLf
+                Exit For
+            End If
+        Next adresse
+    End If
+    
+    rapport = rapport & vbCrLf & "Utilisez cette information pour vérifier si les détections sont correctes."
+    
+    MsgBox rapport, vbInformation, "Diagnostic Cases Multivoies"
+End Sub
+
+' Fonction de validation avant application des hachures
+Function ValiderAvantHachures(ws As Worksheet) As Boolean
+    Dim dictMultivoies As Object
+    Dim reponse As VbMsgBoxResult
+    
+    Set dictMultivoies = IdentifierCasesMultivoies(ws)
+    
+    If dictMultivoies.Count = 0 Then
+        MsgBox "Aucune case multivoie détectée. Aucune hachure ne sera appliquée.", vbInformation
+        ValiderAvantHachures = False
+        Exit Function
+    End If
+    
+    reponse = MsgBox("Détection terminée :" & vbCrLf & _
+                     "Nombre de cases multivoies trouvées : " & dictMultivoies.Count & vbCrLf & vbCrLf & _
+                     "Souhaitez-vous voir le détail des cases détectées ?", _
+                     vbQuestion + vbYesNoCancel, "Validation Hachures")
+    
+    Select Case reponse
+        Case vbYes
+            ' Afficher le diagnostic détaillé
+            Call DiagnostiquerCasesMultivoies
+            
+            ' Demander confirmation après le diagnostic
+            reponse = MsgBox("Après avoir vu le diagnostic, souhaitez-vous appliquer les hachures ?", _
+                             vbQuestion + vbYesNo, "Confirmation Hachures")
+            ValiderAvantHachures = (reponse = vbYes)
+            
+        Case vbNo
+            ' Appliquer directement les hachures
+            ValiderAvantHachures = True
+            
+        Case vbCancel
+            ' Annuler l'opération
+            ValiderAvantHachures = False
+    End Select
+End Function
 
 ' Fonction pour appeler NomOngletActif si elle existe
 Sub AppelerNomOngletActif()
