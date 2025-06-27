@@ -1,0 +1,40 @@
+Sub MettreEnFormeAccueil()
+    Dim ws As Worksheet
+    Dim plageW As Range, plageG As Range
+    Dim derniereLigne As Long
+
+    Set ws = ThisWorkbook.Sheets("Accueil")
+
+    ' Centrer tout le contenu de la feuille horizontalement et verticalement
+    With ws.Cells
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+
+    ' Trouver la dernière ligne utilisée
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+
+    ' Définir les plages concernées
+    Set plageW = ws.Range("W7:W" & derniereLigne)
+    Set plageG = ws.Range("G7:G" & derniereLigne)
+
+    ' Supprimer les anciennes règles si nécessaire (optionnel)
+    plageW.FormatConditions.Delete
+    plageG.FormatConditions.Delete
+
+    ' Appliquer mise en forme conditionnelle colonne W (>0 ? fond rouge, texte blanc)
+    With plageW.FormatConditions.Add(Type:=xlCellValue, Operator:=xlGreater, Formula1:="0")
+        .Interior.Color = RGB(255, 0, 0)
+        .Font.Color = RGB(255, 255, 255)
+    End With
+
+    ' Appliquer mise en forme conditionnelle colonne G (>0 ? fond bleu clair, texte noir)
+    With plageG.FormatConditions.Add(Type:=xlCellValue, Operator:=xlGreater, Formula1:="0")
+        .Interior.Color = RGB(173, 216, 230) ' Bleu clair
+        .Font.Color = RGB(0, 0, 0) ' Noir
+    End With
+
+
+    'MsgBox "Mise en forme conditionnelle appliquée avec succès.", vbInformation
+End Sub
+
