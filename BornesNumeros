@@ -171,7 +171,7 @@ Function EstUnSymbole(valeur As String) As Boolean
     ' Test simple : si la valeur ne contient aucun chiffre, c'est probablement un symbole
     Dim reg As Object
     Set reg = CreateObject("VBScript.RegExp")
-    reg.Pattern = "\d"
+    reg.pattern = "\d"
     reg.Global = True
     
     ' Si pas de chiffres trouvés, c'est un symbole
@@ -260,7 +260,7 @@ Sub ExtraireNumerosPDI(valeur As String, ByRef numsP As Collection, ByRef numsI 
     ' Utiliser seulement l'expression régulière pour extraire les numéros
     Dim reg As Object
     Set reg = CreateObject("VBScript.RegExp")
-    reg.Pattern = "\d+"
+    reg.pattern = "\d+"
     reg.Global = True
     
     Dim matches As Object
@@ -487,7 +487,7 @@ Sub AppliquerFormatageDifferencieBornes(rng As Range, contenu As String)
     Else
         symbole = ""
         If InStr(contenu, vbCrLf) > 0 Then
-            Dim parties As Variant
+            'Dim parties As Variant
             parties = Split(contenu, vbCrLf)
             numeros = parties(0)
             If UBound(parties) > 0 Then observations = parties(1)
@@ -505,7 +505,7 @@ End Sub
 ' =====================================================
 Sub BoutonSimplificationBornes()
     If MsgBox("Voulez-vous simplifier les bornes de numéros dans la façade PDI ?" & vbCrLf & _
-              "Cette opération regroupera les numéros consécutifs en bornes (ex: 1, 3, 5 → 1 à 5).", _
+              "Cette opération regroupera les numéros consécutifs en bornes (ex: 1, 3, 5 ? 1 à 5).", _
               vbQuestion + vbYesNo, "Simplification des bornes") = vbYes Then
         Call SimplificationBornesNumPDI
     End If
@@ -543,3 +543,4 @@ Sub TesterCelluleSimple()
     
     On Error GoTo 0
 End Sub
+
