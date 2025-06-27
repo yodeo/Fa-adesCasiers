@@ -1,315 +1,51 @@
+'=======================
+' IMPORT BDC ULTRA-MINIMALISTE
+'=======================
 Option Explicit
-'************************************************************************************************
-'*                                                                                              *
-'*                                                                                              *
-'*                              laurent.lemee@laposte.fr 2021-2023                              *
-'*                                                                                              *
-'*                                                                                              *
-'*                                                                                              *
-'************************************************************************************************
 
-Public Const nbLigneReserv As Integer = 5 'lignes figées en haut
-Public shTournee As Worksheet
-Public NbColonnes As Integer
-Public Tablo
-Public InfosRegroupee()
-Public CouleursVoies
-Public CouleursPolice
-Public CouleursPDI
-Public Module()
-Public fin As Label
-Public Mur As Boolean
-Public SelectionActive As Range
-Public MiseaJour As Boolean 'si import de MAJ
-Public TriangleRouge As Boolean
-Public IndicateurCommentaires As Long
-Public DeuxiemeTour As Boolean
-Public PoliceMaigre As Boolean
-Public Observations As Boolean
-Public PoliceGrande As Integer
-Public MontrerTypage As Boolean
-Public Jeu
-Public JeanneMas As Boolean
-Public NbCoupuresCasier As Long
-Public ListeUDBprio()
-
-' Constantes pour les index de colonnes du fichier BDC
-Private Const Cnumero As Integer = 4
-Private Const Cext As Integer = 5
-Private Const Cvoie As Integer = 6
-Private Const Cville As Integer = 7
-Private Const Cobs As Integer = 8
-Private Const Cid As Integer = 55
-Private Const Ccea As Integer = 56
-Private Const Cudb As Integer = 19
-Private Const Ccp As Integer = 20
-Private Const Ctypage As Integer = 22
-Private Const CpresseSem As Integer = 23
-Private Const CpreTot As Integer = 24
-Private Const CpreND As Integer = 25
-Private Const CpreProSaisBAL As Integer = 26
-Private Const CpreProSaisMP As Integer = 27
-Private Const CprePartRSMP As Integer = 28
-Private Const CprePartRSBAL As Integer = 29
-Private Const CprePartSaisMP As Integer = 30
-Private Const CprePartSaisBAL As Integer = 31
-Private Const CnaturePDI As Integer = 32
-Private Const CtypeAcces As Integer = 33
-Private Const ClocalisationBAL As Integer = 34
-Private Const CdistanceAP As Integer = 35
-Private Const Cstop As Integer = 36
-Private Const Cpot As Integer = 37
-Private Const CpartLoc As Integer = 38
-Private Const CprePartMP As Integer = 39
-Private Const CprePartBAL As Integer = 40
-Private Const CpreProMP As Integer = 41
-Private Const CpreProBAL As Integer = 42
-
-Sub NewImportBDC()
-Dim MonBDC, Tournee As String, Tournee2 As String, Derligne, Ligne, ShBDC, PRE, MAJbdc, shOld As Worksheet, RngOld As Range, i, MP, BAL, RS, Sais
-Dim DerLigneOld, MA, finito As Label, nextiteration As Label
-Dim TotPRE, TotPOT, TotSTOP
-JeanneMas = True
-Application.ScreenUpdating = False
-On Error GoTo fin
-Application.EnableEvents = False
-
-'****************************************************************************
-Dim MyBDC, k
-MyBDC = Application.GetOpenFilename("Import du ou des BDC  (*.xls*), *.xls*", , "Sélection du (ou des) BDC Géop@d", , True)
-If IsArray(MyBDC) = False Then
-    MsgBox "vous n'avez selectionné aucun fichier..." & vbCr & "Importation annulée !", vbExclamation
-    Exit Sub
-End If
-'pour chaque bdc
-For k = LBound(MyBDC) To UBound(MyBDC)
-    MiseaJour = False
-    Set MonBDC = Workbooks.Open(MyBDC(k), Local:=True)
-    Set ShBDC = MonBDC.Sheets(1)
-'**********************************************************************************************************
-    If ShBDC.Name = "Liste PDI" And ShBDC.Cells(1, 55) = "ID" Then
-        
-        Derligne = ShBDC.Range("D" & Rows.Count).End(xlUp).Row
-        Tournee = ShBDC.Range("A" & Derligne + 4)
-            If Tournee = "" Then
-                MsgBox "BDC sans indication de tournée, la tournée sera 0000"
-                Tournee = "0000"
-            Else
-                Tournee2 = Mid(Tournee, Len(Tournee) - 6, 6)
-                Tournee = Mid(Tournee, Len(Tournee) - 4, 4)
-            End If
-            MAJbdc = 0
-
-         If FeuilleExiste(Tournee) Then
-            MAJbdc = MsgBox("Tournée " & Tournee & " déjà présente ! voulez vous :" & vbLf & vbLf _
-                        & "- mettre à jour le casier existant (OUI)" & vbLf & vbLf _
-                        & "- supprimer et remplacer le casier existant (NON)" & vbLf & vbLf _
-                        & "- annuler l'importation (ANNULER)", vbYesNoCancel + vbQuestion, "Attention !")
-        End If
-        
-        If MAJbdc = vbCancel Then GoTo finito
-        
-        If MAJbdc = vbYes Then
-            Set shOld = ThisWorkbook.Sheets(Tournee)
-            shOld.Name = "old" & Tournee
-            Application.DisplayAlerts = False
-            On Error Resume Next
-            ThisWorkbook.Sheets("Faç" & Tournee).Delete
-            On Error GoTo 0
-            Application.DisplayAlerts = True
+Sub ImporterBDC_Minimaliste()
+    Dim FichierBDC As Variant
+    Dim wbBDC As Workbook, wsBDC As Worksheet
+    Dim wsDest As Worksheet
+    Dim Derligne As Long, i As Long, nbLigneReserv As Long
+    Dim Tablo As Variant
     
-        End If
-        If MAJbdc = vbNo Then
-            Application.DisplayAlerts = False
-            On Error Resume Next
-            ThisWorkbook.Sheets(Tournee).Delete
-            ThisWorkbook.Sheets("Faç" & Tournee).Delete
-            On Error GoTo 0
-            Application.DisplayAlerts = True
-        End If
-        
-        If Not (FeuilleExiste(Tournee)) Then
-            Set shTournee = ThisWorkbook.Sheets.Add(, ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
-            shTournee.Name = "Accueil"
-                For i = ThisWorkbook.Sheets.Count To 2 Step -1 'ça mange pas de pain de trier les feuilles
-                    If IsNumeric(ThisWorkbook.Sheets(i).Name) And shTournee.Name < ThisWorkbook.Sheets(i).Name Then
-                        shTournee.Move before:=ThisWorkbook.Sheets(i)
-                    End If
-                Next i
+    ' 1. Sélection du BDC (fichier Excel)
+    FichierBDC = Application.GetOpenFilename("Fichier BDC (*.xls*), *.xls*", , "Sélectionner le BDC")
+    If VarType(FichierBDC) = vbBoolean Then Exit Sub 'Annulation
     
-            shTournee.[a1] = Tournee2
-            shTournee.Cells.NumberFormat = "@"
-            shTournee.Range("A" & 1 + nbLigneReserv & ":V" & 1 + nbLigneReserv) = Array("NUM ext", "VOIE", "VILLE", _
-                "OBSERVATIONS", "PRE", "TYPE PDI", "LARGEUR", "CASE MODULE", "ID PDI", "Accès", "Loc", _
-                   "PQ", "STOP", "Pot", "PartLoc", "MP", "PRE", "RS/Sais", "CodeUDB", "CP", "Libre", "DP")
-            Tablo = ShBDC.Range("A4:BG" & Derligne)
-                '********************************************************************
-                
-                Call DetourParIP
-                
-                Call DetourParTypage
-                
-                '********************************************************************
-            For Ligne = 2 To UBound(Tablo)
-                shTournee.Cells(Ligne + nbLigneReserv, 1) = Tablo(Ligne, Cnumero) & IIf(Tablo(Ligne, Cext) = "", "", " " & Tablo(Ligne, Cext)) 'numero + ext
-                shTournee.Cells(Ligne + nbLigneReserv, 2) = Tablo(Ligne, Cvoie) 'voie
-                shTournee.Cells(Ligne + nbLigneReserv, 3) = Tablo(Ligne, Cville) 'ville
-                shTournee.Cells(Ligne + nbLigneReserv, 4) = Tablo(Ligne, Cobs) 'obs
-                shTournee.Cells(Ligne + nbLigneReserv, 9) = Tablo(Ligne, Cid) & "@" & Tablo(Ligne, Ccea) 'id pdi & CEA
-                shTournee.Cells(Ligne + nbLigneReserv, 19) = Tablo(Ligne, Cudb) 'code UDB
-                shTournee.Cells(Ligne + nbLigneReserv, 20) = Tablo(Ligne, Ccp) 'CP stocké dans col présence plaque de rue
-                'col 21 en réserve
-                shTournee.Cells(Ligne + nbLigneReserv, 22) = Tablo(Ligne, Ctypage) 'Couleur A/B
-                If Tablo(Ligne, Ctypage) = "B" Then shTournee.Cells(Ligne + nbLigneReserv, 22).HorizontalAlignment = xlRight
-                If Tablo(Ligne, CpresseSem) > 0 Then 'correction 29/3/2023
-                    shTournee.Cells(Ligne + nbLigneReserv, 6) = "Presse Q"
-                    shTournee.Cells(Ligne + nbLigneReserv, 12) = "X"
-                End If
-                ' corriger le calcul des PRE
-                PRE = Tablo(Ligne, CpreTot) - Tablo(Ligne, CpreND) - Tablo(Ligne, CpreProSaisBAL) - Tablo(Ligne, CpreProSaisMP) _
-                        - Tablo(Ligne, CprePartRSMP) - Tablo(Ligne, CprePartRSBAL) - Tablo(Ligne, CprePartSaisMP) - Tablo(Ligne, CprePartSaisBAL) 'PRE Permanents
-                If PRE <> 1 Then shTournee.Cells(Ligne + nbLigneReserv, 5) = PRE 'PRE
-                If PRE > 0 Then
-                    shTournee.Cells(Ligne + nbLigneReserv, 7) = 2 + Int(PRE / 12)  'ecartement
-                    If 2 + Int(PRE / 12) > 26 Then shTournee.Cells(Ligne + nbLigneReserv, 7) = 26
-                Else
-                    shTournee.Cells(Ligne + nbLigneReserv, 7) = 1 'ecartement RS Saiso
-                    shTournee.Cells(Ligne + nbLigneReserv, 6) = "RS/Saisonnier"
-                End If
-                Sais = Tablo(Ligne, CprePartSaisBAL) + Tablo(Ligne, CprePartSaisMP) + Tablo(Ligne, CpreProSaisBAL) + Tablo(Ligne, CpreProSaisMP)
-                RS = Tablo(Ligne, CprePartRSBAL) + Tablo(Ligne, CprePartRSMP)
-                If RS > 0 Then shTournee.Cells(Ligne + nbLigneReserv, 18) = RS & " RS"
-                If Sais > 0 Then shTournee.Cells(Ligne + nbLigneReserv, 18) = shTournee.Cells(Ligne + nbLigneReserv, 18) & RS & " Sais"
-                shTournee.Cells(Ligne + nbLigneReserv, 17) = Tablo(Ligne, CpreTot) ' PRE PPQ
-                If Tablo(Ligne, CnaturePDI) Like "*PDI de rattachement*" Then
-                    If Tablo(Ligne, CnaturePDI) Like "*priv*" Then
-                        shTournee.Cells(Ligne + nbLigneReserv, 6) = "Bat P"
-                        shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 12632256 'gris clair
-                    Else
-                        shTournee.Cells(Ligne + nbLigneReserv, 6) = "Bat C"
-                        shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 12632256 'gris clair
-                    End If
-                Else
-                    If Tablo(Ligne, CnaturePDI) Like "*PDI rattach*" Then
-                        If Tablo(Ligne, CnaturePDI) Like "*priv*" Then
-                            shTournee.Cells(Ligne + nbLigneReserv, 6) = "rattaché P"
-                            shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 15395562 'gris très clair
-                            shTournee.Cells(Ligne + nbLigneReserv, 7) = 0 'rattachés regroupés d'office
-                        Else
-                            shTournee.Cells(Ligne + nbLigneReserv, 6) = "rattaché C"
-                            shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 15395562 'gris très clair
-                            'soit
-                            shTournee.Cells(Ligne + nbLigneReserv, 7) = 0 'rattachés regroupés d'office
-                        End If
-                    End If
-                End If
-                If Tablo(Ligne, CtypeAcces) <> "Entrée libre" Then shTournee.Cells(Ligne + nbLigneReserv, 10) = Tablo(Ligne, CtypeAcces)
-                If Tablo(Ligne, ClocalisationBAL) <> "Limite Voirie" Then shTournee.Cells(Ligne + nbLigneReserv, 11) = Tablo(Ligne, CdistanceAP) & " m"
-                If Tablo(Ligne, Cstop) <> 0 Then shTournee.Cells(Ligne + nbLigneReserv, 13) = Tablo(Ligne, Cstop) & " STOP" 'stop p
-                If Tablo(Ligne, Cpot) <> 0 Then shTournee.Cells(Ligne + nbLigneReserv, 14) = Tablo(Ligne, Cpot) & " POT" 'potentiel
-                TotPOT = TotPOT + Tablo(Ligne, Cpot)
-                TotSTOP = TotSTOP + Tablo(Ligne, Cstop)
-                shTournee.Cells(Ligne + nbLigneReserv, 15) = Tablo(Ligne, CpartLoc)  'part loc
-                MP = Tablo(Ligne, CprePartMP) + Tablo(Ligne, CprePartSaisMP) + Tablo(Ligne, CprePartRSMP) + Tablo(Ligne, CpreProMP) + Tablo(Ligne, CpreProSaisMP) 'remise MP
-                BAL = Tablo(Ligne, CprePartBAL) + Tablo(Ligne, CprePartSaisBAL) + Tablo(Ligne, CprePartRSBAL) + Tablo(Ligne, CpreProBAL) + Tablo(Ligne, CpreProSaisBAL) 'remise BAL
-                If BAL > 0 Then shTournee.Cells(Ligne + nbLigneReserv, 16) = BAL & " BAL" 'remise BAL
-                If MP > 0 Then
-                    shTournee.Cells(Ligne + nbLigneReserv, 16) = shTournee.Cells(Ligne + nbLigneReserv, 16) & vbLf & MP & " MP" 'remise MP
-                    If Left(shTournee.Cells(Ligne + nbLigneReserv, 16), 1) = vbLf Then shTournee.Cells(Ligne + nbLigneReserv, 16) = Replace(shTournee.Cells(Ligne + nbLigneReserv, 16), vbLf, "")
-                End If
+    ' 2. Ouverture du BDC
+    Set wbBDC = Workbooks.Open(FichierBDC, Local:=True)
+    Set wsBDC = wbBDC.Sheets(1) 'Suppose que le BDC est toujours en première feuille
     
-            Next Ligne
-            
-            ThisWorkbook.Windows(1).SplitRow = nbLigneReserv + 1
-            ThisWorkbook.Windows(1).FreezePanes = True
-            If MAJbdc = vbYes Then
-                Derligne = shTournee.Range("B" & Rows.Count).End(xlUp).Row
-                DerLigneOld = shOld.Range("B" & Rows.Count).End(xlUp).Row
-                
-                For Ligne = nbLigneReserv + 2 To Derligne
-                    Set RngOld = shOld.Range("I" & nbLigneReserv + 2 & ":I" & DerLigneOld).Find(shTournee.Cells(Ligne, 9), LookIn:=xlFormulas, LookAt:=xlWhole)
-                    If Not RngOld Is Nothing Then
-                     shTournee.Cells(Ligne, 7) = shOld.Cells(RngOld.Row, 7)
-                     shTournee.Cells(Ligne, 2).Interior.Color = shOld.Cells(RngOld.Row, 2).Interior.Color
-                     shTournee.Cells(Ligne, 2).Font.Color = shOld.Cells(RngOld.Row, 2).Font.Color
-                    End If
-                Next Ligne
-                    Application.DisplayAlerts = False
-                    shOld.Delete
-                    Application.DisplayAlerts = True
-                    MiseaJour = True '=> pas couleurs à mettre en col B
-            End If
-        Else
-        
-        
-        End If
-        Call MessageinaBottle("Information", "Import de la tournée " & Tournee & " en cours", 3)
-    Else
-        MsgBox "Le BDC :" & vbLf & MonBDC.Name & vbLf & " n'est pas au format attendu"
-        MonBDC.Close SaveChanges:=False
-        GoTo nextiteration
-    End If
-finito:
-    'On Error Resume Next
-    MonBDC.Close SaveChanges:=False
- 
-'Next k
-'*****************************************************************************
-'Configuration simplifiée
-    With shTournee
-        ' Configuration de base seulement
-        .Cells.NumberFormat = "@"
-        
-        ' Formatage simple des colonnes
-        .Columns("A:A").HorizontalAlignment = xlCenter
-        .Range("A6:V6").AutoFilter
-        .Columns("G:G").NumberFormat = "0"
-        .Columns("G:G").HorizontalAlignment = xlCenter
-        .Columns("A:I").EntireColumn.AutoFit
-        .Columns("D:D").ColumnWidth = 40
-        .Columns("I:U").EntireColumn.Hidden = True
-        .Columns("V:V").ColumnWidth = 4.2
-        If .Columns("C:C").ColumnWidth < 12 Then .Columns("C:C").ColumnWidth = 12
-        
-        ' Couleur d'onglet simple
-        .Tab.Color = 6299648 ' bleu foncé
-    End With
-
-    ' Message de confirmation
-    MsgBox "Import terminé : " & (UBound(Tablo) - 1) & " PDI importés dans la feuille Accueil", vbInformation, "Import BDC"
+    ' 3. Détection de la dernière ligne de données (colonne A)
+    Derligne = wsBDC.Range("A" & wsBDC.Rows.Count).End(xlUp).Row
     
-nextiteration:
-Next k
-fin:
-Application.EnableEvents = True
-
-End Sub
-
-
-Sub Reinitialisation()
-Dim i
-Application.DisplayAlerts = False
-For i = ThisWorkbook.Sheets.Count To 5 Step -1
-    ThisWorkbook.Sheets(i).Delete
-Next i
-ThisWorkbook.Sheets("Typage").Cells.Clear
-
-Application.DisplayAlerts = True
-
-End Sub
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    ' 4. Extraction des données SANS entête (suppose entête en ligne 4)
+    Tablo = wsBDC.Range("A5:BG" & Derligne).Value
+    
+    ' 5. Création de la feuille destination (supprime si déjà présente)
+    On Error Resume Next
+    Application.DisplayAlerts = False
+    ThisWorkbook.Sheets("Import_BDC").Delete
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+    Set wsDest = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+    wsDest.Name = "Import_BDC"
+    
+    ' 6. Entêtes en première ligne de la feuille cible (adapte selon tes besoins)
+    wsDest.Range("A1").Value = "N°"
+    wsDest.Range("B1").Value = "EXT"
+    wsDest.Range("C1").Value = "VOIE"
+    wsDest.Range("D1").Value = "VILLE"
+    wsDest.Range("E1").Value = "OBS"
+    wsDest.Range("F1").Value = "ID"
+    ' ... ajoute les entêtes utiles jusqu'à BG (ou seulement les colonnes que tu veux)
+    
+    nbLigneReserv = 1 'car entête en ligne 1
+    
+    ' 7. Copie brute ligne à ligne
+    For i = 1 To UBound(Tablo, 1)
+        wsDest.Cells(i + nbLigneReserv, 1).Value = Tablo(i, 1)   'Colonne A = N°
+        wsDest.Cells(i + nbLigneReserv, 2).Value = Tablo(i, 2)   'Colonne B = EXT
+        wsDest.Cells(i + nbLigneReserv, 3).Value = Tablo(i, 3)   'Colo
