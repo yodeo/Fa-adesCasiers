@@ -2550,3 +2550,12 @@ Sub DiagnostiquerCouleursAdjacentes()
     
     MsgBox rapport, vbInformation, "Diagnostic Couleurs Adjacentes"
 End Sub
+
+' =====================================================
+' POINT D'ENTRÉE POUR L'IMPORT BDC
+' =====================================================
+
+' Point d'entrée pour l'import BDC
+Sub LancerImportBDC()
+    Call ImporterBDC
+End Sub
