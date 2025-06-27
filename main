@@ -457,6 +457,9 @@ Sub GenererFacadePDI()
     
     Call MettreEnFormeAccueil
     
+    ' Appliquer les hachures multivoies
+    Call AppliquerHachuresMultivoies(wsDest)
+    
     ' Message de confirmation
     MsgBox "La façade PDI a été générée avec succès !" & vbCrLf & _
            "Nombre de lignes traitées : " & (derniereLigne - 6) & vbCrLf & _
@@ -2121,4 +2124,3 @@ Sub VerifierStructureDonnees()
     
     MsgBox msg, vbInformation, "Structure des données"
 End Sub
-
