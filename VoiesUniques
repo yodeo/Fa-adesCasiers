@@ -242,6 +242,150 @@ CleanUp:
            vbInformation, "Optimisation Façade"
 End Sub
 
+' Fonction pour identifier les cases multivoies
+Function IdentifierCasesMultivoies(ws As Worksheet) As Object
+    Dim dictMultivoies As Object
+    Dim dictVoiesParNum As Object
+    Dim cell As Range
+    Dim numeroPDI As String
+    Dim voie As String
+    Dim cellAbove As Range
+    Dim cellBelow As Range
+    
+    Set dictMultivoies = CreateObject("Scripting.Dictionary")
+    Set dictVoiesParNum = CreateObject("Scripting.Dictionary")
+    
+    ' Analyser toutes les cellules pour identifier les voies par numéro PDI
+    For Each cell In ws.UsedRange
+        If cell.Row Mod 2 = 1 Then ' Lignes impaires (numéros PDI)
+            If Not IsEmpty(cell.Value) And cell.Value <> "" Then
+                numeroPDI = Trim(CStr(cell.Value))
+                
+                ' Vérifier la cellule en dessous pour la voie
+                Set cellBelow = ws.Cells(cell.Row + 1, cell.Column)
+                If Not IsEmpty(cellBelow.Value) And cellBelow.Value <> "" Then
+                    voie = Trim(CStr(cellBelow.Value))
+                    
+                    ' Ne pas traiter les valeurs numériques comme des voies
+                    If Not IsNumeric(voie) Then
+                        ' Construire la clé unique pour ce numéro PDI
+                        Dim cle As String
+                        cle = numeroPDI & "|" & cell.Address
+                        
+                        ' Stocker la voie pour ce numéro PDI
+                        If Not dictVoiesParNum.Exists(numeroPDI) Then
+                            dictVoiesParNum.Add numeroPDI, CreateObject("Scripting.Dictionary")
+                        End If
+                        
+                        ' Ajouter la voie à la liste des voies pour ce numéro
+                        If Not dictVoiesParNum(numeroPDI).Exists(voie) Then
+                            dictVoiesParNum(numeroPDI).Add voie, 1
+                        Else
+                            dictVoiesParNum(numeroPDI)(voie) = dictVoiesParNum(numeroPDI)(voie) + 1
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next cell
+    
+    ' Identifier les cases multivoies (numéros PDI avec plusieurs voies différentes)
+    Dim numero As Variant
+    For Each numero In dictVoiesParNum.Keys
+        If dictVoiesParNum(numero).Count > 1 Then
+            ' Ce numéro PDI appartient à plusieurs voies différentes
+            For Each cell In ws.UsedRange
+                If cell.Row Mod 2 = 1 Then ' Lignes impaires (numéros PDI)
+                    If Not IsEmpty(cell.Value) And Trim(CStr(cell.Value)) = numero Then
+                        dictMultivoies.Add cell.Address, True
+                    End If
+                End If
+            Next cell
+        End If
+    Next numero
+    
+    Set IdentifierCasesMultivoies = dictMultivoies
+End Function
+
+' Fonction pour appliquer les hachures aux cases multivoies
+Sub AppliquerHachuresMultivoies(ws As Worksheet)
+    Dim dictMultivoies As Object
+    Dim cell As Range
+    Dim adresse As Variant
+    Dim compteur As Integer
+    
+    ' Identifier les cases multivoies
+    Set dictMultivoies = IdentifierCasesMultivoies(ws)
+    
+    If dictMultivoies.Count = 0 Then
+        MsgBox "Aucune case multivoie détectée.", vbInformation, "Hachures Multivoies"
+        Exit Sub
+    End If
+    
+    Application.ScreenUpdating = False
+    compteur = 0
+    
+    ' Appliquer les hachures aux cases multivoies
+    For Each adresse In dictMultivoies.Keys
+        Set cell = ws.Range(adresse)
+        
+        ' Appliquer le motif de hachures
+        With cell.Interior
+            .Pattern = xlPatternLightDown
+            .PatternColor = RGB(150, 150, 150)
+            .Color = RGB(255, 255, 255)
+        End With
+        
+        ' Renforcer la bordure
+        With cell.Borders
+            .LineStyle = xlContinuous
+            .Weight = xlMedium
+            .Color = RGB(100, 100, 100)
+        End With
+        
+        compteur = compteur + 1
+    Next adresse
+    
+    Application.ScreenUpdating = True
+    
+    MsgBox "Hachures appliquées à " & compteur & " cases multivoies.", vbInformation, "Hachures Multivoies"
+End Sub
+
+' Fonction utilitaire pour supprimer les hachures multivoies
+Sub SupprimerHachuresMultivoies(ws As Worksheet)
+    Dim cell As Range
+    Dim compteur As Integer
+    
+    Application.ScreenUpdating = False
+    compteur = 0
+    
+    ' Parcourir toutes les cellules et supprimer les hachures
+    For Each cell In ws.UsedRange
+        If cell.Row Mod 2 = 1 Then ' Lignes impaires (numéros PDI)
+            If cell.Interior.Pattern = xlPatternLightDown Then
+                ' Remettre le formatage par défaut
+                With cell.Interior
+                    .Pattern = xlNone
+                    .Color = xlNone
+                End With
+                
+                ' Remettre les bordures par défaut
+                With cell.Borders
+                    .LineStyle = xlContinuous
+                    .Weight = xlThin
+                    .Color = RGB(0, 0, 0)
+                End With
+                
+                compteur = compteur + 1
+            End If
+        End If
+    Next cell
+    
+    Application.ScreenUpdating = True
+    
+    MsgBox "Hachures supprimées de " & compteur & " cases.", vbInformation, "Suppression Hachures"
+End Sub
+
 Sub InsererImagesDansCellulesVides()
     Dim ws As Worksheet
     Dim rng As Range, cell As Range
@@ -432,4 +576,3 @@ Sub AppelerNomOngletActif()
     Call NomOngletActif
     On Error GoTo 0
 End Sub
-
