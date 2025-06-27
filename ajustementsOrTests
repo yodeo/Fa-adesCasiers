@@ -1,15 +1,6 @@
-Sub VoirCodesSymboles()
-    Dim cellule As Range
-    Set cellule = Selection
-    
-    If cellule.Value <> "" Then
-        Dim premier As String
-        premier = Left(cellule.Value, 1)
-        Dim code As Long
-        code = AscW(premier)
-        
-        MsgBox "Premier caractère : " & premier & vbCrLf & _
-               "Code Unicode : " & code & vbCrLf & _
-               "Code Hex : &H" & Hex(code), vbInformation
-    End If
-End Sub
+Tablo = ShBDC.Range("A4:BG" & Derligne)
+MsgBox "Tablo(1,1)=" & Tablo(1, 1) & vbCrLf & _
+       "Tablo(2,1)=" & Tablo(2, 1) & vbCrLf & _
+       "Tablo(3,1)=" & Tablo(3, 1) & vbCrLf & _
+       "Tablo(1,6)=" & Tablo(1, 6) & vbCrLf & _
+       "Tablo(2,6)=" & Tablo(2, 6)
