@@ -268,7 +268,7 @@ Sub GenererFacadePDI()
                 If typePDI = "Bat P" Then
                     symbole = ChrW(&H25B2) & " " ' Triangle Unicode
                 ElseIf typePDI = "Bat C" Then
-                    symbole = ChrW(&H25A0) & " " ' Carré Unicode
+                    symbole = ChrW(&H25B2) & " " ' Triangle Unicode
                 End If
 
                 
@@ -439,13 +439,28 @@ Sub GenererFacadePDI()
         .CenterHorizontally = True
     End With
     
+    
+    
     ' Réactiver les mises à jour
     Application.ScreenUpdating = True
     Application.DisplayAlerts = True
     
+    wsDest.Activate
+    
+    ' NOUVEAU : Appeler la macro d'ajustement des paramètres d'impression
+    ' avec une pause pour s'assurer que la feuille est bien créée
+    DoEvents
+    Application.Wait (Now + TimeValue("0:00:01"))
+    
+    ' Appeler la macro d'ajustement d'impression
+    'Call AjusterParametresImpression
+    
+    Call MettreEnFormeAccueil
+    
     ' Message de confirmation
     MsgBox "La façade PDI a été générée avec succès !" & vbCrLf & _
-           "Nombre de lignes traitées : " & (derniereLigne - 6), _
+           "Nombre de lignes traitées : " & (derniereLigne - 6) & vbCrLf & _
+           "Les paramètres d'impression ont été configurés.", _
            vbInformation, "Génération terminée"
     
     wsDest.Activate
@@ -964,7 +979,7 @@ Sub AjouterOptionMenuContextuelAccueil(Target As Range)
     ' Ajouter l'option
     Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
     With nouvelleOption
-        .Caption = "?? Naviguer vers case Façade"
+        .Caption = "Naviguer vers case Façade"
         .OnAction = "NaviguerVersFacadeDepuisAccueil"
         .Tag = "NavigationPDI"
         .FaceId = 1695
@@ -1058,42 +1073,42 @@ Sub AjouterBoutonsSeulement(wsFacade As Worksheet)
     
     ' Configuration de la disposition verticale en colonne AC
     positionX = wsFacade.Columns("AC").Left + 2  ' Position X en colonne AC avec petite marge
-    largeurBouton = wsFacade.Columns("AC").Width - 4  ' Largeur adaptée à la colonne moins marges
+    largeurBouton = wsFacade.Columns("AC").Width + 80  ' Largeur adaptée à la colonne moins marges
     hauteurBouton = 25  ' Hauteur standard des boutons
-    espacement = 30     ' Espacement vertical entre les boutons
+    espacement = 20     ' Espacement vertical entre les boutons
     
     ' BOUTON 1 : Optimiser Affichage
     Set btn = wsFacade.Buttons.Add(positionX, 10, largeurBouton, hauteurBouton)
     With btn
-        .Characters.Text = "? Optimiser Affichage"
+        .Characters.Text = "1. Supprimer contenu voies uniques"
         .OnAction = "OptimiserAffichageFromButton"
         .Font.Bold = True
         .Font.Size = 9
     End With
     
-    ' BOUTON 2 : Simplifier Bornes
-    Set btn = wsFacade.Buttons.Add(positionX, 10 + espacement, largeurBouton, hauteurBouton)
+    ' BOUTON 2 : Insérer Images
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 2), largeurBouton, hauteurBouton)
     With btn
-        .Characters.Text = "?? Simplifier Bornes"
+        .Characters.Text = "2. Insérer Images voies uniques"
+        .OnAction = "InsererImagesFromButton"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+        
+    ' BOUTON 3 : Simplifier Bornes
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 4), largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "3. Simplifier Bornes"
         .OnAction = "SimplifierBornesFromButton"
         .Font.Bold = True
         .Font.Size = 9
     End With
     
-    ' BOUTON 3 : Ajuster Polices Intelligentes
-    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 2), largeurBouton, hauteurBouton)
+     ' BOUTON 4 : Ajuster Polices Intelligentes
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 6), largeurBouton, hauteurBouton)
     With btn
-        .Characters.Text = "?? Ajuster Polices"
+        .Characters.Text = "4. Ajuster taille polices"
         .OnAction = "AjusterPolicesFromButton"
-        .Font.Bold = True
-        .Font.Size = 9
-    End With
-    
-    ' BOUTON 5 : Insérer Images
-    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 4), largeurBouton, hauteurBouton)
-    With btn
-        .Characters.Text = "??? Insérer Images"
-        .OnAction = "InsererImagesFromButton"
         .Font.Bold = True
         .Font.Size = 9
     End With
@@ -1163,7 +1178,7 @@ Sub AjusterPolicesFromButton()
               vbQuestion + vbYesNo, "Ajuster Polices") = vbYes Then
         
         ' Exécuter la macro d'ajustement des polices
-        Call AjusterTaillePoliceFacade
+        Call AjusterTaillePolice
     End If
 End Sub
 
@@ -1282,7 +1297,7 @@ Sub AjouterMenuContextuelIntelligent(Target As Range)
     ' Option principale de navigation
     Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
     With nouvelleOption
-        .Caption = "?? Naviguer vers ligne Accueil"
+        .Caption = "Naviguer vers ligne Accueil"
         .OnAction = "NaviguerDepuisMenuContextuel"
         .Tag = "NavigationPDI"
         .FaceId = 1695
@@ -1306,7 +1321,7 @@ Sub AjouterMenuContextuelIntelligent(Target As Range)
     If IsEmpty(Target.Value) Then
         Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
         With nouvelleOption
-            .Caption = "??? Insérer image ici"
+            .Caption = "Insérer image ici"
             .OnAction = "InsererImageCellule"
             .Tag = "NavigationPDI"
         End With
@@ -1404,7 +1419,7 @@ Sub AjouterOptionMenuContextuel(Target As Range)
     ' Ajouter une nouvelle option au début du menu
     Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
     With nouvelleOption
-        .Caption = "?? Naviguer vers ligne Accueil"
+        .Caption = "Naviguer vers ligne Accueil"
         .OnAction = "NaviguerDepuisMenuContextuel"
         .Tag = "NavigationPDI"
         .FaceId = 1695 ' Icône de navigation
@@ -1583,7 +1598,7 @@ Sub NavigationManuelle()
     
     ' DEBUG: Afficher les informations de calcul
     Dim msgDebug As String
-    msgDebug = "?? INFORMATIONS DE NAVIGATION :" & vbCrLf & vbCrLf
+    msgDebug = "INFORMATIONS DE NAVIGATION :" & vbCrLf & vbCrLf
     msgDebug = msgDebug & "Position sélectionnée :" & vbCrLf
     msgDebug = msgDebug & "• Ligne façade : " & ligneFacade & vbCrLf
     msgDebug = msgDebug & "• Colonne façade : " & colonneFacade & vbCrLf
@@ -1631,19 +1646,19 @@ End Sub
 ' =====================================================
 Sub AfficherAideNavigation()
     Dim msg As String
-    msg = "?? AIDE NAVIGATION FAÇADE PDI" & vbCrLf & vbCrLf
-    msg = msg & "?? NAVIGATION ALTERNATIVE :" & vbCrLf
+    msg = "AIDE NAVIGATION FAÇADE PDI" & vbCrLf & vbCrLf
+    msg = msg & "NAVIGATION ALTERNATIVE :" & vbCrLf
     msg = msg & "   • Sélectionnez une case sur la façade" & vbCrLf
-    msg = msg & "   • Cliquez sur le bouton '?? Navigation Manuelle'" & vbCrLf
+    msg = msg & "   • Cliquez sur le bouton 'Navigation Manuelle'" & vbCrLf
     msg = msg & "   • Vous serez dirigé vers la ligne correspondante" & vbCrLf & vbCrLf
-    msg = msg & "?? BOUTONS :" & vbCrLf
-    msg = msg & "   • ?? Régénérer Façade : Recrée la façade avec les données actuelles" & vbCrLf
-    msg = msg & "   • ?? Accueil : Retourne à la feuille Accueil" & vbCrLf & vbCrLf
-    msg = msg & "?? CODES COULEUR :" & vbCrLf
+    msg = msg & "BOUTONS :" & vbCrLf
+    msg = msg & "   • Régénérer Façade : Recrée la façade avec les données actuelles" & vbCrLf
+    msg = msg & "   • Accueil : Retourne à la feuille Accueil" & vbCrLf & vbCrLf
+    msg = msg & "CODES COULEUR :" & vbCrLf
     msg = msg & "   • Rouge : Cases hors capacité (> " & ThisWorkbook.Sheets("Accueil").Range("C1").Value & "D)" & vbCrLf
     msg = msg & "   • Jaune : Cases marquées 'B' en colonne V" & vbCrLf
     msg = msg & "   • Couleurs diverses : Différentes voies" & vbCrLf & vbCrLf
-    msg = msg & "?? SYMBOLES :" & vbCrLf
+    msg = msg & "SYMBOLES :" & vbCrLf
     msg = msg & "   • ? Triangle : Type 'Bat P'" & vbCrLf
     msg = msg & "   • ¦ Carré : Type 'Bat C'" & vbCrLf
     msg = msg & "   • ? Cercle : Voies multiples (affiché dans nom de voie)" & vbCrLf
