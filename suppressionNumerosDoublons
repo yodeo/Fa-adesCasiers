@@ -27,7 +27,7 @@ Sub NettoyerDoublonsInternesCases()
     derniereLigne = wsFacade.UsedRange.Rows.Count
     compteurCasesModifiees = 0
     
-    msgResultat = "🧹 NETTOYAGE DES DOUBLONS INTERNES" & vbCrLf & vbCrLf
+    msgResultat = "?? NETTOYAGE DES DOUBLONS INTERNES" & vbCrLf & vbCrLf
     
     ' Parcourir seulement les lignes impaires (lignes des numéros PDI)
     For ligneActuelle = 1 To derniereLigne Step 2
@@ -68,21 +68,21 @@ Sub NettoyerDoublonsInternesCases()
     
     ' Message de résultat
     If compteurCasesModifiees > 0 Then
-        msgResultat = msgResultat & "✅ RÉSULTAT :" & vbCrLf
+        msgResultat = msgResultat & "? RÉSULTAT :" & vbCrLf
         msgResultat = msgResultat & "• " & compteurCasesModifiees & " cases nettoyées" & vbCrLf
         msgResultat = msgResultat & "• Structure de la façade préservée" & vbCrLf
         msgResultat = msgResultat & "• Formatage conservé"
         
         MsgBox msgResultat, vbInformation, "Nettoyage terminé"
     Else
-        MsgBox "✅ Aucun doublon interne détecté !" & vbCrLf & _
+        MsgBox "? Aucun doublon interne détecté !" & vbCrLf & _
                "Toutes les cases sont déjà optimisées.", vbInformation, "Analyse terminée"
     End If
     
     Exit Sub
     
 FacadeInexistante:
-    MsgBox "❌ Erreur : La feuille 'Facade_PDI' n'existe pas !" & vbCrLf & _
+    MsgBox "? Erreur : La feuille 'Facade_PDI' n'existe pas !" & vbCrLf & _
            "Veuillez d'abord générer la façade avec la macro principale.", _
            vbCritical, "Façade introuvable"
 End Sub
@@ -331,7 +331,7 @@ Sub AnalyserDoublonsInternesSansModifier()
     derniereLigne = wsFacade.UsedRange.Rows.Count
     compteurDoublons = 0
     
-    msgAnalyse = "🔍 ANALYSE DES DOUBLONS INTERNES" & vbCrLf & vbCrLf
+    msgAnalyse = "?? ANALYSE DES DOUBLONS INTERNES" & vbCrLf & vbCrLf
     
     ' Parcourir seulement les lignes impaires
     For ligneActuelle = 1 To derniereLigne Step 2
@@ -346,7 +346,7 @@ Sub AnalyserDoublonsInternesSansModifier()
                 
                 If contenuOriginal <> contenuNettoye Then
                     compteurDoublons = compteurDoublons + 1
-                    msgAnalyse = msgAnalyse & "🔄 Case L" & ligneActuelle & "C" & colonneActuelle & " :" & vbCrLf
+                    msgAnalyse = msgAnalyse & "?? Case L" & ligneActuelle & "C" & colonneActuelle & " :" & vbCrLf
                     msgAnalyse = msgAnalyse & "  Actuel : " & contenuOriginal & vbCrLf
                     msgAnalyse = msgAnalyse & "  Optimisé : " & contenuNettoye & vbCrLf & vbCrLf
                 End If
@@ -365,11 +365,11 @@ Sub AnalyserDoublonsInternesSansModifier()
     
     ' Résultat final
     If compteurDoublons > 0 Then
-        msgAnalyse = msgAnalyse & "📊 RÉSUMÉ :" & vbCrLf
+        msgAnalyse = msgAnalyse & "?? RÉSUMÉ :" & vbCrLf
         msgAnalyse = msgAnalyse & "• " & compteurDoublons & " cases contiennent des doublons" & vbCrLf
         msgAnalyse = msgAnalyse & "• Utilisez 'NettoyerDoublonsInternesCases' pour les corriger"
     Else
-        msgAnalyse = "✅ PARFAIT !" & vbCrLf & vbCrLf
+        msgAnalyse = "? PARFAIT !" & vbCrLf & vbCrLf
         msgAnalyse = msgAnalyse & "Aucun doublon interne détecté." & vbCrLf
         msgAnalyse = msgAnalyse & "Toutes les cases sont optimisées !"
     End If
@@ -378,6 +378,7 @@ Sub AnalyserDoublonsInternesSansModifier()
     Exit Sub
     
 FacadeInexistante:
-    MsgBox "❌ Erreur : La feuille 'Facade_PDI' n'existe pas !" & vbCrLf & _
+    MsgBox "? Erreur : La feuille 'Facade_PDI' n'existe pas !" & vbCrLf & _
            "Veuillez d'abord générer la façade.", vbCritical, "Façade introuvable"
 End Sub
+
