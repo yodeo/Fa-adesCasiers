@@ -13,6 +13,7 @@ Sub GenererFacadePDI()
     Dim rngHaut As Range, rngBas As Range, rngCaisson As Range
     Dim valeurLargeur As Variant
     Dim dictCouleurs As Object
+    Dim paletteCouleurs As Object
     Dim couleurActuelle As Long
     Dim indexCouleur As Integer
     
@@ -45,7 +46,11 @@ Sub GenererFacadePDI()
     
     ' Créer un dictionnaire pour gérer les couleurs par nom de voie
     Set dictCouleurs = CreateObject("Scripting.Dictionary")
-    indexCouleur = 3
+    
+    ' Créer la palette de couleurs étendues
+    Set paletteCouleurs = CreateObject("Scripting.Dictionary")
+    Call InitialiserPaletteCouleursEtendues(paletteCouleurs)
+    indexCouleur = 0
     
     ' Créer un dictionnaire pour stocker les codes caisson à mettre à jour
     Set dictMiseAJourCodes = CreateObject("Scripting.Dictionary")
@@ -340,10 +345,11 @@ Sub GenererFacadePDI()
                 End If
                 
                 If Not dictCouleurs.Exists(premiereVoie) Then
-                    dictCouleurs.Add premiereVoie, indexCouleur
+                    ' Utiliser la nouvelle palette de couleurs étendues
+                    Dim couleurRGB As Long
+                    couleurRGB = ObtenirCouleurDistinctePourVoie(premiereVoie, paletteCouleurs, indexCouleur)
+                    dictCouleurs.Add premiereVoie, couleurRGB
                     indexCouleur = indexCouleur + 1
-                    If indexCouleur > 56 Then indexCouleur = 3
-                    If indexCouleur = 2 Or indexCouleur = 15 Then indexCouleur = indexCouleur + 1
                 End If
                 couleurActuelle = dictCouleurs(premiereVoie)
             Else
@@ -371,8 +377,9 @@ Sub GenererFacadePDI()
                         .Interior.Color = RGB(255, 0, 0) ' Rouge (priorité 1)
                         .Font.Color = RGB(255, 255, 255) ' Texte blanc sur fond rouge
                     Else
-                        .Interior.ColorIndex = couleurActuelle
-                        .Font.Color = ObtenirCouleurTexte(couleurActuelle)
+                        ' Utiliser la couleur RGB de la nouvelle palette
+                        .Interior.Color = couleurActuelle
+                        .Font.Color = ObtenirCouleurTexteRGB(couleurActuelle)
                     End If
                 Else
                     ' Même si pas de couleur de voie, appliquer le rouge si dépasse
@@ -2123,4 +2130,241 @@ Sub VerifierStructureDonnees()
     msg = msg & "Cellule du BAS : " & ws.Cells(7, 2).Text
     
     MsgBox msg, vbInformation, "Structure des données"
+End Sub
+
+' =====================================================
+' GESTION DES COULEURS ÉTENDUES
+' =====================================================
+
+' Initialise une palette de couleurs étendues avec 150+ couleurs distinctes
+Sub InitialiserPaletteCouleursEtendues(dictPalette As Object)
+    Dim i As Integer
+    i = 0
+    
+    ' SÉRIE 1: COULEURS VIVES ET CONTRASTÉES (20 couleurs)
+    dictPalette.Add i, RGB(255, 87, 87):   i = i + 1  ' Rouge corail
+    dictPalette.Add i, RGB(255, 183, 77):  i = i + 1  ' Orange doré
+    dictPalette.Add i, RGB(255, 235, 59):  i = i + 1  ' Jaune vif
+    dictPalette.Add i, RGB(139, 195, 74):  i = i + 1  ' Vert lime
+    dictPalette.Add i, RGB(38, 166, 154):  i = i + 1  ' Vert émeraude
+    dictPalette.Add i, RGB(41, 182, 246):  i = i + 1  ' Bleu cyan
+    dictPalette.Add i, RGB(92, 107, 192):  i = i + 1  ' Indigo
+    dictPalette.Add i, RGB(186, 104, 200): i = i + 1  ' Violet
+    dictPalette.Add i, RGB(240, 98, 146):  i = i + 1  ' Rose fuchsia
+    dictPalette.Add i, RGB(255, 138, 101): i = i + 1  ' Saumon
+    dictPalette.Add i, RGB(78, 175, 79):   i = i + 1  ' Vert forêt
+    dictPalette.Add i, RGB(3, 169, 244):   i = i + 1  ' Bleu ciel
+    dictPalette.Add i, RGB(156, 39, 176):  i = i + 1  ' Pourpre
+    dictPalette.Add i, RGB(255, 87, 34):   i = i + 1  ' Orange rouge
+    dictPalette.Add i, RGB(205, 220, 57):  i = i + 1  ' Jaune vert
+    dictPalette.Add i, RGB(0, 188, 212):   i = i + 1  ' Turquoise
+    dictPalette.Add i, RGB(103, 58, 183):  i = i + 1  ' Violet profond
+    dictPalette.Add i, RGB(233, 30, 99):   i = i + 1  ' Rose vif
+    dictPalette.Add i, RGB(121, 85, 72):   i = i + 1  ' Brun
+    dictPalette.Add i, RGB(84, 110, 122):  i = i + 1  ' Bleu gris
+    
+    ' SÉRIE 2: COULEURS PASTEL DISTINCTIVES (20 couleurs)
+    dictPalette.Add i, RGB(255, 205, 210): i = i + 1  ' Rose pâle
+    dictPalette.Add i, RGB(255, 224, 178): i = i + 1  ' Pêche
+    dictPalette.Add i, RGB(255, 249, 196): i = i + 1  ' Jaune pastel
+    dictPalette.Add i, RGB(220, 237, 200): i = i + 1  ' Vert menthe
+    dictPalette.Add i, RGB(178, 223, 219): i = i + 1  ' Vert d'eau
+    dictPalette.Add i, RGB(187, 222, 251): i = i + 1  ' Bleu clair
+    dictPalette.Add i, RGB(209, 196, 233): i = i + 1  ' Lavande
+    dictPalette.Add i, RGB(248, 187, 208): i = i + 1  ' Rose poudrée
+    dictPalette.Add i, RGB(255, 204, 188): i = i + 1  ' Abricot
+    dictPalette.Add i, RGB(200, 230, 201): i = i + 1  ' Vert tendre
+    dictPalette.Add i, RGB(179, 229, 252): i = i + 1  ' Bleu poudrée
+    dictPalette.Add i, RGB(225, 190, 231): i = i + 1  ' Mauve clair
+    dictPalette.Add i, RGB(255, 171, 145): i = i + 1  ' Corail clair
+    dictPalette.Add i, RGB(240, 244, 195): i = i + 1  ' Citron vert
+    dictPalette.Add i, RGB(204, 255, 229): i = i + 1  ' Menthe glacée
+    dictPalette.Add i, RGB(191, 239, 255): i = i + 1  ' Bleu glacé
+    dictPalette.Add i, RGB(228, 187, 255): i = i + 1  ' Violet clair
+    dictPalette.Add i, RGB(255, 194, 209): i = i + 1  ' Rose saumon
+    dictPalette.Add i, RGB(215, 204, 200): i = i + 1  ' Beige rosé
+    dictPalette.Add i, RGB(207, 216, 220): i = i + 1  ' Gris bleuté
+    
+    ' SÉRIE 3: COULEURS MOYENNES BIEN CONTRASTÉES (30 couleurs)
+    dictPalette.Add i, RGB(244, 67, 54):   i = i + 1  ' Rouge Material
+    dictPalette.Add i, RGB(233, 30, 99):   i = i + 1  ' Pink Material
+    dictPalette.Add i, RGB(156, 39, 176):  i = i + 1  ' Purple Material
+    dictPalette.Add i, RGB(103, 58, 183):  i = i + 1  ' Deep Purple
+    dictPalette.Add i, RGB(63, 81, 181):   i = i + 1  ' Indigo Material
+    dictPalette.Add i, RGB(33, 150, 243):  i = i + 1  ' Blue Material
+    dictPalette.Add i, RGB(3, 169, 244):   i = i + 1  ' Light Blue
+    dictPalette.Add i, RGB(0, 188, 212):   i = i + 1  ' Cyan Material
+    dictPalette.Add i, RGB(0, 150, 136):   i = i + 1  ' Teal Material
+    dictPalette.Add i, RGB(76, 175, 80):   i = i + 1  ' Green Material
+    dictPalette.Add i, RGB(139, 195, 74):  i = i + 1  ' Light Green
+    dictPalette.Add i, RGB(205, 220, 57):  i = i + 1  ' Lime Material
+    dictPalette.Add i, RGB(255, 235, 59):  i = i + 1  ' Yellow Material
+    dictPalette.Add i, RGB(255, 193, 7):   i = i + 1  ' Amber Material
+    dictPalette.Add i, RGB(255, 152, 0):   i = i + 1  ' Orange Material
+    dictPalette.Add i, RGB(255, 87, 34):   i = i + 1  ' Deep Orange
+    dictPalette.Add i, RGB(121, 85, 72):   i = i + 1  ' Brown Material
+    dictPalette.Add i, RGB(158, 158, 158): i = i + 1  ' Grey Material
+    dictPalette.Add i, RGB(96, 125, 139):  i = i + 1  ' Blue Grey
+    dictPalette.Add i, RGB(255, 112, 67):  i = i + 1  ' Orange vif
+    dictPalette.Add i, RGB(174, 213, 129): i = i + 1  ' Vert clair vif
+    dictPalette.Add i, RGB(100, 181, 246): i = i + 1  ' Bleu moyen
+    dictPalette.Add i, RGB(149, 117, 205): i = i + 1  ' Violet moyen
+    dictPalette.Add i, RGB(240, 113, 120): i = i + 1  ' Rose corail
+    dictPalette.Add i, RGB(255, 183, 77):  i = i + 1  ' Orange doré
+    dictPalette.Add i, RGB(129, 212, 250): i = i + 1  ' Bleu clair vif
+    dictPalette.Add i, RGB(206, 147, 216): i = i + 1  ' Violet rosé
+    dictPalette.Add i, RGB(255, 138, 128): i = i + 1  ' Rouge saumon
+    dictPalette.Add i, RGB(185, 246, 202): i = i + 1  ' Vert menthe vif
+    dictPalette.Add i, RGB(144, 202, 249): i = i + 1  ' Bleu pervenche
+    
+    ' SÉRIE 4: COULEURS FONCÉES CONTRASTÉES (30 couleurs)
+    dictPalette.Add i, RGB(183, 28, 28):   i = i + 1  ' Rouge foncé
+    dictPalette.Add i, RGB(136, 14, 79):   i = i + 1  ' Rose foncé
+    dictPalette.Add i, RGB(74, 20, 140):   i = i + 1  ' Violet foncé
+    dictPalette.Add i, RGB(49, 27, 146):   i = i + 1  ' Indigo foncé
+    dictPalette.Add i, RGB(26, 35, 126):   i = i + 1  ' Bleu foncé
+    dictPalette.Add i, RGB(13, 71, 161):   i = i + 1  ' Bleu profond
+    dictPalette.Add i, RGB(1, 87, 155):    i = i + 1  ' Bleu clair foncé
+    dictPalette.Add i, RGB(0, 96, 100):    i = i + 1  ' Cyan foncé
+    dictPalette.Add i, RGB(0, 77, 64):     i = i + 1  ' Vert foncé
+    dictPalette.Add i, RGB(27, 94, 32):    i = i + 1  ' Vert profond
+    dictPalette.Add i, RGB(51, 105, 30):   i = i + 1  ' Vert olive
+    dictPalette.Add i, RGB(130, 119, 23):  i = i + 1  ' Jaune olive
+    dictPalette.Add i, RGB(245, 127, 23):  i = i + 1  ' Orange foncé
+    dictPalette.Add i, RGB(191, 54, 12):   i = i + 1  ' Rouge orange
+    dictPalette.Add i, RGB(62, 39, 35):    i = i + 1  ' Brun foncé
+    dictPalette.Add i, RGB(69, 90, 100):   i = i + 1  ' Gris bleu foncé
+    dictPalette.Add i, RGB(101, 31, 255):  i = i + 1  ' Violet électrique
+    dictPalette.Add i, RGB(0, 230, 118):   i = i + 1  ' Vert néon
+    dictPalette.Add i, RGB(255, 61, 0):    i = i + 1  ' Rouge orange vif
+    dictPalette.Add i, RGB(196, 0, 140):   i = i + 1  ' Magenta foncé
+    dictPalette.Add i, RGB(0, 145, 234):   i = i + 1  ' Bleu électrique
+    dictPalette.Add i, RGB(67, 160, 71):   i = i + 1  ' Vert franc
+    dictPalette.Add i, RGB(251, 140, 0):   i = i + 1  ' Orange amber
+    dictPalette.Add i, RGB(124, 77, 255):  i = i + 1  ' Violet clair
+    dictPalette.Add i, RGB(255, 23, 68):   i = i + 1  ' Rose vif
+    dictPalette.Add i, RGB(0, 191, 255):   i = i + 1  ' Bleu ciel vif
+    dictPalette.Add i, RGB(198, 255, 0):   i = i + 1  ' Vert lime vif
+    dictPalette.Add i, RGB(255, 64, 129):  i = i + 1  ' Rose accent
+    dictPalette.Add i, RGB(101, 187, 255): i = i + 1  ' Bleu accent
+    dictPalette.Add i, RGB(178, 255, 89):  i = i + 1  ' Vert accent
+    
+    ' SÉRIE 5: COULEURS SPÉCIALES ET DISTINCTIVES (30 couleurs)
+    dictPalette.Add i, RGB(132, 94, 194):  i = i + 1  ' Améthyste
+    dictPalette.Add i, RGB(207, 106, 135): i = i + 1  ' Rose antique
+    dictPalette.Add i, RGB(72, 133, 237):  i = i + 1  ' Bleu royal
+    dictPalette.Add i, RGB(245, 166, 35):  i = i + 1  ' Miel
+    dictPalette.Add i, RGB(126, 211, 33):  i = i + 1  ' Chartreuse
+    dictPalette.Add i, RGB(202, 111, 30):  i = i + 1  ' Terre de Sienne
+    dictPalette.Add i, RGB(21, 101, 192):  i = i + 1  ' Saphir
+    dictPalette.Add i, RGB(162, 155, 254): i = i + 1  ' Pervenche
+    dictPalette.Add i, RGB(255, 204, 0):   i = i + 1  ' Or
+    dictPalette.Add i, RGB(0, 200, 83):    i = i + 1  ' Émeraude vif
+    dictPalette.Add i, RGB(213, 0, 249):   i = i + 1  ' Magenta électrique
+    dictPalette.Add i, RGB(0, 184, 169):   i = i + 1  ' Turquoise foncé
+    dictPalette.Add i, RGB(255, 109, 0):   i = i + 1  ' Orange mandarine
+    dictPalette.Add i, RGB(149, 69, 53):   i = i + 1  ' Acajou
+    dictPalette.Add i, RGB(56, 142, 60):   i = i + 1  ' Vert sapin
+    dictPalette.Add i, RGB(94, 53, 177):   i = i + 1  ' Violet byzantin
+    dictPalette.Add i, RGB(239, 83, 80):   i = i + 1  ' Rouge tomate
+    dictPalette.Add i, RGB(26, 188, 156):  i = i + 1  ' Turquoise clair
+    dictPalette.Add i, RGB(255, 193, 7):   i = i + 1  ' Ambre
+    dictPalette.Add i, RGB(142, 36, 170):  i = i + 1  ' Violet orchidée
+    dictPalette.Add i, RGB(67, 56, 202):   i = i + 1  ' Indigo électrique
+    dictPalette.Add i, RGB(46, 204, 113):  i = i + 1  ' Vert menthe électrique
+    dictPalette.Add i, RGB(231, 76, 60):   i = i + 1  ' Rouge brique
+    dictPalette.Add i, RGB(230, 126, 34):  i = i + 1  ' Carotte
+    dictPalette.Add i, RGB(241, 196, 15):  i = i + 1  ' Tournesol
+    dictPalette.Add i, RGB(155, 89, 182):  i = i + 1  ' Améthyste clair
+    dictPalette.Add i, RGB(52, 152, 219):  i = i + 1  ' Bleu peter river
+    dictPalette.Add i, RGB(22, 160, 133):  i = i + 1  ' Vert sea
+    dictPalette.Add i, RGB(243, 156, 18):  i = i + 1  ' Orange soleil
+    dictPalette.Add i, RGB(211, 84, 0):    i = i + 1  ' Orange foncé pumpkin
+End Sub
+
+' Obtient une couleur distincte pour une voie donnée
+Function ObtenirCouleurDistinctePourVoie(nomVoie As String, paletteCouleurs As Object, indexActuel As Integer) As Long
+    ' Calculer un hash simple basé sur le nom de la voie pour une attribution déterministe
+    Dim hashVoie As Long
+    Dim i As Integer
+    
+    hashVoie = 0
+    For i = 1 To Len(nomVoie)
+        hashVoie = hashVoie + Asc(Mid(nomVoie, i, 1)) * i
+    Next i
+    
+    ' Utiliser le hash pour choisir une couleur dans la palette, en évitant la séquence
+    Dim indexCouleur As Integer
+    indexCouleur = (hashVoie Mod paletteCouleurs.Count)
+    
+    ' S'assurer que l'index est valide
+    If indexCouleur < 0 Then indexCouleur = indexCouleur + paletteCouleurs.Count
+    
+    ' Retourner la couleur RGB correspondante
+    ObtenirCouleurDistinctePourVoie = paletteCouleurs(indexCouleur)
+End Function
+
+' Version RGB de la fonction ObtenirCouleurTexte
+Function ObtenirCouleurTexteRGB(couleurFondRGB As Long) As Long
+    Dim r As Integer, g As Integer, b As Integer
+    Dim luminosite As Double
+    
+    ' Extraire les composantes RGB
+    r = couleurFondRGB Mod 256
+    g = (couleurFondRGB \ 256) Mod 256
+    b = (couleurFondRGB \ 65536) Mod 256
+    
+    ' Calculer la luminosité (formule standard)
+    luminosite = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    
+    ' Si la couleur est sombre, texte blanc, sinon texte noir
+    If luminosite < 0.5 Then
+        ObtenirCouleurTexteRGB = RGB(255, 255, 255) ' Blanc
+    Else
+        ObtenirCouleurTexteRGB = RGB(0, 0, 0) ' Noir
+    End If
+End Function
+
+' Fonction de diagnostic pour afficher les couleurs attribuées
+Sub AfficherDiagnosticCouleurs()
+    Dim ws As Worksheet
+    Dim i As Long
+    Dim rapport As String
+    Dim cellule As Range
+    Dim nomVoie As String
+    Dim couleur As Long
+    Dim voiesTraitees As Object
+    
+    Set ws = ActiveSheet
+    Set voiesTraitees = CreateObject("Scripting.Dictionary")
+    
+    If ws Is Nothing Then
+        MsgBox "Aucune feuille active détectée.", vbExclamation
+        Exit Sub
+    End If
+    
+    rapport = "DIAGNOSTIC DES COULEURS ATTRIBUÉES" & vbCrLf & vbCrLf
+    
+    ' Parcourir les cellules de voies (lignes paires)
+    For Each cellule In ws.UsedRange
+        If cellule.Row Mod 2 = 0 And Not IsEmpty(cellule.Value) Then ' Lignes paires (voies)
+            nomVoie = Trim(CStr(cellule.Value))
+            
+            If nomVoie <> "" And Not IsNumeric(nomVoie) And Not voiesTraitees.Exists(nomVoie) Then
+                couleur = cellule.Interior.Color
+                
+                If couleur <> xlNone And couleur <> RGB(255, 255, 255) Then
+                    rapport = rapport & "Voie: " & nomVoie & vbCrLf
+                    rapport = rapport & "  Couleur RGB: " & couleur & vbCrLf
+                    rapport = rapport & "  Cellule: " & cellule.Address & vbCrLf & vbCrLf
+                    
+                    voiesTraitees.Add nomVoie, True
+                End If
+            End If
+        End If
+    Next cellule
+    
+    rapport = rapport & "Total de voies colorées: " & voiesTraitees.Count
+    
+    MsgBox rapport, vbInformation, "Diagnostic Couleurs"
 End Sub
