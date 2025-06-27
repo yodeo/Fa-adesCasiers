@@ -1,5 +1,6 @@
 '=======================
 ' IMPORT BDC ULTRA-MINIMALISTE
+' Import TOUT le BDC, colonnes A à BG, sans typage, sans couleur, sans dépendance
 '=======================
 Option Explicit
 
@@ -7,7 +8,7 @@ Sub ImporterBDC_Minimaliste()
     Dim FichierBDC As Variant
     Dim wbBDC As Workbook, wsBDC As Worksheet
     Dim wsDest As Worksheet
-    Dim Derligne As Long, i As Long, nbLigneReserv As Long
+    Dim Derligne As Long
     Dim Tablo As Variant
     
     ' 1. Sélection du BDC (fichier Excel)
@@ -22,6 +23,7 @@ Sub ImporterBDC_Minimaliste()
     Derligne = wsBDC.Range("A" & wsBDC.Rows.Count).End(xlUp).Row
     
     ' 4. Extraction des données SANS entête (suppose entête en ligne 4)
+    '    et que les données commencent ligne 5
     Tablo = wsBDC.Range("A5:BG" & Derligne).Value
     
     ' 5. Création de la feuille destination (supprime si déjà présente)
@@ -33,19 +35,22 @@ Sub ImporterBDC_Minimaliste()
     Set wsDest = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
     wsDest.Name = "Import_BDC"
     
-    ' 6. Entêtes en première ligne de la feuille cible (adapte selon tes besoins)
-    wsDest.Range("A1").Value = "N°"
-    wsDest.Range("B1").Value = "EXT"
-    wsDest.Range("C1").Value = "VOIE"
-    wsDest.Range("D1").Value = "VILLE"
-    wsDest.Range("E1").Value = "OBS"
-    wsDest.Range("F1").Value = "ID"
-    ' ... ajoute les entêtes utiles jusqu'à BG (ou seulement les colonnes que tu veux)
+    ' 6. Import TOUT le BDC d'un bloc (sans boucle)
+    wsDest.Range("A2").Resize(UBound(Tablo, 1), UBound(Tablo, 2)).Value = Tablo
     
-    nbLigneReserv = 1 'car entête en ligne 1
+    ' 7. Copie les entêtes d'origine du BDC (ligne 4)
+    wsDest.Range("A1:BG1").Value = wsBDC.Range("A4:BG4").Value
     
-    ' 7. Copie brute ligne à ligne
-    For i = 1 To UBound(Tablo, 1)
-        wsDest.Cells(i + nbLigneReserv, 1).Value = Tablo(i, 1)   'Colonne A = N°
-        wsDest.Cells(i + nbLigneReserv, 2).Value = Tablo(i, 2)   'Colonne B = EXT
-        wsDest.Cells(i + nbLigneReserv, 3).Value = Tablo(i, 3)   'Colo
+    ' 8. Ajuste la largeur
+    wsDest.Columns("A:BG").AutoFit
+    
+    ' 9. Ferme le BDC
+    wbBDC.Close SaveChanges:=False
+    
+    MsgBox "Import BDC terminé !", vbInformation
+End Sub
+
+'-------
+'--- Cette version importe tout le BDC, de A à BG, entêtes d'origine et toutes les lignes,
+'--- sans aucun mapping, sans dépendance, sans typage.
+'-------
