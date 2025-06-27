@@ -1,0 +1,39 @@
+Sub SupprimerToutesLesDonnees()
+
+    Call NomOngletActif
+     Dim ws As Worksheet
+    Set ws = ActiveSheet
+    Dim derniereLigne As Long
+    Dim i As Long
+    
+    ' Définir la plage jusqu'à la colonne AA
+    Dim rng As Range
+    Set rng = ws.Range("A7:AA" & ws.Cells(ws.Rows.Count, "A").End(xlUp).Row)
+    
+    ' Efface le contenu des cellules
+    rng.ClearContents
+    
+    ' Efface les formats des cellules (couleurs, bordures, etc.)
+    rng.ClearFormats
+    
+    ' Supprime les fusions de cellules
+    rng.UnMerge
+    
+    ' Supprime toutes les images dans la plage
+    Dim img As Shape
+    For Each img In ws.Shapes
+        If Not Intersect(img.TopLeftCell, rng) Is Nothing Then
+            img.Delete
+        End If
+    Next img
+    
+    ' Supprime les commentaires dans la plage
+    Dim cell As Range
+    For Each cell In rng
+        If Not cell.Comment Is Nothing Then
+            cell.Comment.Delete
+        End If
+    Next cell
+    
+End Sub
+
