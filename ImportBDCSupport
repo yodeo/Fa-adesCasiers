@@ -1,0 +1,29 @@
+Option Explicit
+
+' =====================================================
+' MODULE DE SUPPORT POUR ImportBDC SIMPLIFIÉ
+' =====================================================
+
+' Fonction pour vérifier l'existence d'une feuille
+Function FeuilleExiste(nomFeuille As String) As Boolean
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(nomFeuille)
+    FeuilleExiste = Not ws Is Nothing
+    On Error GoTo 0
+End Function
+
+' Fonction stub pour DetourParIP (appelée ligne 116)
+Sub DetourParIP()
+    ' Fonction vide - pas d'action spéciale requise pour l'import simple
+End Sub
+
+' Fonction stub pour DetourParTypage (appelée ligne 118)
+Sub DetourParTypage()
+    ' Fonction vide - pas d'action spéciale requise pour l'import simple
+End Sub
+
+' Fonction pour lancer l'import BDC simplifié
+Sub ImporterBDC()
+    Call NewImportBDC
+End Sub
