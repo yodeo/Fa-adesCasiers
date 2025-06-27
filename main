@@ -345,9 +345,9 @@ Sub GenererFacadePDI()
                 End If
                 
                 If Not dictCouleurs.Exists(premiereVoie) Then
-                    ' Utiliser la nouvelle palette de couleurs étendues
+                    ' Utiliser la nouvelle palette de couleurs étendues avec vérification d'adjacence
                     Dim couleurRGB As Long
-                    couleurRGB = ObtenirCouleurDistinctePourVoie(premiereVoie, paletteCouleurs, indexCouleur)
+                    couleurRGB = ObtenirCouleurDistinctePourVoieAvecAdjacence(premiereVoie, paletteCouleurs, dictCouleurs, colonneActuelle, wsDest, ligneActuelle)
                     dictCouleurs.Add premiereVoie, couleurRGB
                     indexCouleur = indexCouleur + 1
                 End If
@@ -2282,7 +2282,7 @@ Sub InitialiserPaletteCouleursEtendues(dictPalette As Object)
     dictPalette.Add i, RGB(211, 84, 0):    i = i + 1  ' Orange foncé pumpkin
 End Sub
 
-' Obtient une couleur distincte pour une voie donnée
+' Obtient une couleur distincte pour une voie donnée (ANCIENNE VERSION - gardée pour compatibilité)
 Function ObtenirCouleurDistinctePourVoie(nomVoie As String, paletteCouleurs As Object, indexActuel As Integer) As Long
     ' Calculer un hash simple basé sur le nom de la voie pour une attribution déterministe
     Dim hashVoie As Long
@@ -2302,6 +2302,118 @@ Function ObtenirCouleurDistinctePourVoie(nomVoie As String, paletteCouleurs As O
     
     ' Retourner la couleur RGB correspondante
     ObtenirCouleurDistinctePourVoie = paletteCouleurs(indexCouleur)
+End Function
+
+' Obtient une couleur distincte pour une voie avec vérification d'adjacence (NOUVELLE VERSION AMÉLIORÉE)
+Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, paletteCouleurs As Object, dictCouleursExistantes As Object, colonne As Long, ws As Worksheet, ligne As Long) As Long
+    Dim hashVoie As Long
+    Dim i As Integer
+    Dim indexCouleur As Integer
+    Dim couleurCandidate As Long
+    Dim couleurGauche As Long, couleurDroite As Long
+    Dim tentatives As Integer
+    Dim contraste As Double
+    Dim contrastelimite As Double
+    
+    ' Seuil de contraste minimum (plus c'est élevé, plus les couleurs doivent être différentes)
+    contrastelimite = 30000 ' Différence RGB minimum
+    
+    ' Calculer un hash basé sur le nom de la voie
+    hashVoie = 0
+    For i = 1 To Len(nomVoie)
+        hashVoie = hashVoie + Asc(Mid(nomVoie, i, 1)) * i
+    Next i
+    
+    ' Obtenir les couleurs des voies adjacentes
+    couleurGauche = ObtenirCouleurVoieAdjacente(ws, ligne, colonne - 1)
+    couleurDroite = ObtenirCouleurVoieAdjacente(ws, ligne, colonne + 1)
+    
+    ' Essayer de trouver une couleur avec suffisamment de contraste
+    tentatives = 0
+    Do
+        ' Calculer l'index de couleur avec variation selon les tentatives
+        indexCouleur = ((hashVoie + tentatives * 17) Mod paletteCouleurs.Count)
+        If indexCouleur < 0 Then indexCouleur = indexCouleur + paletteCouleurs.Count
+        
+        couleurCandidate = paletteCouleurs(indexCouleur)
+        
+        ' Vérifier le contraste avec les couleurs adjacentes
+        Dim contrasteBon As Boolean
+        contrasteBon = True
+        
+        If couleurGauche <> xlNone And couleurGauche <> 0 Then
+            contraste = CalculerContrasteRGB(couleurCandidate, couleurGauche)
+            If contraste < contrastelimite Then contrasteBon = False
+        End If
+        
+        If couleurDroite <> xlNone And couleurDroite <> 0 And contrasteBon Then
+            contraste = CalculerContrasteRGB(couleurCandidate, couleurDroite)
+            If contraste < contrastelimite Then contrasteBon = False
+        End If
+        
+        ' Si la couleur a suffisamment de contraste, l'utiliser
+        If contrasteBon Then
+            ObtenirCouleurDistinctePourVoieAvecAdjacence = couleurCandidate
+            Exit Function
+        End If
+        
+        tentatives = tentatives + 1
+        
+        ' Limiter les tentatives pour éviter une boucle infinie
+        If tentatives > 50 Then
+            ' Utiliser une couleur de la série spéciale haute différenciation
+            indexCouleur = (tentatives Mod 30) + 100 ' Utiliser la série 5 (couleurs spéciales)
+            If indexCouleur >= paletteCouleurs.Count Then indexCouleur = paletteCouleurs.Count - 1
+            ObtenirCouleurDistinctePourVoieAvecAdjacence = paletteCouleurs(indexCouleur)
+            Exit Function
+        End If
+    Loop
+End Function
+
+' Fonction utilitaire pour obtenir la couleur d'une voie adjacente
+Function ObtenirCouleurVoieAdjacente(ws As Worksheet, ligne As Long, colonne As Long) As Long
+    On Error GoTo ErrorHandler
+    
+    ' Vérifier que la colonne est dans les limites
+    If colonne < 1 Or colonne > ws.Columns.Count Then
+        ObtenirCouleurVoieAdjacente = xlNone
+        Exit Function
+    End If
+    
+    ' Vérifier la cellule de voie (ligne + 1 pour la ligne des voies)
+    Dim celluleVoie As Range
+    Set celluleVoie = ws.Cells(ligne + 1, colonne)
+    
+    ' Si la cellule contient une voie (pas vide, pas numérique)
+    If Not IsEmpty(celluleVoie.Value) And Not IsNumeric(celluleVoie.Value) Then
+        ObtenirCouleurVoieAdjacente = celluleVoie.Interior.Color
+    Else
+        ObtenirCouleurVoieAdjacente = xlNone
+    End If
+    
+    Exit Function
+    
+ErrorHandler:
+    ObtenirCouleurVoieAdjacente = xlNone
+End Function
+
+' Calcule le contraste entre deux couleurs RGB
+Function CalculerContrasteRGB(couleur1 As Long, couleur2 As Long) As Double
+    Dim r1 As Integer, g1 As Integer, b1 As Integer
+    Dim r2 As Integer, g2 As Integer, b2 As Integer
+    
+    ' Extraire les composantes RGB de la première couleur
+    r1 = couleur1 Mod 256
+    g1 = (couleur1 \ 256) Mod 256
+    b1 = (couleur1 \ 65536) Mod 256
+    
+    ' Extraire les composantes RGB de la seconde couleur
+    r2 = couleur2 Mod 256
+    g2 = (couleur2 \ 256) Mod 256
+    b2 = (couleur2 \ 65536) Mod 256
+    
+    ' Calculer la distance euclidienne dans l'espace RGB
+    CalculerContrasteRGB = Sqr((r1 - r2) ^ 2 + (g1 - g2) ^ 2 + (b1 - b2) ^ 2)
 End Function
 
 ' Version RGB de la fonction ObtenirCouleurTexte
@@ -2367,4 +2479,74 @@ Sub AfficherDiagnosticCouleurs()
     rapport = rapport & "Total de voies colorées: " & voiesTraitees.Count
     
     MsgBox rapport, vbInformation, "Diagnostic Couleurs"
+End Sub
+
+' Fonction de diagnostic pour vérifier les couleurs adjacentes
+Sub DiagnostiquerCouleursAdjacentes()
+    Dim ws As Worksheet
+    Dim ligne As Long, colonne As Long
+    Dim rapport As String
+    Dim celluleVoie As Range, celluleVoieGauche As Range, celluleVoieDroite As Range
+    Dim nomVoie As String, nomVoieGauche As String, nomVoieDroite As String
+    Dim couleur As Long, couleurGauche As Long, couleurDroite As Long
+    Dim contraste As Double
+    Dim problemesDetectes As Integer
+    
+    Set ws = ActiveSheet
+    
+    If ws Is Nothing Then
+        MsgBox "Aucune feuille active détectée.", vbExclamation
+        Exit Sub
+    End If
+    
+    rapport = "DIAGNOSTIC DES COULEURS ADJACENTES" & vbCrLf & vbCrLf
+    problemesDetectes = 0
+    
+    ' Parcourir les lignes de voies (lignes paires)
+    For ligne = 2 To ws.UsedRange.Rows.Count Step 2
+        For colonne = 1 To 26 ' Colonnes A à Z
+            Set celluleVoie = ws.Cells(ligne, colonne)
+            
+            ' Si la cellule contient une voie
+            If Not IsEmpty(celluleVoie.Value) And Not IsNumeric(celluleVoie.Value) Then
+                nomVoie = Trim(CStr(celluleVoie.Value))
+                couleur = celluleVoie.Interior.Color
+                
+                ' Vérifier la voie à droite
+                If colonne < 26 Then
+                    Set celluleVoieDroite = ws.Cells(ligne, colonne + 1)
+                    If Not IsEmpty(celluleVoieDroite.Value) And Not IsNumeric(celluleVoieDroite.Value) Then
+                        nomVoieDroite = Trim(CStr(celluleVoieDroite.Value))
+                        couleurDroite = celluleVoieDroite.Interior.Color
+                        
+                        ' Calculer le contraste
+                        If couleur <> xlNone And couleurDroite <> xlNone And couleur <> 0 And couleurDroite <> 0 Then
+                            contraste = CalculerContrasteRGB(couleur, couleurDroite)
+                            
+                            ' Si le contraste est insuffisant
+                            If contraste < 25000 Then ' Seuil plus bas pour le diagnostic
+                                problemesDetectes = problemesDetectes + 1
+                                rapport = rapport & "PROBLÈME " & problemesDetectes & ":" & vbCrLf
+                                rapport = rapport & "  Voie 1: " & nomVoie & " (colonne " & Chr(64 + colonne) & ")" & vbCrLf
+                                rapport = rapport & "  Voie 2: " & nomVoieDroite & " (colonne " & Chr(64 + colonne + 1) & ")" & vbCrLf
+                                rapport = rapport & "  Contraste: " & Round(contraste, 0) & " (< 25000 = insuffisant)" & vbCrLf
+                                rapport = rapport & "  Couleur 1: RGB(" & (couleur Mod 256) & "," & ((couleur \ 256) Mod 256) & "," & ((couleur \ 65536) Mod 256) & ")" & vbCrLf
+                                rapport = rapport & "  Couleur 2: RGB(" & (couleurDroite Mod 256) & "," & ((couleurDroite \ 256) Mod 256) & "," & ((couleurDroite \ 65536) Mod 256) & ")" & vbCrLf & vbCrLf
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        Next colonne
+    Next ligne
+    
+    If problemesDetectes = 0 Then
+        rapport = rapport & "✅ Aucun problème de contraste détecté !" & vbCrLf
+        rapport = rapport & "Toutes les voies adjacentes ont des couleurs suffisamment distinctes."
+    Else
+        rapport = rapport & "⚠️ " & problemesDetectes & " problème(s) de contraste détecté(s)." & vbCrLf
+        rapport = rapport & "Relancez la génération de façade pour corriger automatiquement."
+    End If
+    
+    MsgBox rapport, vbInformation, "Diagnostic Couleurs Adjacentes"
 End Sub
