@@ -454,7 +454,7 @@ Sub GenererFacadePDI()
     Call AjouterCodeMenuContextuel(wsDest)
     
     ' AJOUTER LE MENU CONTEXTUEL À LA FEUILLE SOURCE (navigation inverse)
-    Call AjouterCodeMenuContextuelAccueil(wsSource)
+    'Call AjouterCodeMenuContextuelAccueil(wsSource)
     
     ' Masquer le quadrillage
     With wsDest
@@ -541,3 +541,2115 @@ Function NettoyerNomFeuille(nomOriginal As String) As String
     
     NettoyerNomFeuille = nomNettoye
 End Function
+
+' =====================================================
+' SUB : Gérer les changements en temps réel de la colonne G - CALCUL PAR CAISSON
+' =====================================================
+Sub GererChangementColonneG(Target As Range)
+    Dim wsSource As Worksheet
+    
+    ' Vérifier si le changement concerne la colonne G (largeur) et ligne >= 7
+    If Target.Column <> 7 Or Target.Row < 7 Then Exit Sub
+    
+    ' MODIFICATION : Utiliser la feuille où le changement a eu lieu
+    Set wsSource = Target.Worksheet
+    
+    ' Désactiver les événements pour éviter les boucles
+    Application.EnableEvents = False
+    
+    ' Recalculer les cellules vides pour tous les caissons
+    Call RecalculerCellulesVidesParCaisson(wsSource)
+    
+    ' Réactiver les événements
+    Application.EnableEvents = True
+    
+End Sub
+
+' =====================================================
+' SUB : Recalculer les cellules vides par caisson
+' =====================================================
+Sub RecalculerCellulesVidesParCaisson(ws As Worksheet)
+    Dim maxParCaisson As Integer
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim largeurActuelle As Integer
+    Dim colonneVirtuelle As Integer
+    Dim ligneVirtuelle As Integer
+    Dim numeroCaisson As Integer
+    Dim lettreCaisson As String
+    Dim horsCapacitePermanent As Boolean
+    Dim dictCaissonsLignes As Object ' Pour stocker la dernière ligne de chaque caisson
+    Dim dictCaissonsVides As Object ' Pour stocker le nombre de cellules vides par caisson
+    Dim codeCaisson As String
+    Dim ligneDebutCaisson As Long
+    
+    ' Récupérer la valeur max par caisson
+    maxParCaisson = val(ws.Range("C1").Value)
+    If maxParCaisson <= 0 Then maxParCaisson = 4
+    
+    ' Créer les dictionnaires
+    Set dictCaissonsLignes = CreateObject("Scripting.Dictionary")
+    Set dictCaissonsVides = CreateObject("Scripting.Dictionary")
+    
+    ' Initialiser les compteurs
+    colonneVirtuelle = 1
+    numeroCaisson = 1
+    lettreCaisson = "A"
+    horsCapacitePermanent = False
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    ligneDebutCaisson = 7
+    
+    'Call EnleverProtectionFeuille ' Décommenter si la feuille est protégée
+    
+    ' Effacer d'abord toute la colonne W
+    ws.Range("W7:W" & derniereLigne).ClearContents
+    
+    ' Parcourir toutes les lignes pour simuler la disposition
+    For i = 7 To derniereLigne
+        largeurActuelle = ConvertirEnEntier(ws.Cells(i, 7).Value, 0)
+        
+        ' Si on a une largeur > 0, c'est un bloc PDI
+        If largeurActuelle > 0 Then
+            ' Vérifier si on dépasse la colonne Z (26)
+            If colonneVirtuelle + largeurActuelle - 1 > 26 Then
+                ' Finaliser le caisson précédent
+                codeCaisson = numeroCaisson & lettreCaisson
+                If Not horsCapacitePermanent And Not CaissonDepasse(codeCaisson, maxParCaisson) Then
+                    ' Calculer les cellules vides du caisson précédent
+                    Dim cellulesVides As Integer
+                    cellulesVides = 26 - colonneVirtuelle + 1
+                    
+                    ' Stocker dans le dictionnaire avec la dernière ligne du caisson
+                    If ligneDebutCaisson > 0 Then
+                        dictCaissonsVides.Add codeCaisson, cellulesVides
+                        dictCaissonsLignes.Add codeCaisson, i - 1 ' Ligne précédente = dernière du caisson
+                    End If
+                End If
+                
+                ' Passer au caisson suivant
+                colonneVirtuelle = 1
+                numeroCaisson = numeroCaisson + 1
+                ligneDebutCaisson = i
+                
+                ' Gérer le passage à la lettre suivante
+                If numeroCaisson > maxParCaisson Then
+                    numeroCaisson = 1
+                    If lettreCaisson = "D" Then
+                        horsCapacitePermanent = True
+                        lettreCaisson = "A"
+                    Else
+                        lettreCaisson = Chr(Asc(lettreCaisson) + 1)
+                        If lettreCaisson > "D" And Not horsCapacitePermanent Then
+                            horsCapacitePermanent = True
+                            lettreCaisson = "A"
+                            numeroCaisson = 1
+                        End If
+                    End If
+                End If
+            End If
+            
+            ' Avancer la position virtuelle
+            colonneVirtuelle = colonneVirtuelle + largeurActuelle
+        End If
+    Next i
+    
+    ' Finaliser le dernier caisson
+    codeCaisson = numeroCaisson & lettreCaisson
+    If Not horsCapacitePermanent And Not CaissonDepasse(codeCaisson, maxParCaisson) Then
+        If colonneVirtuelle <= 26 Then
+            cellulesVides = 26 - colonneVirtuelle + 1
+            dictCaissonsVides.Add codeCaisson, cellulesVides
+            dictCaissonsLignes.Add codeCaisson, derniereLigne
+        End If
+    End If
+    
+    ' Maintenant, écrire les valeurs dans la colonne W seulement sur les dernières lignes de chaque caisson
+    Dim cle As Variant
+    For Each cle In dictCaissonsLignes.Keys
+        Dim ligneCible As Long
+        ligneCible = dictCaissonsLignes(cle)
+        ws.Cells(ligneCible, 23).Value = dictCaissonsVides(cle) ' Colonne W = 23
+    Next cle
+    
+End Sub
+
+' =====================================================
+' FONCTION : Calculer les espaces vides pour une ligne spécifique - SUPPRIMÉE
+' =====================================================
+' SUB : Ajuster la taille de police intelligemment selon contenu et largeur
+' =====================================================
+Sub AjusterTaillePoliceIntelligente(rng As Range, largeurCellule As Integer, contenu As String, estVoie As Boolean)
+    Dim tailleOptimale As Integer
+    Dim tailleMax As Integer
+    Dim tailleMin As Integer
+    Dim longueurMaxLigne As Integer
+    Dim nbLignesEstimees As Integer
+    
+    ' Définir les limites de taille selon le type de contenu
+    If estVoie Then
+        ' Pour les noms de voies : plus de liberté
+        tailleMin = 6
+        tailleMax = 28
+    Else
+        ' Pour les numéros PDI : plus conservateur
+        tailleMin = 6
+        tailleMax = 16
+    End If
+    
+    ' Analyser le contenu et estimer la répartition des lignes
+    Call AnalyserContenuAvecWrapText(contenu, largeurCellule, longueurMaxLigne, nbLignesEstimees)
+    
+    ' Calculer la taille optimale basée sur l'espace disponible
+    tailleOptimale = CalculerTailleOptimaleAvecWrap(largeurCellule, longueurMaxLigne, nbLignesEstimees, estVoie)
+    
+    ' Appliquer les limites
+    If tailleOptimale < tailleMin Then tailleOptimale = tailleMin
+    If tailleOptimale > tailleMax Then tailleOptimale = tailleMax
+    
+    ' Appliquer la taille
+    With rng.Font
+        .Size = tailleOptimale
+    End With
+End Sub
+
+' =====================================================
+' SUB : Analyser le contenu en tenant compte du WrapText - VERSION CONSERVATRICE
+' =====================================================
+Sub AnalyserContenuAvecWrapText(contenu As String, largeurCellule As Integer, ByRef longueurMaxLigne As Integer, ByRef nbLignesEstimees As Integer)
+    Dim lignesExplicites As Variant
+    Dim i As Integer, j As Integer
+    Dim ligneActuelle As String
+    Dim mots As Variant
+    Dim longueurLigneActuelle As Integer
+    Dim capaciteParLigne As Integer
+    Dim lignesFinales As Collection
+    
+    ' Estimer la capacité de caractères par ligne selon la largeur - PLUS CONSERVATEUR
+    ' Réduction significative pour éviter tout débordement
+    Select Case largeurCellule
+        Case 1
+            capaciteParLigne = 5   ' Très conservateur pour 1 colonne
+        Case 2
+            capaciteParLigne = 10  ' Conservateur pour 2 colonnes
+        Case 3
+            capaciteParLigne = 16  ' 3 colonnes
+        Case 4
+            capaciteParLigne = 22  ' 4 colonnes
+        Case 5
+            capaciteParLigne = 28  ' 5 colonnes
+        Case Else
+            capaciteParLigne = largeurCellule * 6  ' Formule conservatrice
+    End Select
+    
+    Set lignesFinales = New Collection
+    longueurMaxLigne = 0
+    
+    ' Si le contenu est vide, valeurs par défaut
+    If Len(contenu) = 0 Then
+        longueurMaxLigne = 1
+        nbLignesEstimees = 1
+        Exit Sub
+    End If
+    
+    ' Séparer d'abord par les sauts de ligne explicites (vbCrLf)
+    If InStr(contenu, vbCrLf) > 0 Then
+        lignesExplicites = Split(contenu, vbCrLf)
+    Else
+        ReDim lignesExplicites(0)
+        lignesExplicites(0) = contenu
+    End If
+    
+    ' Pour chaque ligne explicite, analyser le wrap automatique
+    For i = 0 To UBound(lignesExplicites)
+        ligneActuelle = Trim(lignesExplicites(i))
+        
+        ' Si la ligne est courte, pas de wrap nécessaire
+        If Len(ligneActuelle) <= capaciteParLigne Then
+            lignesFinales.Add ligneActuelle
+            If Len(ligneActuelle) > longueurMaxLigne Then
+                longueurMaxLigne = Len(ligneActuelle)
+            End If
+        Else
+            ' La ligne est trop longue, simuler le wrap par mots
+            mots = Split(ligneActuelle, " ")
+            Dim ligneEnCours As String
+            ligneEnCours = ""
+            
+            For j = 0 To UBound(mots)
+                ' Tester si on peut ajouter le mot suivant
+                Dim ligneTest As String
+                If ligneEnCours = "" Then
+                    ligneTest = mots(j)
+                Else
+                    ligneTest = ligneEnCours & " " & mots(j)
+                End If
+                
+                ' Si ça rentre encore, continuer
+                If Len(ligneTest) <= capaciteParLigne Then
+                    ligneEnCours = ligneTest
+                Else
+                    ' Finir la ligne actuelle et commencer une nouvelle
+                    If ligneEnCours <> "" Then
+                        lignesFinales.Add ligneEnCours
+                        If Len(ligneEnCours) > longueurMaxLigne Then
+                            longueurMaxLigne = Len(ligneEnCours)
+                        End If
+                    End If
+                    ligneEnCours = mots(j)
+                End If
+            Next j
+            
+            ' Ajouter la dernière ligne en cours
+            If ligneEnCours <> "" Then
+                lignesFinales.Add ligneEnCours
+                If Len(ligneEnCours) > longueurMaxLigne Then
+                    longueurMaxLigne = Len(ligneEnCours)
+                End If
+            End If
+        End If
+    Next i
+    
+    ' Résultats finaux
+    nbLignesEstimees = lignesFinales.Count
+    If longueurMaxLigne = 0 Then longueurMaxLigne = 1
+    
+End Sub
+
+' =====================================================
+' FONCTION : Calculer la taille optimale avec WrapText - VERSION SÉCURISÉE
+' =====================================================
+Function CalculerTailleOptimaleAvecWrap(largeurCellule As Integer, longueurMaxLigne As Integer, nbLignesEstimees As Integer, estVoie As Boolean) As Integer
+    Dim espaceHorizontal As Double
+    Dim espaceVertical As Double
+    Dim tailleParLargeur As Integer
+    Dim tailleParHauteur As Integer
+    Dim tailleOptimale As Integer
+    Dim margeSecurite As Double
+    
+    ' Marges de sécurité pour éviter tout débordement
+    margeSecurite = 0.7  ' Utiliser seulement 70% de l'espace estimé
+    
+    ' Estimer l'espace horizontal disponible - PLUS CONSERVATEUR
+    espaceHorizontal = largeurCellule * 20 * margeSecurite ' Réduit de 25 à 20 pixels
+    
+    ' Estimer l'espace vertical disponible - PLUS CONSERVATEUR
+    If estVoie Then
+        espaceVertical = 35 * margeSecurite ' Réduit de 39 à 35
+    Else
+        espaceVertical = 43 * margeSecurite ' Réduit de 48.75 à 43
+    End If
+    
+    ' Calculer la taille optimale selon la largeur (contrainte horizontale)
+    If longueurMaxLigne > 0 Then
+        tailleParLargeur = Int(espaceHorizontal / (longueurMaxLigne * 1.6)) ' Augmenté de 1.3 à 1.6
+    Else
+        tailleParLargeur = 8
+    End If
+    
+    ' Calculer la taille optimale selon la hauteur (contrainte verticale)
+    If nbLignesEstimees > 0 Then
+        tailleParHauteur = Int(espaceVertical / (nbLignesEstimees * 1.8)) ' Augmenté de 1.4 à 1.8
+    Else
+        tailleParHauteur = 8
+    End If
+    
+    ' Prendre la contrainte la plus restrictive
+    tailleOptimale = Application.WorksheetFunction.Min(tailleParLargeur, tailleParHauteur)
+    
+    ' Limites absolues de sécurité
+    If estVoie Then
+        ' Pour les voies : limites plus strictes
+        Select Case largeurCellule
+            Case 1
+                If tailleOptimale > 7 Then tailleOptimale = 7   ' Max très bas pour 1 col
+                If tailleOptimale < 6 Then tailleOptimale = 6
+            Case 2
+                If tailleOptimale > 9 Then tailleOptimale = 9   ' Max bas pour 2 col
+                If tailleOptimale < 7 Then tailleOptimale = 7
+            Case 3
+                If tailleOptimale > 11 Then tailleOptimale = 11
+                If tailleOptimale < 8 Then tailleOptimale = 8
+            Case 4
+                If tailleOptimale > 13 Then tailleOptimale = 13
+                If tailleOptimale < 9 Then tailleOptimale = 9
+            Case Else
+                If tailleOptimale > 16 Then tailleOptimale = 16
+                If tailleOptimale < 10 Then tailleOptimale = 10
+        End Select
+    Else
+        ' Pour les numéros : encore plus conservateur
+        Select Case largeurCellule
+            Case 1
+                If tailleOptimale > 6 Then tailleOptimale = 6   ' Max très bas
+                If tailleOptimale < 6 Then tailleOptimale = 6
+            Case 2
+                If tailleOptimale > 8 Then tailleOptimale = 8
+                If tailleOptimale < 6 Then tailleOptimale = 6
+            Case 3
+                If tailleOptimale > 10 Then tailleOptimale = 10
+                If tailleOptimale < 7 Then tailleOptimale = 7
+            Case Else
+                If tailleOptimale > 12 Then tailleOptimale = 12
+                If tailleOptimale < 8 Then tailleOptimale = 8
+        End Select
+    End If
+    
+    CalculerTailleOptimaleAvecWrap = tailleOptimale
+End Function
+
+' =====================================================
+' SUB : Ajuster la taille de police selon la largeur de cellule - VERSION SÉCURISÉE
+' =====================================================
+Sub AjusterTaillePoliceSelonLargeur(rng As Range, largeurCellule As Integer)
+    ' Cette fonction est maintenant un wrapper pour la version intelligente
+    ' On analyse le contenu de la cellule de manière sécurisée
+    Dim contenu As String
+    Dim valeurCellule As Variant
+    
+    ' Récupération sécurisée du contenu
+    On Error Resume Next
+    valeurCellule = rng.Value
+    If Err.Number <> 0 Or IsNull(valeurCellule) Or IsEmpty(valeurCellule) Then
+        contenu = ""
+        Err.Clear
+    Else
+        contenu = CStr(valeurCellule)
+    End If
+    On Error GoTo 0
+    
+    Call AjusterTaillePoliceIntelligente(rng, largeurCellule, contenu, False) ' False = numéros PDI
+End Sub
+
+' =====================================================
+' SUB : Ajuster la taille de police pour les noms de voies - VERSION SÉCURISÉE
+' =====================================================
+Sub AjusterTaillePoliceVoiesSelonLargeur(rng As Range, largeurCellule As Integer)
+    ' Cette fonction est maintenant un wrapper pour la version intelligente
+    ' On analyse le contenu de la cellule de manière sécurisée
+    Dim contenu As String
+    Dim valeurCellule As Variant
+    
+    ' Récupération sécurisée du contenu
+    On Error Resume Next
+    valeurCellule = rng.Value
+    If Err.Number <> 0 Or IsNull(valeurCellule) Or IsEmpty(valeurCellule) Then
+        contenu = ""
+        Err.Clear
+    Else
+        contenu = CStr(valeurCellule)
+    End If
+    On Error GoTo 0
+    
+    Call AjusterTaillePoliceIntelligente(rng, largeurCellule, contenu, True) ' True = noms de voies
+End Sub
+
+' =====================================================
+' SUB : Appliquer un formatage différencié pour numéros et observations - SANS ÉCRASER LES TAILLES
+' =====================================================
+Sub AppliquerFormatageDifferencie(rng As Range, symbole As String, numAccumule As String, obsAccumulees As String)
+    Dim longueurNumeroAvecSymbole As Integer
+    Dim debutObservations As Integer
+    
+    ' Calculer la longueur de la partie numéro + symbole
+    longueurNumeroAvecSymbole = Len(symbole & numAccumule)
+    
+    ' Vérifier qu'on a quelque chose à formater
+    If longueurNumeroAvecSymbole = 0 Then Exit Sub
+    
+    ' Formatage avec gestion d'erreur complète
+    On Error GoTo FormatageFallback
+    
+    ' Si pas d'observations, formater tout en gras
+    If obsAccumulees = "" Then
+        ' Tout le texte (symbole + numéro) en gras - SANS MODIFIER LA TAILLE
+        rng.Characters(1, longueurNumeroAvecSymbole).Font.Bold = True
+    Else
+        ' Formater la partie numéro (symbole + numéro) : gras - SANS MODIFIER LA TAILLE
+        rng.Characters(1, longueurNumeroAvecSymbole).Font.Bold = True
+        
+        ' Formater la partie observations (après le saut de ligne) : pas gras - SANS MODIFIER LA TAILLE
+        debutObservations = longueurNumeroAvecSymbole + 2 ' +2 pour vbCrLf (saut de ligne)
+        
+        If Len(obsAccumulees) > 0 Then
+            rng.Characters(debutObservations, Len(obsAccumulees)).Font.Bold = False
+        End If
+    End If
+    
+    On Error GoTo 0
+    Exit Sub
+    
+FormatageFallback:
+    ' En cas d'erreur, appliquer un formatage global simple - SANS MODIFIER LA TAILLE
+    On Error Resume Next
+    rng.Font.Bold = True
+    On Error GoTo 0
+    
+End Sub
+
+'' =====================================================
+'' SUB : Ajouter le code VBA dans la feuille Source pour navigation inverse
+'' =====================================================
+'Sub AjouterCodeMenuContextuelAccueil(wsSource As Worksheet)
+'    Dim codeModule As Object
+'    Dim codeVBA As String
+'
+'    ' Tenter d'accéder au module de code de la feuille source
+'    On Error GoTo ErreurAccesVBAAccueil
+'
+'    Set codeModule = ThisWorkbook.VBProject.VBComponents(wsSource.CodeName).codeModule
+'
+'    ' Supprimer tout le code existant pour éviter les conflits
+'    If codeModule.CountOfLines > 0 Then
+'        codeModule.DeleteLines 1, codeModule.CountOfLines
+'    End If
+'
+'    ' Code VBA à ajouter dans la feuille Source (version propre)
+'    codeVBA = "Private Sub Worksheet_BeforeRightClick(ByVal Target As Range, Cancel As Boolean)" & vbCrLf
+'    codeVBA = codeVBA & "    ' Navigation vers façade PDI" & vbCrLf
+'    codeVBA = codeVBA & "    Call AjouterOptionMenuContextuelAccueil(Target)" & vbCrLf
+'    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
+'
+'    codeVBA = codeVBA & "Private Sub Worksheet_Change(ByVal Target As Range)" & vbCrLf
+'    codeVBA = codeVBA & "    ' Mise à jour en temps réel de la colonne W si modification en colonne G" & vbCrLf
+'    codeVBA = codeVBA & "    Call GererChangementColonneG(Target)" & vbCrLf
+'    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
+'
+'    codeVBA = codeVBA & "Private Sub Worksheet_Deactivate()" & vbCrLf
+'    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
+'    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
+'
+'    codeVBA = codeVBA & "Private Sub Worksheet_Activate()" & vbCrLf
+'    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
+'    codeVBA = codeVBA & "End Sub"
+'
+'    ' Insérer le code proprement
+'    codeModule.InsertLines 1, codeVBA
+'
+'    Exit Sub
+'
+'ErreurAccesVBAAccueil:
+'    ' Si erreur, ne rien faire (navigation inverse non disponible)
+'End Sub
+'
+'' =====================================================
+'' SUB : Ajouter option menu contextuel dans la feuille source
+'' =====================================================
+'Sub AjouterOptionMenuContextuelAccueil(Target As Range)
+'    Dim menuContextuel As CommandBar
+'    Dim nouvelleOption As CommandBarButton
+'
+'    ' Supprimer l'option existante
+'    Call SupprimerOptionMenuContextuel
+'
+'    ' Vérifier qu'on est dans la zone des données (ligne 7+, colonne A-H)
+'    If Target.Row < 7 Or Target.Column > 8 Then
+'        Exit Sub
+'    End If
+'
+'    ' Vérifier qu'il y a un code caisson en colonne H
+'    If Target.Worksheet.Cells(Target.Row, 8).Value = "" Then
+'        Exit Sub
+'    End If
+'
+'    ' Accéder au menu contextuel
+'    Set menuContextuel = Application.CommandBars("Cell")
+'
+'    ' Ajouter l'option
+'    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
+'    With nouvelleOption
+'        .Caption = "Naviguer vers case Façade"
+'        .OnAction = "NaviguerVersFacadeDepuisAccueil"
+'        .Tag = "NavigationPDI"
+'        .FaceId = 1695
+'    End With
+'End Sub
+'
+'' =====================================================
+'' SUB : Navigation Feuille Source vers Facade
+'' =====================================================
+'Sub NaviguerVersFacadeDepuisAccueil()
+'    Dim wsSource As Worksheet
+'    Dim wsFacade As Worksheet
+'    Dim celluleCible As Range
+'    Dim codePosition As String
+'    Dim ligneSource As Long
+'
+'    ' MODIFICATION : La feuille source est la feuille active
+'    Set wsSource = ActiveSheet
+'    Set celluleCible = Selection
+'    ligneSource = celluleCible.Row
+'
+'    ' MODIFICATION : Le test sur le nom "Accueil" est supprimé pour plus de flexibilité.
+'
+'    ' Lire le code en colonne H
+'    codePosition = wsSource.Cells(ligneSource, 8).Value
+'    If codePosition = "" Then Exit Sub
+'
+'    ' Vérifier que la feuille Facade_PDI existe
+'    On Error GoTo FacadeInexistante
+'    Set wsFacade = ThisWorkbook.Sheets("Facade_PDI")
+'    On Error GoTo 0
+'
+'    ' Extraire les informations du code (ex: "2A 15")
+'    Dim partieCode As String, partiePosition As String
+'    Dim posEspace As Integer
+'    posEspace = InStr(codePosition, " ")
+'    If posEspace = 0 Then Exit Sub
+'
+'    partieCode = Left(codePosition, posEspace - 1) ' "2A"
+'    partiePosition = Right(codePosition, Len(codePosition) - posEspace) ' "15"
+'
+'    ' Extraire numéro et lettre du code caisson
+'    Dim numeroCaisson As Integer, lettreCaisson As String
+'    numeroCaisson = val(Left(partieCode, Len(partieCode) - 1))
+'    lettreCaisson = Right(partieCode, 1)
+'
+'    ' Calculer la ligne de la façade
+'    Dim maxParCaisson As Integer
+'    maxParCaisson = val(wsSource.Range("C1").Value)
+'    If maxParCaisson <= 0 Then maxParCaisson = 4
+'
+'    Dim lettreIndex As Integer
+'    lettreIndex = Asc(lettreCaisson) - Asc("A") ' A=0, B=1, C=2, D=3
+'
+'    Dim indiceLigne As Integer
+'    indiceLigne = (lettreIndex * maxParCaisson) + numeroCaisson
+'
+'    Dim ligneFacade As Integer
+'    ligneFacade = (indiceLigne * 2) - 1 ' Ligne du haut du caisson
+'
+'    ' Colonne de la façade
+'    Dim colonneFacade As Integer
+'    colonneFacade = val(partiePosition)
+'
+'    ' Naviguer vers la façade
+'    wsFacade.Activate
+'    wsFacade.Cells(ligneFacade, colonneFacade).Select
+'
+'    Exit Sub
+'
+'FacadeInexistante:
+'    ' La feuille n'existe pas, ne rien faire
+'End Sub
+
+
+' =====================================================
+' SUB MODIFIÉE : Ajouter les boutons avec macros intégrées - DISPOSITION VERTICALE COLONNE AC
+' =====================================================
+Sub AjouterBoutonsSeulement(wsFacade As Worksheet)
+    Dim btn As Object
+    Dim positionX As Double
+    Dim espacement As Double
+    Dim largeurBouton As Double
+    Dim hauteurBouton As Double
+    
+    ' Supprimer les boutons existants s'ils existent
+    Dim shp As Shape
+    For Each shp In wsFacade.Shapes
+        If shp.Type = msoFormControl Then shp.Delete
+    Next shp
+    
+    ' Configuration de la disposition verticale en colonne AC
+    positionX = wsFacade.Columns("AC").Left + 2  ' Position X en colonne AC avec petite marge
+    largeurBouton = wsFacade.Columns("AC").Width + 80  ' Largeur adaptée à la colonne moins marges
+    hauteurBouton = 25  ' Hauteur standard des boutons
+    espacement = 20     ' Espacement vertical entre les boutons
+    
+    ' BOUTON 1 : Optimiser Affichage
+    Set btn = wsFacade.Buttons.Add(positionX, 10, largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "1. Supprimer contenu voies uniques"
+        .OnAction = "OptimiserAffichageFromButton"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+    
+    ' BOUTON 2 : Insérer Images
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 2), largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "2. Insérer Images voies uniques"
+        .OnAction = "InsererImagesFromButton"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+        
+    ' BOUTON 3 : Simplifier Bornes
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 4), largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "3. Simplifier Bornes"
+        .OnAction = "SimplifierBornesFromButton"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+    
+     ' BOUTON 4 : Ajuster Polices Intelligentes
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 6), largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "4. Ajuster taille polices"
+        .OnAction = "AjusterPolicesFromButton"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+    
+End Sub
+
+' =====================================================
+' NOUVELLES MACROS POUR LES BOUTONS
+' =====================================================
+
+Sub OptimiserAffichageFromButton()
+    ' Macro appelée par le bouton "Optimiser Affichage"
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Confirmation avant exécution
+    If MsgBox("Voulez-vous optimiser l'affichage de la façade ?" & vbCrLf & _
+              "Cette action va supprimer les numéros uniques pour simplifier la vue.", _
+              vbQuestion + vbYesNo, "Optimiser Affichage") = vbYes Then
+        
+        ' Exécuter la macro d'optimisation
+        Call OptimiserAffichageFacade
+    End If
+End Sub
+
+Sub SimplifierBornesFromButton()
+    ' Macro appelée par le bouton "Simplifier Bornes"
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Confirmation avant exécution
+    If MsgBox("Voulez-vous simplifier les bornes de numéros ?" & vbCrLf & _
+              "Cette action va regrouper les numéros consécutifs en plages.", _
+              vbQuestion + vbYesNo, "Simplifier Bornes") = vbYes Then
+        
+        ' Exécuter la macro de simplification des bornes
+        Call SimplificationBornesNumPDI
+    End If
+End Sub
+
+Sub AjusterPolicesFromButton()
+    ' Macro appelée par le bouton "Ajuster Polices"
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Confirmation avant exécution
+    If MsgBox("Voulez-vous ajuster automatiquement la taille des polices ?" & vbCrLf & _
+              "Cette action va optimiser la lisibilité selon la taille des cellules.", _
+              vbQuestion + vbYesNo, "Ajuster Polices") = vbYes Then
+        
+        ' Exécuter la macro d'ajustement des polices
+        Call AjusterTaillePolice
+    End If
+End Sub
+
+Sub InsererImagesFromButton()
+    ' Macro appelée par le bouton "Insérer Images"
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur la bonne feuille
+    If ws.Name <> "Facade_PDI" Then
+        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Message d'information et confirmation
+    If MsgBox("Voulez-vous insérer des images dans les cellules vides ?" & vbCrLf & _
+              "Vous devrez sélectionner un fichier image à utiliser.", _
+              vbQuestion + vbYesNo, "Insérer Images") = vbYes Then
+        
+        ' Exécuter la macro d'insertion d'images
+        Call InsererImagesDansCellulesVides
+    End If
+End Sub
+
+
+' =====================================================
+' MACRO UTILITAIRE : Ajuster paramètres d'impression
+' =====================================================
+Sub AjusterParametresImpression()
+    ' Fonction utilitaire pour optimiser l'impression de la façade
+    Dim ws As Worksheet
+    Set ws = ActiveSheet
+    
+    ' Configuration de l'impression
+    With ws.PageSetup
+        .Orientation = xlLandscape
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .CenterHorizontally = True
+        .CenterVertically = False
+        .PrintArea = "A1:AA" & ws.UsedRange.Rows.Count
+        .LeftMargin = Application.InchesToPoints(0.25)
+        .RightMargin = Application.InchesToPoints(0.25)
+        .TopMargin = Application.InchesToPoints(0.25)
+        .BottomMargin = Application.InchesToPoints(0.25)
+        .HeaderMargin = Application.InchesToPoints(0.1)
+        .FooterMargin = Application.InchesToPoints(0.1)
+    End With
+End Sub
+
+' =====================================================
+' FONCTION UTILITAIRE : Obtenir le nom de l'onglet actif
+' =====================================================
+Sub NomOngletActif()
+    ' Fonction utilitaire utilisée par les autres macros
+    ' (Cette fonction semble être une dépendance des macros importées)
+    Dim nomOnglet As String
+    nomOnglet = ActiveSheet.Name
+    ' Vous pouvez ajouter ici du code si nécessaire
+End Sub
+
+'' =====================================================
+'' MACRO AVANCÉE : Menu contextuel intelligent
+'' =====================================================
+'Sub AjouterMenuContextuelAvance(ws As Worksheet)
+'    ' Version avancée du menu contextuel avec plus d'options
+'    Dim codeModule As Object
+'    Dim codeVBA As String
+'
+'    On Error GoTo ErreurAccesVBA
+'
+'    Set codeModule = ThisWorkbook.VBProject.VBComponents(ws.CodeName).codeModule
+'
+'    ' Supprimer l'ancien code s'il existe
+'    If codeModule.CountOfLines > 0 Then
+'        codeModule.DeleteLines 1, codeModule.CountOfLines
+'    End If
+'
+'    ' Code VBA avancé pour le menu contextuel
+'    codeVBA = "Private Sub Worksheet_BeforeRightClick(ByVal Target As Range, Cancel As Boolean)" & vbCrLf
+'    codeVBA = codeVBA & "    Call AjouterMenuContextuelIntelligent(Target)" & vbCrLf
+'    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
+'
+'    codeVBA = codeVBA & "Private Sub Worksheet_Deactivate()" & vbCrLf
+'    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
+'    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
+'
+'    codeVBA = codeVBA & "Private Sub Worksheet_Activate()" & vbCrLf
+'    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
+'    codeVBA = codeVBA & "End Sub"
+'
+'    ' Insérer le code
+'    codeModule.InsertLines 1, codeVBA
+'
+'    Exit Sub
+'
+'ErreurAccesVBA:
+'    ' Si erreur d'accès VBA, ne rien faire
+'End Sub
+'
+'' =====================================================
+'' MENU CONTEXTUEL INTELLIGENT
+'' =====================================================
+'Sub AjouterMenuContextuelIntelligent(Target As Range)
+'    Dim menuContextuel As CommandBar
+'    Dim nouvelleOption As CommandBarButton
+'
+'    ' Supprimer les options existantes
+'    Call SupprimerOptionMenuContextuel
+'
+'    ' Vérifier la zone cliquée
+'    If Target.Column = 27 Then Exit Sub ' Colonne des codes caisson
+'
+'    Set menuContextuel = Application.CommandBars("Cell")
+'
+'    ' Option principale de navigation
+'    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
+'    With nouvelleOption
+'        .Caption = "Naviguer vers ligne Source"
+'        .OnAction = "NaviguerDepuisMenuContextuel"
+'        .Tag = "NavigationPDI"
+'        .FaceId = 1695
+'    End With
+'
+'    ' Séparateur
+'    menuContextuel.Controls.Add Type:=msoControlButton, before:=2
+'    menuContextuel.Controls(2).BeginGroup = True
+'
+'    ' Options d'optimisation si cellule non vide
+'    If Not IsEmpty(Target.Value) Then
+'        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
+'        With nouvelleOption
+'            .Caption = "? Optimiser cette zone"
+'            .OnAction = "OptimiserZoneSelectionnee"
+'            .Tag = "NavigationPDI"
+'        End With
+'    End If
+'
+'    ' Option pour cellules vides
+'    If IsEmpty(Target.Value) Then
+'        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
+'        With nouvelleOption
+'            .Caption = "Insérer image ici"
+'            .OnAction = "InsererImageCellule"
+'            .Tag = "NavigationPDI"
+'        End With
+'    End If
+'End Sub
+'
+'' =====================================================
+'' MACROS POUR LES OPTIONS DU MENU CONTEXTUEL
+'' =====================================================
+'Sub OptimiserZoneSelectionnee()
+'    ' Optimise la zone autour de la cellule sélectionnée
+'    Dim cellule As Range
+'    Set cellule = Selection
+'
+'    MsgBox "Optimisation de la zone autour de " & cellule.Address, vbInformation
+'    ' Ici vous pouvez ajouter la logique d'optimisation locale
+'End Sub
+
+Sub InsererImageCellule()
+    ' Insère une image dans la cellule sélectionnée uniquement
+    Dim cellule As Range
+    Set cellule = Selection
+    
+    If IsEmpty(cellule.Value) Then
+        MsgBox "Insertion d'image dans " & cellule.Address, vbInformation
+        ' Appel à une version modifiée d'insertion d'image pour une seule cellule
+    Else
+        MsgBox "Cette cellule n'est pas vide", vbExclamation
+    End If
+End Sub
+
+
+' =====================================================
+' SUB : Ajouter automatiquement le code du menu contextuel
+' =====================================================
+Sub AjouterCodeMenuContextuel(wsFacade As Worksheet)
+    Dim codeModule As Object
+    Dim codeVBA As String
+    
+    ' Tenter d'accéder au module de code de la feuille
+    On Error GoTo ErreurAccesVBA
+    
+    Set codeModule = ThisWorkbook.VBProject.VBComponents(wsFacade.CodeName).codeModule
+    
+    ' Supprimer l'ancien code s'il existe
+    If codeModule.CountOfLines > 0 Then
+        codeModule.DeleteLines 1, codeModule.CountOfLines
+    End If
+    
+    ' Code VBA à insérer dans la feuille Facade_PDI
+    codeVBA = "Private Sub Worksheet_BeforeRightClick(ByVal Target As Range, Cancel As Boolean)" & vbCrLf
+    codeVBA = codeVBA & "    ' Ajouter une option au menu contextuel" & vbCrLf
+    codeVBA = codeVBA & "    Call AjouterOptionMenuContextuel(Target)" & vbCrLf
+    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
+    
+    codeVBA = codeVBA & "Private Sub Worksheet_Deactivate()" & vbCrLf
+    codeVBA = codeVBA & "    ' Nettoyer le menu contextuel quand on quitte la feuille" & vbCrLf
+    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
+    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
+    
+    codeVBA = codeVBA & "Private Sub Worksheet_Activate()" & vbCrLf
+    codeVBA = codeVBA & "    ' Nettoyer le menu contextuel au cas où" & vbCrLf
+    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
+    codeVBA = codeVBA & "End Sub"
+    
+    ' Insérer le code dans le module de la feuille
+    codeModule.InsertLines 1, codeVBA
+    
+    Exit Sub
+    
+ErreurAccesVBA:
+    ' Si l'accès VBA est bloqué, ne rien afficher (message supprimé)
+End Sub
+
+' =====================================================
+' SUB : Ajouter une option au menu contextuel Excel
+' =====================================================
+Sub AjouterOptionMenuContextuel(Target As Range)
+    Dim menuContextuel As CommandBar
+    Dim nouvelleOption As CommandBarButton
+    
+    ' Supprimer l'option existante si elle existe déjà
+    Call SupprimerOptionMenuContextuel
+    
+    ' Vérifier qu'on est dans une zone valide de la façade
+    ' Exclure seulement la colonne AA (codes caisson)
+    ' Les boutons sont positionnés différemment et ne gênent pas les cases PDI
+    If Target.Column = 27 Then
+        Exit Sub ' Ne pas ajouter l'option dans la colonne des codes caisson
+    End If
+    
+    ' Accéder au menu contextuel des cellules
+    Set menuContextuel = Application.CommandBars("Cell")
+    
+    ' Ajouter une nouvelle option au début du menu
+    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
+    With nouvelleOption
+        .Caption = "Naviguer vers ligne Source" ' MODIFICATION : "Accueil" -> "Source"
+        .OnAction = "NaviguerDepuisMenuContextuel"
+        .Tag = "NavigationPDI"
+        .FaceId = 1695 ' Icône de navigation
+    End With
+End Sub
+
+' =====================================================
+' SUB : Supprimer l'option du menu contextuel - VERSION AMÉLIORÉE
+' =====================================================
+Sub SupprimerOptionMenuContextuel()
+    Dim ctrl As CommandBarControl
+    Dim menuContextuel As CommandBar
+    Dim i As Integer
+    
+    On Error Resume Next
+    Set menuContextuel = Application.CommandBars("Cell")
+    
+    ' NOUVELLE APPROCHE : Supprimer en partant de la fin pour éviter les décalages d'index
+    For i = menuContextuel.Controls.Count To 1 Step -1
+        Set ctrl = menuContextuel.Controls(i)
+        ' Supprimer si c'est notre contrôle OU si c'est un contrôle vide/corrompu
+        If ctrl.Tag = "NavigationPDI" Or ctrl.Caption = "" Or ctrl.Caption Like "*Naviguer*" Then
+            ctrl.Delete
+        End If
+    Next i
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
+' SUB : Navigation depuis le menu contextuel
+' =====================================================
+Sub NaviguerDepuisMenuContextuel()
+    Dim celluleCible As Range
+    Dim wsSource As Worksheet
+    Dim wsFacade As Worksheet
+    
+    Set wsFacade = ActiveSheet
+    
+    ' MODIFICATION : La feuille source est la feuille qui précède la feuille "Facade_PDI"
+    On Error Resume Next
+    Set wsSource = wsFacade.Previous
+    If wsSource Is Nothing Then
+        MsgBox "Impossible de trouver la feuille source. Elle doit être juste avant la feuille 'Facade_PDI'.", vbExclamation
+        Exit Sub
+    End If
+    On Error GoTo 0
+    
+    Set celluleCible = Selection
+    
+    ' Vérifier qu'on est bien sur la feuille Facade_PDI
+    If wsFacade.Name <> "Facade_PDI" Then
+        Exit Sub
+    End If
+    
+    ' Calculer la position
+    Dim celluleReference As Range
+    Set celluleReference = celluleCible.Cells(1, 1)
+    
+    Dim ligneFacade As Long, colonneFacade As Long
+    ligneFacade = celluleReference.Row
+    colonneFacade = celluleReference.Column
+    
+    ' Ajuster pour ligne du haut
+    If ligneFacade Mod 2 = 0 Then ligneFacade = ligneFacade - 1
+    
+    ' Pour cellules fusionnées
+    On Error Resume Next
+    If celluleReference.MergeCells Then
+        colonneFacade = celluleReference.MergeArea.Column
+    End If
+    On Error GoTo 0
+    
+    ' Calculer le code
+    Dim maxParCaisson As Integer
+    maxParCaisson = val(wsSource.Range("C1").Value) ' Prend la valeur de la feuille source
+    If maxParCaisson <= 0 Then maxParCaisson = 4
+    
+    Dim indiceLigne As Integer
+    indiceLigne = (ligneFacade + 1) / 2
+    Dim numeroCaissonCalcule As Integer
+    numeroCaissonCalcule = ((indiceLigne - 1) Mod (maxParCaisson * 4)) Mod maxParCaisson + 1
+    Dim lettreIndex As Integer
+    lettreIndex = ((indiceLigne - 1) \ maxParCaisson) Mod 4
+    Dim lettreCaissonCalculee As String
+    lettreCaissonCalculee = Chr(Asc("A") + lettreIndex)
+    
+    Dim codePosition As String
+    codePosition = numeroCaissonCalcule & lettreCaissonCalculee & " " & Format(colonneFacade, "00")
+    
+    ' Chercher et naviguer
+    Dim ligneSourceCible As Long
+    Dim derniereLigne As Long
+    derniereLigne = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
+    
+    For ligneSourceCible = 7 To derniereLigne
+        If wsSource.Cells(ligneSourceCible, 8).Value = codePosition Then
+            ' Naviguer vers cette ligne
+            wsSource.Activate
+            wsSource.Cells(ligneSourceCible, 1).Select
+            Exit Sub
+        End If
+    Next ligneSourceCible
+    
+    ' Si pas trouvé, ne rien faire (pas de message)
+End Sub
+
+
+' =====================================================
+' SUB : Fonctions pour les boutons (dans module standard)
+' =====================================================
+Sub RegénérerFaçadeFromButton()
+    Call GenererFacadePDI
+End Sub
+
+Sub RetourAccueilFromButton()
+    ' MODIFICATION : Retourne à la feuille précédente (la feuille source)
+    On Error Resume Next
+    ActiveSheet.Previous.Activate
+    If Err.Number <> 0 Then
+        MsgBox "Impossible de trouver la feuille source.", vbExclamation
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Sub
+
+Sub NavigationManuelle()
+    ' Navigation manuelle basée sur la cellule sélectionnée
+    Dim celluleCible As Range
+    Dim wsSource As Worksheet
+    Dim wsFacade As Worksheet
+    Dim ligneSource As Long
+    Dim codePosition As String
+    Dim numeroPosition As String
+    Dim ligneFacade As Long
+    Dim colonneFacade As Long
+    
+    Set wsFacade = ActiveSheet
+    
+    ' MODIFICATION : La feuille source est la feuille précédente
+    On Error Resume Next
+    Set wsSource = wsFacade.Previous
+    If wsSource Is Nothing Then
+        MsgBox "Feuille source non trouvée.", vbExclamation
+        Exit Sub
+    End If
+    On Error GoTo 0
+    
+    Set celluleCible = Selection
+    
+    ' Vérifier qu'on est bien sur la feuille Facade_PDI
+    If wsFacade.Name <> "Facade_PDI" Then
+        MsgBox "Veuillez d'abord sélectionner une cellule sur la feuille Facade_PDI", vbExclamation
+        Exit Sub
+    End If
+    
+    ' NOUVELLE LOGIQUE SÉCURISÉE : Gérer les cellules fusionnées
+    Dim celluleReference As Range
+    
+    ' Prendre la première cellule de la sélection (gère automatiquement fusionné ou normal)
+    Set celluleReference = celluleCible.Cells(1, 1)
+    
+    ' Ignorer si on clique sur la colonne AA (codes caisson)
+    If celluleReference.Column = 27 Then
+        MsgBox "Veuillez sélectionner une case de PDI dans la façade (colonnes A à Z)", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Déterminer la ligne et colonne de la façade (basé sur la cellule de référence)
+    ligneFacade = celluleReference.Row
+    colonneFacade = celluleReference.Column
+    
+    ' Ajuster pour prendre la ligne du haut si on clique sur la ligne du bas
+    If ligneFacade Mod 2 = 0 Then ligneFacade = ligneFacade - 1
+    
+    ' Pour les cellules fusionnées, chercher la vraie colonne de début
+    On Error Resume Next
+    If celluleReference.MergeCells Then
+        colonneFacade = celluleReference.MergeArea.Column
+    End If
+    On Error GoTo 0
+    
+    ' Calculer le code caisson et position
+    Dim maxParCaisson As Integer
+    maxParCaisson = val(wsSource.Range("C1").Value) ' MODIFICATION : Référence à wsSource
+    If maxParCaisson <= 0 Then maxParCaisson = 4
+    
+    ' Calcul du numéro de caisson basé sur la ligne de la façade
+    Dim numeroCaissonCalcule As Integer
+    Dim lettreCaissonCalculee As String
+    Dim indiceLigne As Integer
+    
+    indiceLigne = (ligneFacade + 1) / 2 ' 1, 2, 3...
+    numeroCaissonCalcule = ((indiceLigne - 1) Mod (maxParCaisson * 4)) Mod maxParCaisson + 1
+    Dim lettreIndex As Integer
+    lettreIndex = ((indiceLigne - 1) \ maxParCaisson) Mod 4
+    lettreCaissonCalculee = Chr(Asc("A") + lettreIndex)
+    
+    ' Construire le code de position complet
+    numeroPosition = Format(colonneFacade, "00")
+    codePosition = numeroCaissonCalcule & lettreCaissonCalculee & " " & numeroPosition
+    
+    ' DEBUG: Afficher les informations de calcul
+    Dim msgDebug As String
+    msgDebug = "INFORMATIONS DE NAVIGATION :" & vbCrLf & vbCrLf
+    msgDebug = msgDebug & "Position sélectionnée :" & vbCrLf
+    msgDebug = msgDebug & "• Ligne façade : " & ligneFacade & vbCrLf
+    msgDebug = msgDebug & "• Colonne façade : " & colonneFacade & vbCrLf
+    
+    ' Vérification sécurisée de la fusion
+    Dim estFusionne As Boolean
+    On Error Resume Next
+    estFusionne = celluleReference.MergeCells
+    On Error GoTo 0
+    
+    msgDebug = msgDebug & "• Cellule fusionnée : " & IIf(estFusionne, "Oui", "Non") & vbCrLf
+    msgDebug = msgDebug & "• Code calculé : " & codePosition & vbCrLf & vbCrLf
+    msgDebug = msgDebug & "Recherche en cours dans la colonne H de la feuille '" & wsSource.Name & "'..."
+    
+    ' Chercher dans la colonne H de la feuille Source
+    Dim derniereLigne As Long
+    derniereLigne = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
+    
+    For ligneSource = 7 To derniereLigne
+        If wsSource.Cells(ligneSource, 8).Value = codePosition Then
+            ' Naviguer vers cette ligne
+            wsSource.Activate
+            wsSource.Cells(ligneSource, 1).Select
+            MsgBox "? Navigation réussie !" & vbCrLf & _
+                   "Ligne " & ligneSource & " - PDI : " & wsSource.Cells(ligneSource, 1).Value & vbCrLf & _
+                   "Position façade : " & codePosition, vbInformation, "Navigation"
+            Exit Sub
+        End If
+    Next ligneSource
+    
+    ' Si pas trouvé, afficher les détails pour debug
+    msgDebug = msgDebug & vbCrLf & "? RÉSULTAT : Position non trouvée" & vbCrLf & vbCrLf
+    msgDebug = msgDebug & "Codes présents en colonne H (échantillon) :" & vbCrLf
+    For ligneSource = 7 To Application.Min(16, derniereLigne) ' Afficher les 10 premiers
+        If wsSource.Cells(ligneSource, 8).Value <> "" Then
+            msgDebug = msgDebug & "• Ligne " & ligneSource & " : " & wsSource.Cells(ligneSource, 8).Value & vbCrLf
+        End If
+    Next ligneSource
+    
+    MsgBox msgDebug, vbExclamation, "Debug Navigation"
+End Sub
+
+' =====================================================
+' SUB : Afficher l'aide pour la navigation
+' =====================================================
+Sub AfficherAideNavigation()
+    Dim msg As String
+    Dim valC1 As String
+    
+    ' MODIFICATION : Récupérer la valeur de C1 de la feuille source (précédente)
+    On Error Resume Next
+    valC1 = ActiveSheet.Previous.Range("C1").Value
+    If Err.Number <> 0 Then valC1 = "[valeur C1 non trouvée]"
+    On Error GoTo 0
+
+    msg = "AIDE NAVIGATION FAÇADE PDI" & vbCrLf & vbCrLf
+    msg = msg & "NAVIGATION ALTERNATIVE :" & vbCrLf
+    msg = msg & "   • Sélectionnez une case sur la façade" & vbCrLf
+    msg = msg & "   • Cliquez sur le bouton 'Navigation Manuelle'" & vbCrLf
+    msg = msg & "   • Vous serez dirigé vers la ligne correspondante" & vbCrLf & vbCrLf
+    msg = msg & "BOUTONS :" & vbCrLf
+    msg = msg & "   • Régénérer Façade : Recrée la façade avec les données actuelles" & vbCrLf
+    msg = msg & "   • Retour Source : Retourne à la feuille de données" & vbCrLf & vbCrLf
+    msg = msg & "CODES COULEUR :" & vbCrLf
+    msg = msg & "   • Rouge : Cases hors capacité (> " & valC1 & "D)" & vbCrLf
+    msg = msg & "   • Jaune : Cases marquées 'B' en colonne V" & vbCrLf
+    msg = msg & "   • Couleurs diverses : Différentes voies" & vbCrLf & vbCrLf
+    msg = msg & "SYMBOLES :" & vbCrLf
+    msg = msg & "   • ? Triangle : Type 'Bat P'" & vbCrLf
+    msg = msg & "   • ¦ Carré : Type 'Bat C'" & vbCrLf
+    msg = msg & "   • ? Cercle : Voies multiples (affiché dans nom de voie)" & vbCrLf
+    msg = msg & "   • HC : Hors Capacité en colonne AA"
+    
+    MsgBox msg, vbInformation, "Aide Navigation"
+End Sub
+
+' =====================================================
+' FONCTION CORRIGÉE : Vérifier si un caisson dépasse la limite
+' =====================================================
+Function CaissonDepasse(codeCaisson As String, maxParCaisson As Integer) As Boolean
+    ' Extraire le numéro et la lettre du code caisson
+    ' Format : "1A", "2B", etc.
+    Dim numero As Integer
+    Dim lettre As String
+    
+    If Len(codeCaisson) >= 2 Then
+        numero = val(Left(codeCaisson, Len(codeCaisson) - 1))
+        lettre = Right(codeCaisson, 1)
+        
+        ' LOGIQUE CORRIGÉE : on dépasse si on est au-delà de [maxParCaisson]D
+        ' Exemples avec maxParCaisson = 7 :
+        ' - 1A à 7D : OK (dans la capacité)
+        ' - 8D, 9D, etc. : DÉPASSE (hors capacité)
+        ' - 1E, 2E, etc. : DÉPASSE (lettre après D)
+        
+        If lettre > "D" Then
+            ' Toute lettre après D dépasse automatiquement
+            CaissonDepasse = True
+        ElseIf lettre = "D" And numero > maxParCaisson Then
+            ' Pour la lettre D, on dépasse si le numéro > maxParCaisson
+            CaissonDepasse = True
+        Else
+            ' Dans tous les autres cas, c'est dans la capacité
+            CaissonDepasse = False
+        End If
+    Else
+        CaissonDepasse = False
+    End If
+End Function
+
+' =====================================================
+' SUB AMÉLIORÉE : Mettre à jour la colonne H avec couleur
+' =====================================================
+Sub MettreAJourColonneHAvecCouleur(wsSource As Worksheet, dictCodes As Object, dictHorsCapacite As Object)
+    Dim Ligne As Long
+    Dim cle As Variant
+    
+    ' Parcourir toutes les clés du dictionnaire (numéros de ligne)
+    For Each cle In dictCodes.Keys
+        Ligne = CLng(cle)
+        
+        ' Mettre à jour la colonne H (colonne 8) avec le code calculé
+        wsSource.Cells(Ligne, 8).Value = dictCodes(cle)
+        
+        ' Si cette ligne est hors capacité, la colorer en rouge
+        If dictHorsCapacite.Exists(Ligne) Then
+            With wsSource.Cells(Ligne, 8)
+                .Interior.Color = RGB(255, 0, 0) ' Fond rouge
+                .Font.Color = RGB(255, 255, 255) ' Texte blanc
+                .Font.Bold = True
+            End With
+        Else
+            ' Réinitialiser le formatage pour les cases normales
+            With wsSource.Cells(Ligne, 8)
+                .Interior.Pattern = xlNone ' Pas de couleur de fond
+                .Font.Color = RGB(0, 0, 0) ' Texte noir
+                .Font.Bold = False
+            End With
+        End If
+    Next cle
+End Sub
+
+' =====================================================
+' FONCTION : Compter les cellules vides en fin de ligne
+' =====================================================
+Function CompterCellulesVidesFinLigne(ws As Worksheet, Ligne As Long) As Integer
+    Dim compte As Integer
+    Dim col As Integer
+    
+    compte = 0
+    
+    ' Parcourir de la colonne Z (26) vers la gauche
+    For col = 26 To 1 Step -1
+        ' Vérifier les deux lignes du caisson
+        If ws.Cells(Ligne, col).Value = "" And ws.Cells(Ligne + 1, col).Value = "" Then
+            ' Si la cellule n'est pas fusionnée ou fait partie d'une zone vide
+            If Not ws.Cells(Ligne, col).MergeCells Or _
+               (ws.Cells(Ligne, col).MergeCells And ws.Cells(Ligne, col).MergeArea.Cells(1, 1).Value = "") Then
+                compte = compte + 1
+            Else
+                ' On a trouvé une cellule non vide, on arrête
+                Exit For
+            End If
+        Else
+            ' On a trouvé une cellule non vide, on arrête
+            Exit For
+        End If
+    Next col
+    
+    CompterCellulesVidesFinLigne = compte
+End Function
+
+' =====================================================
+' SUB : Mettre à jour les cellules vides dans la feuille source - MODIFIÉE POUR DERNIÈRE LIGNE PAR CAISSON
+' =====================================================
+Sub MettreAJourCellulesVides(wsSource As Worksheet, wsFacade As Worksheet, colonneMiseAJour As String)
+    ' Utiliser la nouvelle logique de calcul par caisson
+    Call RecalculerCellulesVidesParCaisson(wsSource)
+End Sub
+
+' =====================================================
+' FONCTION : Abréger les types de voies
+' =====================================================
+Function AbregerTypeVoie(nomVoie As String) As String
+    Dim result As String
+    result = nomVoie
+    
+    ' Remplacer les types de voies par leurs abréviations
+    ' Ordre important : les plus longs d'abord pour éviter les conflits
+    result = Replace(result, "Chemin de Grande communication", "CHDG", , , vbTextCompare)
+    result = Replace(result, "Chemin de Liaison", "CHDL", , , vbTextCompare)
+    result = Replace(result, "Chemin de Petite transport", "CRPT", , , vbTextCompare)
+    result = Replace(result, "Impasse en cul-de-sac", "IMP-CUL", , , vbTextCompare)
+    result = Replace(result, "Prolongement", "PROL", , , vbTextCompare)
+    result = Replace(result, "Boulevard", "BD", , , vbTextCompare)
+    result = Replace(result, "Avenue", "AV", , , vbTextCompare)
+    result = Replace(result, "Route", "RTE", , , vbTextCompare)
+    result = Replace(result, "Impasse", "IMP", , , vbTextCompare)
+    result = Replace(result, "Chemin", "CH", , , vbTextCompare)
+    result = Replace(result, "Place", "PL", , , vbTextCompare)
+    result = Replace(result, "Allée", "ALL", , , vbTextCompare)
+    result = Replace(result, "Square", "SQ", , , vbTextCompare)
+    result = Replace(result, "Voie", "V", , , vbTextCompare)
+    result = Replace(result, "Quai", "QU", , , vbTextCompare)
+    result = Replace(result, "Passage", "PSG", , , vbTextCompare)
+    result = Replace(result, "Sentier", "SENT", , , vbTextCompare)
+    result = Replace(result, "Traversée", "TR", , , vbTextCompare)
+    result = Replace(result, "Lotissement", "LOT", , , vbTextCompare)
+    result = Replace(result, "Résidence", "RES", , , vbTextCompare)
+    result = Replace(result, "Cité", "CIT", , , vbTextCompare)
+    result = Replace(result, "Hameau", "H", , , vbTextCompare)
+    result = Replace(result, "Parc", "PARC", , , vbTextCompare)
+    result = Replace(result, "Pâture", "PAT", , , vbTextCompare)
+    result = Replace(result, "Petite rue", "PTE", , , vbTextCompare)
+    result = Replace(result, "Galerie", "GAL", , , vbTextCompare)
+    result = Replace(result, "Places", "PL", , , vbTextCompare)
+    result = Replace(result, "Ruelle", "RLE", , , vbTextCompare)
+    result = Replace(result, "Promenade", "PR", , , vbTextCompare)
+    result = Replace(result, "Esplanade", "ESPL", , , vbTextCompare)
+    result = Replace(result, "Pont", "PT", , , vbTextCompare)
+    result = Replace(result, "Vallée", "VAL", , , vbTextCompare)
+    result = Replace(result, "Val", "VAL", , , vbTextCompare)
+    
+    ' Gérer les cas avec "de", "du", "des", "de la"
+    result = Replace(result, " de la ", " ", , , vbTextCompare)
+    result = Replace(result, " du ", " ", , , vbTextCompare)
+    result = Replace(result, " des ", " ", , , vbTextCompare)
+    result = Replace(result, " de ", " ", , , vbTextCompare)
+    result = Replace(result, " d'", " ", , , vbTextCompare)
+    
+    ' Nettoyer les espaces doubles
+    Do While InStr(result, "  ") > 0
+        result = Replace(result, "  ", " ")
+    Loop
+    
+    AbregerTypeVoie = Trim(result)
+End Function
+
+' =====================================================
+' SUB : Ajouter le code caisson en colonne AA
+' =====================================================
+Sub AjouterCodeCaisson(ws As Worksheet, Ligne As Long, code As String)
+    Dim rngCode As Range
+    
+    ' Fusionner les 2 lignes en colonne AA
+    Set rngCode = ws.Range(ws.Cells(Ligne, 27), ws.Cells(Ligne + 1, 27))
+    rngCode.Merge
+    
+    ' Ajouter le code
+    With rngCode
+        .NumberFormat = "@" ' Format texte
+        .Value = code
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Font.Bold = True
+        .Font.Size = 12
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin ' Bordures simples
+        
+        ' Si c'est "HC", colorer en rouge
+        If code = "HC" Then
+            .Interior.Color = RGB(255, 0, 0) ' Fond rouge
+            .Font.Color = RGB(255, 255, 255) ' Texte blanc
+        Else
+            .Interior.Pattern = xlNone ' Pas de couleur
+            .Font.Color = RGB(0, 0, 0) ' Texte noir
+        End If
+    End With
+End Sub
+
+' =====================================================
+' FONCTION : Conversion sécurisée en entier
+' =====================================================
+Function ConvertirEnEntier(valeur As Variant, valeurParDefaut As Integer) As Integer
+    On Error Resume Next
+    ConvertirEnEntier = CInt(valeur)
+    If Err.Number <> 0 Then
+        ConvertirEnEntier = valeurParDefaut
+        Err.Clear
+    End If
+    On Error GoTo 0
+End Function
+
+' =====================================================
+' FONCTION : Obtenir la couleur de texte adaptée
+' =====================================================
+Function ObtenirCouleurTexte(indexCouleur As Long) As Long
+    Dim couleurRGB As Long
+    Dim r As Integer, g As Integer, b As Integer
+    Dim luminosite As Double
+    
+    ' Obtenir la valeur RGB de la couleur d'index
+    couleurRGB = ThisWorkbook.Colors(indexCouleur)
+    
+    ' Extraire les composantes RGB
+    r = couleurRGB Mod 256
+    g = (couleurRGB \ 256) Mod 256
+    b = (couleurRGB \ 65536) Mod 256
+    
+    ' Calculer la luminosité (formule standard)
+    luminosite = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    
+    ' Si la couleur est sombre, texte blanc, sinon texte noir
+    If luminosite < 0.5 Then
+        ObtenirCouleurTexte = RGB(255, 255, 255) ' Blanc
+    Else
+        ObtenirCouleurTexte = RGB(0, 0, 0) ' Noir
+    End If
+End Function
+
+' =====================================================
+' SUB : Fusionner les cellules adjacentes avec même nom de voie
+' =====================================================
+Sub FusionnerVoiesAdjacentes(ws As Worksheet)
+    Dim ligneVoie As Long
+    Dim col As Long, colDebut As Long
+    Dim nomVoieActuel As String, nomVoieSuivant As String
+    Dim rngFusion As Range
+    Dim derniereLigne As Long
+    Dim derniereColonne As Long
+    Dim couleurIndex As Long
+    Dim couleurTexte As Long
+    
+    ' Trouver les limites de la feuille utilisée
+    derniereLigne = ws.UsedRange.Rows.Count
+    derniereColonne = 26 ' S'arrêter à la colonne Z
+    
+    ' Parcourir toutes les lignes de noms de voies (lignes 2, 4, 6, etc.)
+    For ligneVoie = 2 To derniereLigne Step 2
+        col = 1
+        
+        ' Parcourir les colonnes de cette ligne
+        Do While col <= derniereColonne
+            ' Ignorer les cellules vides
+            If ws.Cells(ligneVoie, col).Value = "" Then
+                col = col + 1
+            Else
+                ' Récupérer le nom de voie actuel (sans slash pour comparaison)
+                nomVoieActuel = Trim(ws.Cells(ligneVoie, col).Value)
+                
+                ' Extraire le nom de voie sans le cercle blanc pour la comparaison
+                Dim nomVoieComparaison As String
+                If Left(nomVoieActuel, 1) = ChrW(&H25CB) Then
+                    ' Enlever le cercle blanc et l'espace qui suit pour la comparaison
+                    nomVoieComparaison = Trim(Mid(nomVoieActuel, 3))
+                Else
+                    nomVoieComparaison = nomVoieActuel
+                End If
+                
+                ' Si c'est une voie multiple, ne pas fusionner
+                If InStr(nomVoieComparaison, " / ") > 0 Then
+                    ' Passer à la cellule suivante sans fusionner
+                    If ws.Cells(ligneVoie, col).MergeCells Then
+                        col = ws.Cells(ligneVoie, col).MergeArea.Column + _
+                              ws.Cells(ligneVoie, col).MergeArea.Columns.Count
+                    Else
+                        col = col + 1
+                    End If
+                Else
+                    ' Procéder à la fusion normale pour les voies simples
+                    colDebut = col
+                    
+                    ' Mémoriser la couleur et vérifier si c'est rouge (hors capacité)
+                    Dim estRouge As Boolean
+                    estRouge = False
+                    If ws.Cells(ligneVoie, col).Interior.Color = RGB(255, 0, 0) Then
+                        estRouge = True
+                        couleurIndex = xlNone ' On utilisera le rouge directement
+                        couleurTexte = RGB(255, 255, 255)
+                    ElseIf ws.Cells(ligneVoie, col).Interior.ColorIndex <> xlNone Then
+                        couleurIndex = ws.Cells(ligneVoie, col).Interior.ColorIndex
+                        couleurTexte = ws.Cells(ligneVoie, col).Font.Color
+                    Else
+                        couleurIndex = xlNone
+                    End If
+                    
+                    ' Trouver la fin de la cellule fusionnée actuelle
+                    If ws.Cells(ligneVoie, col).MergeCells Then
+                        col = ws.Cells(ligneVoie, col).MergeArea.Column + _
+                              ws.Cells(ligneVoie, col).MergeArea.Columns.Count - 1
+                    End If
+                    
+                    ' Vérifier les cellules suivantes pour le même nom de voie
+                    Do While col < derniereColonne
+                        ' Vérifier la cellule suivante
+                        If ws.Cells(ligneVoie, col + 1).Value = "" Then
+                            Exit Do
+                        End If
+                        
+                        nomVoieSuivant = Trim(ws.Cells(ligneVoie, col + 1).Value)
+                        
+                        ' Extraire le nom de voie sans le cercle blanc pour la comparaison
+                        Dim nomVoieSuivantComparaison As String
+                        If Left(nomVoieSuivant, 1) = ChrW(&H25CB) Then
+                            ' Enlever le cercle blanc et l'espace qui suit pour la comparaison
+                            nomVoieSuivantComparaison = Trim(Mid(nomVoieSuivant, 3))
+                        Else
+                            nomVoieSuivantComparaison = nomVoieSuivant
+                        End If
+                        
+                        ' Ne pas fusionner si la cellule suivante contient des voies multiples
+                        If InStr(nomVoieSuivantComparaison, " / ") > 0 Then
+                            Exit Do
+                        End If
+                        
+                        ' Si c'est le même nom de voie (en ignorant le cercle blanc), étendre la fusion
+                        If nomVoieComparaison = nomVoieSuivantComparaison And nomVoieComparaison <> "" Then
+                            ' Trouver la fin de la cellule suivante
+                            If ws.Cells(ligneVoie, col + 1).MergeCells Then
+                                col = ws.Cells(ligneVoie, col + 1).MergeArea.Column + _
+                                      ws.Cells(ligneVoie, col + 1).MergeArea.Columns.Count - 1
+                            Else
+                                col = col + 1
+                            End If
+                        Else
+                            Exit Do
+                        End If
+                    Loop
+                    
+                    ' Si on a trouvé plusieurs cellules adjacentes avec le même nom
+                    If col > colDebut Then
+                        ' Défusionner d'abord toutes les cellules concernées
+                        For i = colDebut To col
+                            If ws.Cells(ligneVoie, i).MergeCells Then
+                                ws.Cells(ligneVoie, i).MergeArea.UnMerge
+                            End If
+                        Next i
+                        
+                        ' Refusionner l'ensemble
+                        Set rngFusion = ws.Range(ws.Cells(ligneVoie, colDebut), ws.Cells(ligneVoie, col))
+                        rngFusion.Merge
+                        
+                        ' Réappliquer le formatage avec le nom abrégé et le cercle blanc si nécessaire
+                        Dim texteVoieFusionne As String
+                        ' Vérifier si le texte original contenait un cercle blanc
+                        If InStr(nomVoieActuel, ChrW(&H25CB)) > 0 Then
+                            texteVoieFusionne = ChrW(&H25CB) & " " & AbregerTypeVoie(nomVoieComparaison)
+                        Else
+                            texteVoieFusionne = AbregerTypeVoie(nomVoieComparaison)
+                        End If
+                        
+                        With rngFusion
+                            .NumberFormat = "@" ' Format texte
+                            .Value = texteVoieFusionne
+                            .HorizontalAlignment = xlCenter
+                            .VerticalAlignment = xlCenter
+                            .Font.Bold = True
+                            .WrapText = True
+                            .Borders.LineStyle = xlContinuous
+                            .Borders.Weight = xlThin ' Bordures simples pour la fusion
+                            
+                            ' Souligner si c'était une voie multiple
+                            If InStr(nomVoieActuel, ChrW(&H25CB)) > 0 Then
+                                .Font.Underline = xlUnderlineStyleSingle
+                            End If
+                            
+                            ' Appliquer la couleur appropriée
+                            If estRouge Then
+                                .Interior.Color = RGB(255, 0, 0) ' Rouge pour hors capacité
+                                .Font.Color = RGB(255, 255, 255) ' Texte blanc
+                            ElseIf couleurIndex <> xlNone Then
+                                .Interior.ColorIndex = couleurIndex
+                                .Font.Color = couleurTexte
+                            End If
+                        End With
+                        
+                        ' APPLIQUER LA TAILLE DE POLICE OPTIMISÉE POUR LES VOIES FUSIONNÉES
+                        Call AjusterTaillePoliceVoiesSelonLargeur(rngFusion, col - colDebut + 1)
+                    End If
+                    
+                    col = col + 1
+                End If
+            End If
+        Loop
+    Next ligneVoie
+End Sub
+
+
+' =====================================================
+' MACRO DE TEST : Vérifier la logique de dépassement
+' =====================================================
+Sub TesterLogiquleDepassement()
+    Dim ws As Worksheet
+    Dim maxPar As Integer
+    Dim msg As String
+    
+    Set ws = ActiveSheet ' MODIFICATION: Test sur la feuille active
+    maxPar = val(ws.Range("C1").Value)
+    If maxPar <= 0 Then maxPar = 4
+    
+    msg = "TEST DE LA LOGIQUE DE DÉPASSEMENT" & vbCrLf & vbCrLf
+    msg = msg & "Valeur max par caisson (C1 de '" & ws.Name & "') : " & maxPar & vbCrLf & vbCrLf
+    msg = msg & "EXEMPLES DE TESTS :" & vbCrLf
+    
+    ' Tester quelques codes
+    msg = msg & "1A : " & IIf(CaissonDepasse("1A", maxPar), "DÉPASSE", "OK") & vbCrLf
+    msg = msg & maxPar & "D : " & IIf(CaissonDepasse(maxPar & "D", maxPar), "DÉPASSE", "OK") & vbCrLf
+    msg = msg & (maxPar + 1) & "D : " & IIf(CaissonDepasse((maxPar + 1) & "D", maxPar), "DÉPASSE", "OK") & vbCrLf
+    msg = msg & "1E : " & IIf(CaissonDepasse("1E", maxPar), "DÉPASSE", "OK") & vbCrLf & vbCrLf
+    
+    msg = msg & "LIMITE : Tout au-delà de " & maxPar & "D devrait être en ROUGE avec HC" & vbCrLf
+    msg = msg & "IMPORTANT : Une fois dépassé, même si ça repart à 1A, ça reste ROUGE !"
+    
+    MsgBox msg, vbInformation, "Test logique dépassement"
+End Sub
+
+' =====================================================
+' MACRO DE TEST : Vérifier la structure des données
+' =====================================================
+Sub VerifierStructureDonnees()
+    Dim ws As Worksheet
+    Dim msg As String
+    
+    Set ws = ActiveSheet ' MODIFICATION: Test sur la feuille active
+    
+    msg = "VÉRIFICATION DE LA STRUCTURE DES DONNÉES SUR '" & ws.Name & "'" & vbCrLf & vbCrLf
+    msg = msg & "Valeur max par caisson (C1) : " & ws.Range("C1").Value & vbCrLf & vbCrLf
+    msg = msg & "Exemple de la ligne 7 :" & vbCrLf
+    msg = msg & "- Colonne A (N°) : " & ws.Cells(7, 1).Text & vbCrLf
+    msg = msg & "- Colonne B (Nom voie) : " & ws.Cells(7, 2).Text & vbCrLf
+    msg = msg & "- Colonne D (Observations) : " & ws.Cells(7, 4).Text & vbCrLf
+    msg = msg & "- Colonne F (Type PDI) : " & ws.Cells(7, 6).Text & vbCrLf
+    msg = msg & "- Colonne G (Largeur) : " & ws.Cells(7, 7).Text & vbCrLf
+    msg = msg & "- Colonne V (Valeur B) : " & ws.Cells(7, 22).Text & vbCrLf & vbCrLf
+    
+    msg = msg & "RÉSULTAT ATTENDU :" & vbCrLf
+    msg = msg & "Cellule du HAUT : " & ws.Cells(7, 1).Text & " - " & ws.Cells(7, 4).Text & vbCrLf
+    msg = msg & "Cellule du BAS : " & ws.Cells(7, 2).Text
+    
+    MsgBox msg, vbInformation, "Structure des données"
+End Sub
+
+' =====================================================
+' GESTION DES COULEURS ÉTENDUES
+' =====================================================
+
+' Initialise une palette de couleurs étendues avec 150+ couleurs distinctes
+Sub InitialiserPaletteCouleursEtendues(dictPalette As Object)
+    Dim i As Integer
+    i = 0
+    
+    ' SÉRIE 1: COULEURS VIVES ET CONTRASTÉES (20 couleurs)
+    dictPalette.Add i, RGB(255, 87, 87):   i = i + 1  ' Rouge corail
+    dictPalette.Add i, RGB(255, 183, 77):  i = i + 1  ' Orange doré
+    dictPalette.Add i, RGB(255, 235, 59):  i = i + 1  ' Jaune vif
+    dictPalette.Add i, RGB(139, 195, 74):  i = i + 1  ' Vert lime
+    dictPalette.Add i, RGB(38, 166, 154):  i = i + 1  ' Vert émeraude
+    dictPalette.Add i, RGB(41, 182, 246):  i = i + 1  ' Bleu cyan
+    dictPalette.Add i, RGB(92, 107, 192):  i = i + 1  ' Indigo
+    dictPalette.Add i, RGB(186, 104, 200): i = i + 1  ' Violet
+    dictPalette.Add i, RGB(240, 98, 146):  i = i + 1  ' Rose fuchsia
+    dictPalette.Add i, RGB(255, 138, 101): i = i + 1  ' Saumon
+    dictPalette.Add i, RGB(78, 175, 79):   i = i + 1  ' Vert forêt
+    dictPalette.Add i, RGB(3, 169, 244):   i = i + 1  ' Bleu ciel
+    dictPalette.Add i, RGB(156, 39, 176):  i = i + 1  ' Pourpre
+    dictPalette.Add i, RGB(255, 87, 34):   i = i + 1  ' Orange rouge
+    dictPalette.Add i, RGB(205, 220, 57):  i = i + 1  ' Jaune vert
+    dictPalette.Add i, RGB(0, 188, 212):   i = i + 1  ' Turquoise
+    dictPalette.Add i, RGB(103, 58, 183):  i = i + 1  ' Violet profond
+    dictPalette.Add i, RGB(233, 30, 99):   i = i + 1  ' Rose vif
+    dictPalette.Add i, RGB(121, 85, 72):   i = i + 1  ' Brun
+    dictPalette.Add i, RGB(84, 110, 122):  i = i + 1  ' Bleu gris
+    
+    ' SÉRIE 2: COULEURS PASTEL DISTINCTIVES (20 couleurs)
+    dictPalette.Add i, RGB(255, 205, 210): i = i + 1  ' Rose pâle
+    dictPalette.Add i, RGB(255, 224, 178): i = i + 1  ' Pêche
+    dictPalette.Add i, RGB(255, 249, 196): i = i + 1  ' Jaune pastel
+    dictPalette.Add i, RGB(220, 237, 200): i = i + 1  ' Vert menthe
+    dictPalette.Add i, RGB(178, 223, 219): i = i + 1  ' Vert d'eau
+    dictPalette.Add i, RGB(187, 222, 251): i = i + 1  ' Bleu clair
+    dictPalette.Add i, RGB(209, 196, 233): i = i + 1  ' Lavande
+    dictPalette.Add i, RGB(248, 187, 208): i = i + 1  ' Rose poudrée
+    dictPalette.Add i, RGB(255, 204, 188): i = i + 1  ' Abricot
+    dictPalette.Add i, RGB(200, 230, 201): i = i + 1  ' Vert tendre
+    dictPalette.Add i, RGB(179, 229, 252): i = i + 1  ' Bleu poudrée
+    dictPalette.Add i, RGB(225, 190, 231): i = i + 1  ' Mauve clair
+    dictPalette.Add i, RGB(255, 171, 145): i = i + 1  ' Corail clair
+    dictPalette.Add i, RGB(240, 244, 195): i = i + 1  ' Citron vert
+    dictPalette.Add i, RGB(204, 255, 229): i = i + 1  ' Menthe glacée
+    dictPalette.Add i, RGB(191, 239, 255): i = i + 1  ' Bleu glacé
+    dictPalette.Add i, RGB(228, 187, 255): i = i + 1  ' Violet clair
+    dictPalette.Add i, RGB(255, 194, 209): i = i + 1  ' Rose saumon
+    dictPalette.Add i, RGB(215, 204, 200): i = i + 1  ' Beige rosé
+    dictPalette.Add i, RGB(207, 216, 220): i = i + 1  ' Gris bleuté
+    
+    ' SÉRIE 3: COULEURS MOYENNES BIEN CONTRASTÉES (30 couleurs)
+    dictPalette.Add i, RGB(244, 67, 54):   i = i + 1  ' Rouge Material
+    dictPalette.Add i, RGB(233, 30, 99):   i = i + 1  ' Pink Material
+    dictPalette.Add i, RGB(156, 39, 176):  i = i + 1  ' Purple Material
+    dictPalette.Add i, RGB(103, 58, 183):  i = i + 1  ' Deep Purple
+    dictPalette.Add i, RGB(63, 81, 181):   i = i + 1  ' Indigo Material
+    dictPalette.Add i, RGB(33, 150, 243):  i = i + 1  ' Blue Material
+    dictPalette.Add i, RGB(3, 169, 244):   i = i + 1  ' Light Blue
+    dictPalette.Add i, RGB(0, 188, 212):   i = i + 1  ' Cyan Material
+    dictPalette.Add i, RGB(0, 150, 136):   i = i + 1  ' Teal Material
+    dictPalette.Add i, RGB(76, 175, 80):   i = i + 1  ' Green Material
+    dictPalette.Add i, RGB(139, 195, 74):  i = i + 1  ' Light Green
+    dictPalette.Add i, RGB(205, 220, 57):  i = i + 1  ' Lime Material
+    dictPalette.Add i, RGB(255, 235, 59):  i = i + 1  ' Yellow Material
+    dictPalette.Add i, RGB(255, 193, 7):   i = i + 1  ' Amber Material
+    dictPalette.Add i, RGB(255, 152, 0):   i = i + 1  ' Orange Material
+    dictPalette.Add i, RGB(255, 87, 34):   i = i + 1  ' Deep Orange
+    dictPalette.Add i, RGB(121, 85, 72):   i = i + 1  ' Brown Material
+    dictPalette.Add i, RGB(158, 158, 158): i = i + 1  ' Grey Material
+    dictPalette.Add i, RGB(96, 125, 139):  i = i + 1  ' Blue Grey
+    dictPalette.Add i, RGB(255, 112, 67):  i = i + 1  ' Orange vif
+    dictPalette.Add i, RGB(174, 213, 129): i = i + 1  ' Vert clair vif
+    dictPalette.Add i, RGB(100, 181, 246): i = i + 1  ' Bleu moyen
+    dictPalette.Add i, RGB(149, 117, 205): i = i + 1  ' Violet moyen
+    dictPalette.Add i, RGB(240, 113, 120): i = i + 1  ' Rose corail
+    dictPalette.Add i, RGB(255, 183, 77):  i = i + 1  ' Orange doré
+    dictPalette.Add i, RGB(129, 212, 250): i = i + 1  ' Bleu clair vif
+    dictPalette.Add i, RGB(206, 147, 216): i = i + 1  ' Violet rosé
+    dictPalette.Add i, RGB(255, 138, 128): i = i + 1  ' Rouge saumon
+    dictPalette.Add i, RGB(185, 246, 202): i = i + 1  ' Vert menthe vif
+    dictPalette.Add i, RGB(144, 202, 249): i = i + 1  ' Bleu pervenche
+    
+    ' SÉRIE 4: COULEURS FONCÉES CONTRASTÉES (30 couleurs)
+    dictPalette.Add i, RGB(183, 28, 28):   i = i + 1  ' Rouge foncé
+    dictPalette.Add i, RGB(136, 14, 79):   i = i + 1  ' Rose foncé
+    dictPalette.Add i, RGB(74, 20, 140):   i = i + 1  ' Violet foncé
+    dictPalette.Add i, RGB(49, 27, 146):   i = i + 1  ' Indigo foncé
+    dictPalette.Add i, RGB(26, 35, 126):   i = i + 1  ' Bleu foncé
+    dictPalette.Add i, RGB(13, 71, 161):   i = i + 1  ' Bleu profond
+    dictPalette.Add i, RGB(1, 87, 155):    i = i + 1  ' Bleu clair foncé
+    dictPalette.Add i, RGB(0, 96, 100):    i = i + 1  ' Cyan foncé
+    dictPalette.Add i, RGB(0, 77, 64):     i = i + 1  ' Vert foncé
+    dictPalette.Add i, RGB(27, 94, 32):    i = i + 1  ' Vert profond
+    dictPalette.Add i, RGB(51, 105, 30):   i = i + 1  ' Vert olive
+    dictPalette.Add i, RGB(130, 119, 23):  i = i + 1  ' Jaune olive
+    dictPalette.Add i, RGB(245, 127, 23):  i = i + 1  ' Orange foncé
+    dictPalette.Add i, RGB(191, 54, 12):   i = i + 1  ' Rouge orange
+    dictPalette.Add i, RGB(62, 39, 35):    i = i + 1  ' Brun foncé
+    dictPalette.Add i, RGB(69, 90, 100):   i = i + 1  ' Gris bleu foncé
+    dictPalette.Add i, RGB(101, 31, 255):  i = i + 1  ' Violet électrique
+    dictPalette.Add i, RGB(0, 230, 118):   i = i + 1  ' Vert néon
+    dictPalette.Add i, RGB(255, 61, 0):    i = i + 1  ' Rouge orange vif
+    dictPalette.Add i, RGB(196, 0, 140):   i = i + 1  ' Magenta foncé
+    dictPalette.Add i, RGB(0, 145, 234):   i = i + 1  ' Bleu électrique
+    dictPalette.Add i, RGB(67, 160, 71):   i = i + 1  ' Vert franc
+    dictPalette.Add i, RGB(251, 140, 0):   i = i + 1  ' Orange amber
+    dictPalette.Add i, RGB(124, 77, 255):  i = i + 1  ' Violet clair
+    dictPalette.Add i, RGB(255, 23, 68):   i = i + 1  ' Rose vif
+    dictPalette.Add i, RGB(0, 191, 255):   i = i + 1  ' Bleu ciel vif
+    dictPalette.Add i, RGB(198, 255, 0):   i = i + 1  ' Vert lime vif
+    dictPalette.Add i, RGB(255, 64, 129):  i = i + 1  ' Rose accent
+    dictPalette.Add i, RGB(101, 187, 255): i = i + 1  ' Bleu accent
+    dictPalette.Add i, RGB(178, 255, 89):  i = i + 1  ' Vert accent
+    
+    ' SÉRIE 5: COULEURS SPÉCIALES ET DISTINCTIVES (30 couleurs)
+    dictPalette.Add i, RGB(132, 94, 194):  i = i + 1  ' Améthyste
+    dictPalette.Add i, RGB(207, 106, 135): i = i + 1  ' Rose antique
+    dictPalette.Add i, RGB(72, 133, 237):  i = i + 1  ' Bleu royal
+    dictPalette.Add i, RGB(245, 166, 35):  i = i + 1  ' Miel
+    dictPalette.Add i, RGB(126, 211, 33):  i = i + 1  ' Chartreuse
+    dictPalette.Add i, RGB(202, 111, 30):  i = i + 1  ' Terre de Sienne
+    dictPalette.Add i, RGB(21, 101, 192):  i = i + 1  ' Saphir
+    dictPalette.Add i, RGB(162, 155, 254): i = i + 1  ' Pervenche
+    dictPalette.Add i, RGB(255, 204, 0):   i = i + 1  ' Or
+    dictPalette.Add i, RGB(0, 200, 83):    i = i + 1  ' Émeraude vif
+    dictPalette.Add i, RGB(213, 0, 249):   i = i + 1  ' Magenta électrique
+    dictPalette.Add i, RGB(0, 184, 169):   i = i + 1  ' Turquoise foncé
+    dictPalette.Add i, RGB(255, 109, 0):   i = i + 1  ' Orange mandarine
+    dictPalette.Add i, RGB(149, 69, 53):   i = i + 1  ' Acajou
+    dictPalette.Add i, RGB(56, 142, 60):   i = i + 1  ' Vert sapin
+    dictPalette.Add i, RGB(94, 53, 177):   i = i + 1  ' Violet byzantin
+    dictPalette.Add i, RGB(239, 83, 80):   i = i + 1  ' Rouge tomate
+    dictPalette.Add i, RGB(26, 188, 156):  i = i + 1  ' Turquoise clair
+    dictPalette.Add i, RGB(255, 193, 7):   i = i + 1  ' Ambre
+    dictPalette.Add i, RGB(142, 36, 170):  i = i + 1  ' Violet orchidée
+    dictPalette.Add i, RGB(67, 56, 202):   i = i + 1  ' Indigo électrique
+    dictPalette.Add i, RGB(46, 204, 113):  i = i + 1  ' Vert menthe électrique
+    dictPalette.Add i, RGB(231, 76, 60):   i = i + 1  ' Rouge brique
+    dictPalette.Add i, RGB(230, 126, 34):  i = i + 1  ' Carotte
+    dictPalette.Add i, RGB(241, 196, 15):  i = i + 1  ' Tournesol
+    dictPalette.Add i, RGB(155, 89, 182):  i = i + 1  ' Améthyste clair
+    dictPalette.Add i, RGB(52, 152, 219):  i = i + 1  ' Bleu peter river
+    dictPalette.Add i, RGB(22, 160, 133):  i = i + 1  ' Vert sea
+    dictPalette.Add i, RGB(243, 156, 18):  i = i + 1  ' Orange soleil
+    dictPalette.Add i, RGB(211, 84, 0):    i = i + 1  ' Orange foncé pumpkin
+End Sub
+
+' Obtient une couleur distincte pour une voie donnée (ANCIENNE VERSION - gardée pour compatibilité)
+Function ObtenirCouleurDistinctePourVoie(nomVoie As String, paletteCouleurs As Object, indexActuel As Integer) As Long
+    ' Calculer un hash simple basé sur le nom de la voie pour une attribution déterministe
+    Dim hashVoie As Long
+    Dim i As Integer
+    
+    hashVoie = 0
+    For i = 1 To Len(nomVoie)
+        hashVoie = hashVoie + Asc(Mid(nomVoie, i, 1)) * i
+    Next i
+    
+    ' Utiliser le hash pour choisir une couleur dans la palette, en évitant la séquence
+    Dim indexCouleur As Integer
+    indexCouleur = (hashVoie Mod paletteCouleurs.Count)
+    
+    ' S'assurer que l'index est valide
+    If indexCouleur < 0 Then indexCouleur = indexCouleur + paletteCouleurs.Count
+    
+    ' Retourner la couleur RGB correspondante
+    ObtenirCouleurDistinctePourVoie = paletteCouleurs(indexCouleur)
+End Function
+
+' Obtient une couleur distincte pour une voie avec vérification d'adjacence (NOUVELLE VERSION AMÉLIORÉE)
+Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, paletteCouleurs As Object, dictCouleursExistantes As Object, colonne As Long, ws As Worksheet, Ligne As Long) As Long
+    Dim hashVoie As Long
+    Dim i As Integer
+    Dim indexCouleur As Integer
+    Dim couleurCandidate As Long
+    Dim couleurGauche As Long, couleurDroite As Long
+    Dim tentatives As Integer
+    Dim contraste As Double
+    Dim contrastelimite As Double
+    
+    ' Seuil de contraste minimum (plus c'est élevé, plus les couleurs doivent être différentes)
+    contrastelimite = 30000 ' Différence RGB minimum
+    
+    ' Calculer un hash basé sur le nom de la voie
+    hashVoie = 0
+    For i = 1 To Len(nomVoie)
+        hashVoie = hashVoie + Asc(Mid(nomVoie, i, 1)) * i
+    Next i
+    
+    ' Obtenir les couleurs des voies adjacentes
+    couleurGauche = ObtenirCouleurVoieAdjacente(ws, Ligne, colonne - 1)
+    couleurDroite = ObtenirCouleurVoieAdjacente(ws, Ligne, colonne + 1)
+    
+    ' Essayer de trouver une couleur avec suffisamment de contraste
+    tentatives = 0
+    Do
+        ' Calculer l'index de couleur avec variation selon les tentatives
+        indexCouleur = ((hashVoie + tentatives * 17) Mod paletteCouleurs.Count)
+        If indexCouleur < 0 Then indexCouleur = indexCouleur + paletteCouleurs.Count
+        
+        couleurCandidate = paletteCouleurs(indexCouleur)
+        
+        ' Vérifier le contraste avec les couleurs adjacentes
+        Dim contrasteBon As Boolean
+        contrasteBon = True
+        
+        If couleurGauche <> xlNone And couleurGauche <> 0 Then
+            contraste = CalculerContrasteRGB(couleurCandidate, couleurGauche)
+            If contraste < contrastelimite Then contrasteBon = False
+        End If
+        
+        If couleurDroite <> xlNone And couleurDroite <> 0 And contrasteBon Then
+            contraste = CalculerContrasteRGB(couleurCandidate, couleurDroite)
+            If contraste < contrastelimite Then contrasteBon = False
+        End If
+        
+        ' Si la couleur a suffisamment de contraste, l'utiliser
+        If contrasteBon Then
+            ObtenirCouleurDistinctePourVoieAvecAdjacence = couleurCandidate
+            Exit Function
+        End If
+        
+        tentatives = tentatives + 1
+        
+        ' Limiter les tentatives pour éviter une boucle infinie
+        If tentatives > 50 Then
+            ' Utiliser une couleur de la série spéciale haute différenciation
+            indexCouleur = (tentatives Mod 30) + 100 ' Utiliser la série 5 (couleurs spéciales)
+            If indexCouleur >= paletteCouleurs.Count Then indexCouleur = paletteCouleurs.Count - 1
+            ObtenirCouleurDistinctePourVoieAvecAdjacence = paletteCouleurs(indexCouleur)
+            Exit Function
+        End If
+    Loop
+End Function
+
+' Fonction utilitaire pour obtenir la couleur d'une voie adjacente
+Function ObtenirCouleurVoieAdjacente(ws As Worksheet, Ligne As Long, colonne As Long) As Long
+    On Error GoTo ErrorHandler
+    
+    ' Vérifier que la colonne est dans les limites
+    If colonne < 1 Or colonne > ws.Columns.Count Then
+        ObtenirCouleurVoieAdjacente = xlNone
+        Exit Function
+    End If
+    
+    ' Vérifier la cellule de voie (ligne + 1 pour la ligne des voies)
+    Dim celluleVoie As Range
+    Set celluleVoie = ws.Cells(Ligne + 1, colonne)
+    
+    ' Si la cellule contient une voie (pas vide, pas numérique)
+    If Not IsEmpty(celluleVoie.Value) And Not IsNumeric(celluleVoie.Value) Then
+        ObtenirCouleurVoieAdjacente = celluleVoie.Interior.Color
+    Else
+        ObtenirCouleurVoieAdjacente = xlNone
+    End If
+    
+    Exit Function
+    
+ErrorHandler:
+    ObtenirCouleurVoieAdjacente = xlNone
+End Function
+
+' Calcule le contraste entre deux couleurs RGB
+Function CalculerContrasteRGB(couleur1 As Long, couleur2 As Long) As Double
+    Dim r1 As Integer, g1 As Integer, b1 As Integer
+    Dim r2 As Integer, g2 As Integer, b2 As Integer
+    
+    ' Extraire les composantes RGB de la première couleur
+    r1 = couleur1 Mod 256
+    g1 = (couleur1 \ 256) Mod 256
+    b1 = (couleur1 \ 65536) Mod 256
+    
+    ' Extraire les composantes RGB de la seconde couleur
+    r2 = couleur2 Mod 256
+    g2 = (couleur2 \ 256) Mod 256
+    b2 = (couleur2 \ 65536) Mod 256
+    
+    ' Calculer la distance euclidienne dans l'espace RGB
+    CalculerContrasteRGB = Sqr((r1 - r2) ^ 2 + (g1 - g2) ^ 2 + (b1 - b2) ^ 2)
+End Function
+
+' Version RGB de la fonction ObtenirCouleurTexte
+Function ObtenirCouleurTexteRGB(couleurFondRGB As Long) As Long
+    Dim r As Integer, g As Integer, b As Integer
+    Dim luminosite As Double
+    
+    ' Extraire les composantes RGB
+    r = couleurFondRGB Mod 256
+    g = (couleurFondRGB \ 256) Mod 256
+    b = (couleurFondRGB \ 65536) Mod 256
+    
+    ' Calculer la luminosité (formule standard)
+    luminosite = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    
+    ' Si la couleur est sombre, texte blanc, sinon texte noir
+    If luminosite < 0.5 Then
+        ObtenirCouleurTexteRGB = RGB(255, 255, 255) ' Blanc
+    Else
+        ObtenirCouleurTexteRGB = RGB(0, 0, 0) ' Noir
+    End If
+End Function
+
+' Fonction de diagnostic pour afficher les couleurs attribuées
+Sub AfficherDiagnosticCouleurs()
+    Dim ws As Worksheet
+    Dim i As Long
+    Dim rapport As String
+    Dim cellule As Range
+    Dim nomVoie As String
+    Dim couleur As Long
+    Dim voiesTraitees As Object
+    
+    Set ws = ActiveSheet
+    Set voiesTraitees = CreateObject("Scripting.Dictionary")
+    
+    If ws Is Nothing Then
+        MsgBox "Aucune feuille active détectée.", vbExclamation
+        Exit Sub
+    End If
+    
+    rapport = "DIAGNOSTIC DES COULEURS ATTRIBUÉES" & vbCrLf & vbCrLf
+    
+    ' Parcourir les cellules de voies (lignes paires)
+    For Each cellule In ws.UsedRange
+        If cellule.Row Mod 2 = 0 And Not IsEmpty(cellule.Value) Then ' Lignes paires (voies)
+            nomVoie = Trim(CStr(cellule.Value))
+            
+            If nomVoie <> "" And Not IsNumeric(nomVoie) And Not voiesTraitees.Exists(nomVoie) Then
+                couleur = cellule.Interior.Color
+                
+                If couleur <> xlNone And couleur <> RGB(255, 255, 255) Then
+                    rapport = rapport & "Voie: " & nomVoie & vbCrLf
+                    rapport = rapport & "  Couleur RGB: " & couleur & vbCrLf
+                    rapport = rapport & "  Cellule: " & cellule.Address & vbCrLf & vbCrLf
+                    
+                    voiesTraitees.Add nomVoie, True
+                End If
+            End If
+        End If
+    Next cellule
+    
+    rapport = rapport & "Total de voies colorées: " & voiesTraitees.Count
+    
+    MsgBox rapport, vbInformation, "Diagnostic Couleurs"
+End Sub
+
+' Fonction de diagnostic pour vérifier les couleurs adjacentes
+Sub DiagnostiquerCouleursAdjacentes()
+    Dim ws As Worksheet
+    Dim Ligne As Long, colonne As Long
+    Dim rapport As String
+    Dim celluleVoie As Range, celluleVoieGauche As Range, celluleVoieDroite As Range
+    Dim nomVoie As String, nomVoieGauche As String, nomVoieDroite As String
+    Dim couleur As Long, couleurGauche As Long, couleurDroite As Long
+    Dim contraste As Double
+    Dim problemesDetectes As Integer
+    
+    Set ws = ActiveSheet
+    
+    If ws Is Nothing Then
+        MsgBox "Aucune feuille active détectée.", vbExclamation
+        Exit Sub
+    End If
+    
+    rapport = "DIAGNOSTIC DES COULEURS ADJACENTES" & vbCrLf & vbCrLf
+    problemesDetectes = 0
+    
+    ' Parcourir les lignes de voies (lignes paires)
+    For Ligne = 2 To ws.UsedRange.Rows.Count Step 2
+        For colonne = 1 To 26 ' Colonnes A à Z
+            Set celluleVoie = ws.Cells(Ligne, colonne)
+            
+            ' Si la cellule contient une voie
+            If Not IsEmpty(celluleVoie.Value) And Not IsNumeric(celluleVoie.Value) Then
+                nomVoie = Trim(CStr(celluleVoie.Value))
+                couleur = celluleVoie.Interior.Color
+                
+                ' Vérifier la voie à droite
+                If colonne < 26 Then
+                    Set celluleVoieDroite = ws.Cells(Ligne, colonne + 1)
+                    If Not IsEmpty(celluleVoieDroite.Value) And Not IsNumeric(celluleVoieDroite.Value) Then
+                        nomVoieDroite = Trim(CStr(celluleVoieDroite.Value))
+                        couleurDroite = celluleVoieDroite.Interior.Color
+                        
+                        ' Calculer le contraste
+                        If couleur <> xlNone And couleurDroite <> xlNone And couleur <> 0 And couleurDroite <> 0 Then
+                            contraste = CalculerContrasteRGB(couleur, couleurDroite)
+                            
+                            ' Si le contraste est insuffisant
+                            If contraste < 25000 Then ' Seuil plus bas pour le diagnostic
+                                problemesDetectes = problemesDetectes + 1
+                                rapport = rapport & "PROBLÈME " & problemesDetectes & ":" & vbCrLf
+                                rapport = rapport & "  Voie 1: " & nomVoie & " (colonne " & Chr(64 + colonne) & ")" & vbCrLf
+                                rapport = rapport & "  Voie 2: " & nomVoieDroite & " (colonne " & Chr(64 + colonne + 1) & ")" & vbCrLf
+                                rapport = rapport & "  Contraste: " & Round(contraste, 0) & " (< 25000 = insuffisant)" & vbCrLf
+                                rapport = rapport & "  Couleur 1: RGB(" & (couleur Mod 256) & "," & ((couleur \ 256) Mod 256) & "," & ((couleur \ 65536) Mod 256) & ")" & vbCrLf
+                                rapport = rapport & "  Couleur 2: RGB(" & (couleurDroite Mod 256) & "," & ((couleurDroite \ 256) Mod 256) & "," & ((couleurDroite \ 65536) Mod 256) & ")" & vbCrLf & vbCrLf
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        Next colonne
+    Next Ligne
+    
+    If problemesDetectes = 0 Then
+        rapport = rapport & "? Aucun problème de contraste détecté !" & vbCrLf
+        rapport = rapport & "Toutes les voies adjacentes ont des couleurs suffisamment distinctes."
+    Else
+        rapport = rapport & "?? " & problemesDetectes & " problème(s) de contraste détecté(s)." & vbCrLf
+        rapport = rapport & "Relancez la génération de façade pour corriger automatiquement."
+    End If
+    
+    MsgBox rapport, vbInformation, "Diagnostic Couleurs Adjacentes"
+End Sub
