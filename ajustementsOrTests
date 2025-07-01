@@ -11,6 +11,7 @@ Sub RegrouperPDIMemesVoies()
     Dim largeurCase As Variant
     Dim largeurCaseNum As Integer
     Dim compteurVoie As Integer
+    Dim nbPDIRattaches As Long  ' Compteur pour les PDI rattachés
 
     Application.ScreenUpdating = False
     Application.EnableEvents = False
@@ -32,15 +33,17 @@ Sub RegrouperPDIMemesVoies()
         End If
         MsgBox "Veuillez entrer un nombre valide entre 1 et 26.", vbExclamation
     Loop
+    
     nbModifications = 0
     nbGroupes = 0
+    nbPDIRattaches = 0  ' Initialiser le compteur
     voiePrecedente = ""
     compteurVoie = 0
 
     If MsgBox("Cette macro va regrouper les PDI ayant la même voie consécutive (max 10 par groupe)." & vbCrLf & _
               "- Premier PDI du groupe : largeur = " & largeurCaseNum & vbCrLf & _
               "- PDI suivants même voie : largeur = 0" & vbCrLf & _
-              "- Les PDI rattachés seront ignorés" & vbCrLf & vbCrLf & _
+              "- Les PDI rattachés seront forcés à largeur = 0" & vbCrLf & vbCrLf & _
               "Voulez-vous continuer ?", vbQuestion + vbYesNo, "Confirmation") = vbNo Then Exit Sub
 
     For i = 7 To derniereLigne
@@ -48,19 +51,29 @@ Sub RegrouperPDIMemesVoies()
         voieActuelle = CStr(wsAccueil.Cells(i, 2).Text)
         typePDI = CStr(wsAccueil.Cells(i, 6).Text)
 
+        ' MODIFICATION : Vérifier d'abord si c'est un PDI rattaché
         If EstPDIRattache(typePDI) Then
+            ' Forcer la largeur à 0 pour les PDI rattachés
+            wsAccueil.Cells(i, 7).Value = 0
+            nbPDIRattaches = nbPDIRattaches + 1
+            
+            ' Reset des compteurs car un PDI rattaché interrompt la séquence
             voiePrecedente = ""
             compteurVoie = 0
         ElseIf voieActuelle <> "" Then
+            ' Traitement normal pour les PDI non rattachés avec une voie
             If voieActuelle = voiePrecedente Then
                 compteurVoie = compteurVoie + 1
                 If compteurVoie Mod 10 = 1 Then
+                    ' Nouveau groupe de 10 dans la même voie
                     wsAccueil.Cells(i, 7).Value = largeurCaseNum
                     nbGroupes = nbGroupes + 1
                 Else
+                    ' PDI suivant dans le même groupe
                     wsAccueil.Cells(i, 7).Value = 0
                 End If
             Else
+                ' Nouvelle voie : premier PDI du groupe
                 voiePrecedente = voieActuelle
                 compteurVoie = 1
                 wsAccueil.Cells(i, 7).Value = largeurCaseNum
@@ -68,6 +81,7 @@ Sub RegrouperPDIMemesVoies()
             End If
             nbModifications = nbModifications + 1
         Else
+            ' Pas de voie : reset des compteurs
             voiePrecedente = ""
             compteurVoie = 0
         End If
@@ -76,19 +90,21 @@ Sub RegrouperPDIMemesVoies()
     Application.EnableEvents = True
     Application.ScreenUpdating = True
 
+    ' Message de confirmation avec informations détaillées
     MsgBox "Regroupement terminé !" & vbCrLf & vbCrLf & _
            "Largeur de case utilisée : " & largeurCaseNum & vbCrLf & _
            "Nombre de lignes modifiées : " & nbModifications & vbCrLf & _
            "Nombre de groupes créés : " & nbGroupes & vbCrLf & _
+           "Nombre de PDI rattachés forcés à 0 : " & nbPDIRattaches & vbCrLf & _
            "Total de lignes traitées : " & (derniereLigne - 6), _
            vbInformation, "Regroupement PDI"
 End Sub
-
 
 Function EstPDIRattache(typePDI As String) As Boolean
     '=====================================================
     ' FONCTION : Déterminer si un PDI est rattaché
     ' Retourne True si le type est "rattaché C" ou "rattaché P"
+    ' AMÉLIORATION : Gestion plus robuste des variations d'écriture
     '=====================================================
     
     Dim typeClean As String
@@ -96,17 +112,24 @@ Function EstPDIRattache(typePDI As String) As Boolean
     ' Nettoyer le type (enlever espaces en trop, mettre en majuscules)
     typeClean = UCase(Trim(typePDI))
     
-    ' Vérifier si c'est exactement "RATTACHÉ C" ou "RATTACHÉ P"
-    ' On accepte aussi "RATTACHE" sans accent
+    ' Remplacer les accents pour une détection plus robuste
+    typeClean = Replace(typeClean, "É", "E")
+    typeClean = Replace(typeClean, "È", "E")
+    typeClean = Replace(typeClean, "Ê", "E")
+    
+    ' Normaliser les espaces multiples en espaces simples
+    Do While InStr(typeClean, "  ") > 0
+        typeClean = Replace(typeClean, "  ", " ")
+    Loop
+    
+    ' Vérifier si c'est un PDI rattaché (avec ou sans accent)
     Select Case typeClean
-        Case "RATTACHÉ C", "RATTACHE C", "RATTACHÉ P", "RATTACHE P"
+        Case "RATTACHE C", "RATTACHE P", "RATTACHÉ C", "RATTACHÉ P"
             EstPDIRattache = True
         Case Else
-            ' On peut aussi accepter avec des espaces multiples
-            If typeClean = "RATTACHÉ  C" Or typeClean = "RATTACHE  C" Or _
-               typeClean = "RATTACHÉ  P" Or typeClean = "RATTACHE  P" Or _
-               typeClean = "RATTACHÉ   C" Or typeClean = "RATTACHE   C" Or _
-               typeClean = "RATTACHÉ   P" Or typeClean = "RATTACHE   P" Then
+            ' Vérification additionnelle pour des variations possibles
+            If InStr(typeClean, "RATTACHE") > 0 And _
+               (InStr(typeClean, " C") > 0 Or InStr(typeClean, " P") > 0) Then
                 EstPDIRattache = True
             Else
                 EstPDIRattache = False
@@ -114,4 +137,3 @@ Function EstPDIRattache(typePDI As String) As Boolean
     End Select
     
 End Function
-
