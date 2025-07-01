@@ -28,8 +28,8 @@ Sub RegrouperPDIMemesVoies()
     Do
         largeurCase = InputBox("Veuillez entrer la largeur de case souhaitée (entre 1 et 26) :" & vbCrLf & _
                                "Par défaut : 4" & vbCrLf & vbCrLf & _
-                               "Note : Les cases en début et fin de caisson seront" & vbCrLf & _
-                               "automatiquement agrandies de +1 pour optimiser l'espace.", "Largeur de case", "4")
+                               "Note : Les cases seront automatiquement optimisées" & vbCrLf & _
+                               "pour utiliser les 26 cellules de chaque caisson.", "Largeur de case", "4")
         If largeurCase = "" Then
             MsgBox "Opération annulée.", vbInformation
             Exit Sub
@@ -49,20 +49,19 @@ Sub RegrouperPDIMemesVoies()
 
     If MsgBox("Cette macro va regrouper les PDI ayant la même voie consécutive (max 10 par groupe)." & vbCrLf & _
               "- Largeur de base : " & largeurCaseNum & vbCrLf & _
-              "- Cases début/fin de caisson : " & (largeurCaseNum + 1) & " (optimisation espace)" & vbCrLf & _
+              "- Optimisation automatique pour remplir les 26 cellules" & vbCrLf & _
               "- PDI suivants même voie : largeur = 0" & vbCrLf & _
               "- Les PDI rattachés seront forcés à largeur = 0" & vbCrLf & vbCrLf & _
               "Voulez-vous continuer ?", vbQuestion + vbYesNo, "Confirmation") = vbNo Then Exit Sub
 
-    ' ÉTAPE 1 : Regroupement normal avec optimisation début/fin de caisson
+    ' ÉTAPE 1 : Regroupement normal avec largeur de base
     For i = 7 To derniereLigne
         numPDI = CStr(wsAccueil.Cells(i, 1).Text)
         voieActuelle = CStr(wsAccueil.Cells(i, 2).Text)
         typePDI = CStr(wsAccueil.Cells(i, 6).Text)
 
-        ' Si c'est un PDI rattaché, ignorer pour le regroupement mais compter
+        ' Si c'est un PDI rattaché, ignorer pour le regroupement
         If EstPDIRattache(typePDI) Then
-            ' Reset des compteurs car un PDI rattaché interrompt la séquence
             voiePrecedente = ""
             compteurVoie = 0
         ElseIf voieActuelle <> "" Then
@@ -70,21 +69,18 @@ Sub RegrouperPDIMemesVoies()
             If voieActuelle = voiePrecedente Then
                 compteurVoie = compteurVoie + 1
                 If compteurVoie Mod 10 = 1 Then
-                    ' Nouveau groupe de 10 dans la même voie - VÉRIFIER SI DÉBUT DE CAISSON
-                    Dim largeurAUtiliser As Integer
-                    largeurAUtiliser = CalculerLargeurOptimisee(i, largeurCaseNum, maxParCaisson, wsAccueil)
-                    wsAccueil.Cells(i, 7).Value = largeurAUtiliser
+                    ' Nouveau groupe de 10 dans la même voie
+                    wsAccueil.Cells(i, 7).Value = largeurCaseNum
                     nbGroupes = nbGroupes + 1
                 Else
                     ' PDI suivant dans le même groupe
                     wsAccueil.Cells(i, 7).Value = 0
                 End If
             Else
-                ' Nouvelle voie : premier PDI du groupe - VÉRIFIER SI DÉBUT DE CAISSON
+                ' Nouvelle voie : premier PDI du groupe
                 voiePrecedente = voieActuelle
                 compteurVoie = 1
-                largeurAUtiliser = CalculerLargeurOptimisee(i, largeurCaseNum, maxParCaisson, wsAccueil)
-                wsAccueil.Cells(i, 7).Value = largeurAUtiliser
+                wsAccueil.Cells(i, 7).Value = largeurCaseNum
                 nbGroupes = nbGroupes + 1
             End If
             nbModifications = nbModifications + 1
@@ -95,15 +91,14 @@ Sub RegrouperPDIMemesVoies()
         End If
     Next i
 
-    ' ÉTAPE 2 : Optimisation des fins de caisson
-    Call OptimiserFinsDeCaisson(wsAccueil, largeurCaseNum, maxParCaisson)
+    ' ÉTAPE 2 : Optimisation complète des caissons
+    Call OptimiserTousLesCaissons(wsAccueil, largeurCaseNum)
 
     ' ÉTAPE 3 : PASSAGE DÉDIÉ POUR FORCER TOUS LES PDI RATTACHÉS À 0
     For i = 7 To derniereLigne
         typePDI = CStr(wsAccueil.Cells(i, 6).Text)
         
         If EstPDIRattache(typePDI) Then
-            ' Forcer impérativement la largeur à 0 pour tous les PDI rattachés
             wsAccueil.Cells(i, 7).Value = 0
             nbPDIRattaches = nbPDIRattaches + 1
         End If
@@ -115,7 +110,7 @@ Sub RegrouperPDIMemesVoies()
     ' Message de confirmation avec informations détaillées
     MsgBox "Regroupement terminé !" & vbCrLf & vbCrLf & _
            "Largeur de case de base : " & largeurCaseNum & vbCrLf & _
-           "Largeur début/fin caisson : " & (largeurCaseNum + 1) & vbCrLf & _
+           "Optimisation automatique : activée" & vbCrLf & _
            "Nombre de lignes modifiées : " & nbModifications & vbCrLf & _
            "Nombre de groupes créés : " & nbGroupes & vbCrLf & _
            "Nombre de PDI rattachés forcés à 0 : " & nbPDIRattaches & vbCrLf & _
@@ -123,121 +118,137 @@ Sub RegrouperPDIMemesVoies()
            vbInformation, "Regroupement PDI"
 End Sub
 
-Function CalculerLargeurOptimisee(ligneActuelle As Long, largeurBase As Integer, maxParCaisson As Integer, ws As Worksheet) As Integer
+Sub OptimiserTousLesCaissons(ws As Worksheet, largeurBase As Integer)
     '=====================================================
-    ' FONCTION : Calculer la largeur optimisée selon la position dans le caisson
-    ' Retourne largeurBase + 1 si c'est le début d'un caisson, sinon largeurBase
-    '=====================================================
-    
-    ' Simuler la position virtuelle pour déterminer si on est en début de caisson
-    Dim positionVirtuelle As Long
-    positionVirtuelle = 1  ' Position de départ
-    Dim i As Long
-    
-    ' Parcourir depuis la ligne 7 jusqu'à la ligne actuelle pour calculer la position
-    For i = 7 To ligneActuelle - 1
-        Dim largeurLigne As Integer
-        largeurLigne = ConvertirEnEntier(ws.Cells(i, 7).Value, 0)
-        
-        If largeurLigne > 0 Then
-            ' Vérifier si on dépasse la largeur d'un caisson (26)
-            If positionVirtuelle + largeurLigne - 1 > 26 Then
-                ' Nouveau caisson
-                positionVirtuelle = 1
-            End If
-            positionVirtuelle = positionVirtuelle + largeurLigne
-        End If
-    Next i
-    
-    ' Si on est en position 1, c'est le début d'un caisson
-    If positionVirtuelle = 1 Then
-        CalculerLargeurOptimisee = largeurBase + 1
-    Else
-        CalculerLargeurOptimisee = largeurBase
-    End If
-End Function
-
-Sub OptimiserFinsDeCaisson(ws As Worksheet, largeurBase As Integer, maxParCaisson As Integer)
-    '=====================================================
-    ' SUB : Optimiser les fins de caisson en agrandissant la dernière case
+    ' SUB : Optimisation complète de tous les caissons pour utiliser les 26 cellules
     '=====================================================
     
     Dim derniereLigne As Long
     Dim i As Long
-    Dim positionVirtuelle As Long
-    Dim largeurActuelle As Integer
-    Dim derniereCaseCaisson As Long
+    Dim caissons As Collection
+    Dim caissonActuel As Object
     
     derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    positionVirtuelle = 1
-    derniereCaseCaisson = 0
     
-    ' Parcourir toutes les lignes pour identifier les fins de caisson
-    For i = 7 To derniereLigne
-        largeurActuelle = ConvertirEnEntier(ws.Cells(i, 7).Value, 0)
-        
-        If largeurActuelle > 0 Then
-            ' Vérifier si cette case va dépasser la largeur du caisson
-            If positionVirtuelle + largeurActuelle - 1 > 26 Then
-                ' La case précédente était la fin du caisson précédent
-                If derniereCaseCaisson > 0 Then
-                    Call AgrandirFinDeCaisson(ws, derniereCaseCaisson, largeurBase)
-                End If
-                
-                ' Nouveau caisson
-                positionVirtuelle = 1 + largeurActuelle
-                derniereCaseCaisson = i
-            Else
-                ' Case normale dans le caisson actuel
-                positionVirtuelle = positionVirtuelle + largeurActuelle
-                derniereCaseCaisson = i
-            End If
-        End If
-    Next i
+    ' Analyser et créer la structure des caissons
+    Set caissons = AnalyserCaissons(ws, derniereLigne)
     
-    ' Traiter la dernière case du dernier caisson
-    If derniereCaseCaisson > 0 Then
-        Call AgrandirFinDeCaisson(ws, derniereCaseCaisson, largeurBase)
-    End If
+    ' Optimiser chaque caisson individuellement
+    Dim j As Integer
+    For j = 1 To caissons.Count
+        Set caissonActuel = caissons(j)
+        Call OptimiserCaissonIndividuel(ws, caissonActuel, largeurBase)
+    Next j
 End Sub
 
-Sub AgrandirFinDeCaisson(ws As Worksheet, ligneFinCaisson As Long, largeurBase As Integer)
+Function AnalyserCaissons(ws As Worksheet, derniereLigne As Long) As Collection
     '=====================================================
-    ' SUB : Agrandir la dernière case d'un caisson si possible
+    ' FONCTION : Analyser la structure des caissons
+    ' Retourne une collection d'objets caisson avec leurs lignes
     '=====================================================
     
-    ' Calculer l'espace utilisé dans ce caisson
+    Dim caissons As Collection
+    Dim caissonActuel As Object
     Dim positionVirtuelle As Long
     Dim i As Long
     Dim largeurActuelle As Integer
     
+    Set caissons = New Collection
     positionVirtuelle = 1
     
-    ' Remonter pour trouver le début de ce caisson
-    Dim ligneDebutCaisson As Long
-    ligneDebutCaisson = 7
+    ' Créer le premier caisson
+    Set caissonActuel = CreateObject("Scripting.Dictionary")
+    caissonActuel.Add "lignes", New Collection
+    caissonActuel.Add "totalLargeur", 0
     
-    For i = 7 To ligneFinCaisson
+    For i = 7 To derniereLigne
         largeurActuelle = ConvertirEnEntier(ws.Cells(i, 7).Value, 0)
         
         If largeurActuelle > 0 Then
+            ' Vérifier si cette case rentre dans le caisson actuel
             If positionVirtuelle + largeurActuelle - 1 > 26 Then
-                ' Nouveau caisson commencé
-                ligneDebutCaisson = i
-                positionVirtuelle = 1 + largeurActuelle
-            Else
-                positionVirtuelle = positionVirtuelle + largeurActuelle
+                ' Finaliser le caisson précédent
+                If caissonActuel("lignes").Count > 0 Then
+                    caissons.Add caissonActuel
+                End If
+                
+                ' Créer un nouveau caisson
+                Set caissonActuel = CreateObject("Scripting.Dictionary")
+                caissonActuel.Add "lignes", New Collection
+                caissonActuel.Add "totalLargeur", 0
+                positionVirtuelle = 1
+            End If
+            
+            ' Ajouter la ligne au caisson actuel
+            caissonActuel("lignes").Add i
+            caissonActuel("totalLargeur") = caissonActuel("totalLargeur") + largeurActuelle
+            positionVirtuelle = positionVirtuelle + largeurActuelle
+        End If
+    Next i
+    
+    ' Ajouter le dernier caisson s'il contient des lignes
+    If caissonActuel("lignes").Count > 0 Then
+        caissons.Add caissonActuel
+    End If
+    
+    Set AnalyserCaissons = caissons
+End Function
+
+Sub OptimiserCaissonIndividuel(ws As Worksheet, caisson As Object, largeurBase As Integer)
+    '=====================================================
+    ' SUB : Optimiser un caisson individuel pour utiliser exactement 26 cellules
+    '=====================================================
+    
+    Dim lignes As Collection
+    Dim totalLargeur As Integer
+    Dim nbCases As Integer
+    Dim espaceLibre As Integer
+    Dim largeurOptimisee As Integer
+    Dim resteADistribuer As Integer
+    Dim i As Integer
+    Dim ligne As Variant
+    
+    Set lignes = caisson("lignes")
+    totalLargeur = caisson("totalLargeur")
+    nbCases = lignes.Count
+    espaceLibre = 26 - totalLargeur
+    
+    ' Si pas d'espace libre, rien à faire
+    If espaceLibre <= 0 Or nbCases = 0 Then Exit Sub
+    
+    ' STRATÉGIE D'OPTIMISATION
+    ' 1. Distribuer l'espace libre de manière équitable
+    ' 2. Donner la priorité aux cases de début et fin
+    
+    largeurOptimisee = largeurBase + (espaceLibre \ nbCases)
+    resteADistribuer = espaceLibre Mod nbCases
+    
+    ' Appliquer les largeurs optimisées
+    For i = 1 To lignes.Count
+        ligne = lignes(i)
+        
+        ' Largeur de base optimisée
+        ws.Cells(ligne, 7).Value = largeurOptimisee
+        
+        ' Distribuer le reste en priorité aux extrémités
+        If resteADistribuer > 0 Then
+            ' Priorité : première case, dernière case, puis les autres
+            If i = 1 Or i = lignes.Count Or (i <= resteADistribuer And lignes.Count <= resteADistribuer) Then
+                ws.Cells(ligne, 7).Value = largeurOptimisee + 1
+                resteADistribuer = resteADistribuer - 1
             End If
         End If
     Next i
     
-    ' Calculer l'espace libre restant
-    Dim espaceLibre As Integer
-    espaceLibre = 26 - (positionVirtuelle - 1)
-    
-    ' Si il y a de l'espace libre ET que la case fait la largeur de base, l'agrandir
-    If espaceLibre > 0 And ws.Cells(ligneFinCaisson, 7).Value = largeurBase Then
-        ws.Cells(ligneFinCaisson, 7).Value = largeurBase + 1
+    ' Si il reste encore de l'espace, distribuer sur les cases du milieu
+    If resteADistribuer > 0 Then
+        For i = 2 To lignes.Count - 1
+            If resteADistribuer > 0 Then
+                ligne = lignes(i)
+                ws.Cells(ligne, 7).Value = ws.Cells(ligne, 7).Value + 1
+                resteADistribuer = resteADistribuer - 1
+            End If
+        Next i
     End If
 End Sub
 
@@ -257,39 +268,31 @@ End Function
 Function EstPDIRattache(typePDI As String) As Boolean
     '=====================================================
     ' FONCTION : Déterminer si un PDI est rattaché
-    ' Retourne True si le type est "rattaché C" ou "rattaché P"
     '=====================================================
     
     Dim typeClean As String
     
-    ' Gestion des valeurs vides ou nulles
     If IsEmpty(typePDI) Or IsNull(typePDI) Or typePDI = "" Then
         EstPDIRattache = False
         Exit Function
     End If
     
-    ' Nettoyer le type (enlever espaces en trop, mettre en majuscules)
     typeClean = UCase(Trim(CStr(typePDI)))
-    
-    ' Remplacer les accents pour une détection plus robuste
     typeClean = Replace(typeClean, "É", "E")
     typeClean = Replace(typeClean, "È", "E")
     typeClean = Replace(typeClean, "Ê", "E")
     typeClean = Replace(typeClean, "Ë", "E")
     
-    ' Normaliser les espaces multiples en espaces simples
     Do While InStr(typeClean, "  ") > 0
         typeClean = Replace(typeClean, "  ", " ")
     Loop
     
-    ' Vérification stricte d'abord
     Select Case typeClean
         Case "RATTACHE C", "RATTACHE P", "RATTACHÉ C", "RATTACHÉ P"
             EstPDIRattache = True
-        Case "RATTACHEC", "RATTACHEP", "RATTACHÉC", "RATTACHÉP"  ' Sans espace
+        Case "RATTACHEC", "RATTACHEP", "RATTACHÉC", "RATTACHÉP"
             EstPDIRattache = True
         Case Else
-            ' Vérification plus souple : contient "RATTACH" ET ("C" OU "P")
             If (InStr(typeClean, "RATTACH") > 0) And _
                ((Right(typeClean, 1) = "C") Or (Right(typeClean, 1) = "P") Or _
                 (InStr(typeClean, " C") > 0) Or (InStr(typeClean, " P") > 0)) Then
@@ -298,62 +301,92 @@ Function EstPDIRattache(typePDI As String) As Boolean
                 EstPDIRattache = False
             End If
     End Select
-    
 End Function
 
-' MACRO DE DIAGNOSTIC POUR VÉRIFIER LES LARGEURS OPTIMISÉES
+' MACRO DE DIAGNOSTIC AMÉLIORÉE
 Sub DiagnostiquerOptimisationCaisson()
     '=====================================================
-    ' MACRO UTILITAIRE : Affiche la répartition des largeurs par caisson
+    ' MACRO UTILITAIRE : Diagnostic complet des caissons optimisés
     '=====================================================
     
     Dim ws As Worksheet
     Dim derniereLigne As Long
-    Dim i As Long
-    Dim positionVirtuelle As Long
-    Dim largeurActuelle As Integer
+    Dim caissons As Collection
+    Dim caissonActuel As Object
     Dim rapport As String
-    Dim caissonActuel As Integer
+    Dim i As Integer
+    Dim j As Integer
+    Dim ligne As Variant
+    Dim largeur As Integer
     Dim totalCaisson As Integer
     
     Set ws = ActiveSheet
     derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     
-    rapport = "DIAGNOSTIC OPTIMISATION CAISSONS" & vbCrLf & vbCrLf
-    positionVirtuelle = 1
-    caissonActuel = 1
-    totalCaisson = 0
+    Set caissons = AnalyserCaissons(ws, derniereLigne)
     
-    rapport = rapport & "CAISSON " & caissonActuel & " : "
+    rapport = "DIAGNOSTIC OPTIMISATION CAISSONS (DÉTAILLÉ)" & vbCrLf & vbCrLf
     
-    For i = 7 To derniereLigne
-        largeurActuelle = ConvertirEnEntier(ws.Cells(i, 7).Value, 0)
+    For i = 1 To caissons.Count
+        Set caissonActuel = caissons(i)
+        rapport = rapport & "CAISSON " & i & " : "
         
-        If largeurActuelle > 0 Then
-            ' Vérifier si on dépasse la largeur du caisson
-            If positionVirtuelle + largeurActuelle - 1 > 26 Then
-                ' Finaliser le caisson précédent
-                rapport = rapport & " = " & totalCaisson & "/26" & vbCrLf
-                
-                ' Nouveau caisson
-                caissonActuel = caissonActuel + 1
-                rapport = rapport & "CAISSON " & caissonActuel & " : " & largeurActuelle
-                positionVirtuelle = 1 + largeurActuelle
-                totalCaisson = largeurActuelle
-            Else
-                ' Ajouter à la liste du caisson actuel
-                If totalCaisson > 0 Then rapport = rapport & "-"
-                rapport = rapport & largeurActuelle
-                positionVirtuelle = positionVirtuelle + largeurActuelle
-                totalCaisson = totalCaisson + largeurActuelle
-            End If
+        totalCaisson = 0
+        For j = 1 To caissonActuel("lignes").Count
+            ligne = caissonActuel("lignes")(j)
+            largeur = ConvertirEnEntier(ws.Cells(ligne, 7).Value, 0)
+            
+            If j > 1 Then rapport = rapport & "-"
+            rapport = rapport & largeur
+            totalCaisson = totalCaisson + largeur
+        Next j
+        
+        rapport = rapport & " = " & totalCaisson & "/26"
+        
+        ' Indicateur de statut
+        If totalCaisson = 26 Then
+            rapport = rapport & " ✓ OPTIMAL"
+        ElseIf totalCaisson < 26 Then
+            rapport = rapport & " ⚠ SOUS-UTILISÉ (" & (26 - totalCaisson) & " cellules perdues)"
+        Else
+            rapport = rapport & " ❌ DÉPASSEMENT"
         End If
+        
+        rapport = rapport & vbCrLf
     Next i
     
-    ' Finaliser le dernier caisson
-    If totalCaisson > 0 Then
-        rapport = rapport & " = " & totalCaisson & "/26" & vbCrLf
-    End If
+    rapport = rapport & vbCrLf & "Nombre total de caissons : " & caissons.Count
     
-    MsgBox rapport, vbInformation, "Diagnostic Optimisation"
+    MsgBox rapport, vbInformation, "Diagnostic Optimisation Avancé"
+End Sub
+
+' MACRO DE CORRECTION FORCÉE
+Sub CorrigerOptimisationForcee()
+    '=====================================================
+    ' MACRO UTILITAIRE : Force la correction de tous les caissons sous-utilisés
+    '=====================================================
+    
+    Dim ws As Worksheet
+    Dim derniereLigne As Long
+    Dim largeurBase As Integer
+    Dim reponse As VbMsgBoxResult
+    
+    Set ws = ActiveSheet
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Demander la largeur de base
+    largeurBase = InputBox("Quelle est la largeur de base utilisée ?", "Largeur de base", "4")
+    If largeurBase <= 0 Then Exit Sub
+    
+    reponse = MsgBox("Cette macro va forcer l'optimisation de tous les caissons" & vbCrLf & _
+                     "pour utiliser exactement 26 cellules chacun." & vbCrLf & vbCrLf & _
+                     "Continuer ?", vbQuestion + vbYesNo, "Correction forcée")
+    
+    If reponse = vbYes Then
+        Application.ScreenUpdating = False
+        Call OptimiserTousLesCaissons(ws, largeurBase)
+        Application.ScreenUpdating = True
+        
+        MsgBox "Correction terminée ! Utilisez le diagnostic pour vérifier.", vbInformation
+    End If
 End Sub
