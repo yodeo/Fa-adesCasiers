@@ -449,12 +449,9 @@ Sub GenererFacadePDI()
     ' Utiliser la colonne W pour stocker le nombre de cellules vides
     Call MettreAJourCellulesVides(wsSource, wsDest, "W")
     
-    ' AJOUTER LES BOUTONS ET MENU CONTEXTUEL À LA FEUILLE FACADE_PDI
+    ' AJOUTER LES BOUTONS ET MENU CONTEXTUEL À LA FEUILLE FACADE_PDI (VERSION SIMPLIFIÉE)
     Call AjouterBoutonsSeulement(wsDest)
-    Call AjouterCodeMenuContextuel(wsDest)
-    
-    ' AJOUTER LE MENU CONTEXTUEL À LA FEUILLE SOURCE (navigation inverse)
-    'Call AjouterCodeMenuContextuelAccueil(wsSource)
+    ' Les menus contextuels sont maintenant gérés par les événements du classeur
     
     ' Masquer le quadrillage
     With wsDest
@@ -469,8 +466,6 @@ Sub GenererFacadePDI()
         .CenterHorizontally = True
     End With
     
-    
-    
     ' Réactiver les mises à jour
     Application.ScreenUpdating = True
     Application.DisplayAlerts = True
@@ -481,14 +476,6 @@ Sub GenererFacadePDI()
     ' avec une pause pour s'assurer que la feuille est bien créée
     DoEvents
     Application.Wait (Now + TimeValue("0:00:01"))
-    
-    ' Appeler la macro d'ajustement d'impression
-    'Call AjusterParametresImpression
-    
-    'Call MettreEnFormeAccueil
-    
-    ' Appliquer les hachures multivoies
-    'Call AppliquerHachuresMultivoies(wsDest)
     
     ' Message de confirmation avec le nouveau nom
     MsgBox "La façade PDI a été générée avec succès !" & vbCrLf & _
@@ -526,9 +513,6 @@ Function NettoyerNomFeuille(nomOriginal As String) As String
         nomNettoye = Replace(nomNettoye, "  ", " ")
     Loop
     
-    ' Remplacer les espaces par des underscores si désiré (optionnel)
-    ' nomNettoye = Replace(nomNettoye, " ", "_")
-    
     ' S'assurer que le nom n'est pas vide
     If Len(nomNettoye) = 0 Then
         nomNettoye = "Tournee"
@@ -541,6 +525,427 @@ Function NettoyerNomFeuille(nomOriginal As String) As String
     
     NettoyerNomFeuille = nomNettoye
 End Function
+
+' =====================================================
+' NOUVEAU SYSTÈME DE MENU CONTEXTUEL AMÉLIORÉ
+' =====================================================
+
+' Variables globales pour le menu contextuel
+Public menuContextuelActif As Boolean
+Public derniereFeuilleActive As String
+
+' =====================================================
+' GESTIONNAIRE UNIVERSEL DU MENU CONTEXTUEL
+' =====================================================
+
+Sub GererMenuContextuelUniversel(ws As Worksheet, Target As Range)
+    ' Supprimer l'ancien menu
+    Call SupprimerOptionMenuContextuel
+    
+    ' Déterminer le type de feuille et ajouter les options appropriées
+    If InStr(ws.Name, "Fac") > 0 Then
+        ' C'est une feuille façade
+        Call AjouterMenuContextuelFacade(Target, ws)
+    ElseIf EstFeuilleSource(ws) Then
+        ' C'est une feuille source avec données PDI
+        Call AjouterMenuContextuelSource(Target, ws)
+    End If
+End Sub
+
+' =====================================================
+' MENU CONTEXTUEL POUR FEUILLES FACADE
+' =====================================================
+
+Sub AjouterMenuContextuelFacade(Target As Range, ws As Worksheet)
+    Dim menuContextuel As CommandBar
+    Dim nouvelleOption As CommandBarButton
+    
+    ' Vérifier qu'on n'est pas dans la colonne des codes caisson
+    If Target.Column = 27 Then Exit Sub
+    
+    Set menuContextuel = Application.CommandBars("Cell")
+    
+    ' Option principale : Navigation vers source
+    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
+    With nouvelleOption
+        .Caption = "📍 Naviguer vers ligne Source"
+        .OnAction = "NaviguerDepuisFacadeVersSource"
+        .Tag = "NavigationPDI"
+        .FaceId = 1695
+    End With
+    
+    ' Séparateur
+    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=2)
+    With nouvelleOption
+        .Caption = "-"
+        .BeginGroup = True
+        .Tag = "NavigationPDI"
+    End With
+    
+    ' Options d'optimisation selon le contenu de la cellule
+    If Not IsEmpty(Target.Value) Then
+        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
+        With nouvelleOption
+            .Caption = "🔧 Optimiser cette zone"
+            .OnAction = "OptimiserZoneSelectionnee"
+            .Tag = "NavigationPDI"
+        End With
+    End If
+    
+    ' Option pour cellules vides
+    If IsEmpty(Target.Value) Then
+        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
+        With nouvelleOption
+            .Caption = "🖼️ Insérer image ici"
+            .OnAction = "InsererImageCellule"
+            .Tag = "NavigationPDI"
+        End With
+    End If
+End Sub
+
+' =====================================================
+' MENU CONTEXTUEL POUR FEUILLES SOURCE
+' =====================================================
+
+Sub AjouterMenuContextuelSource(Target As Range, ws As Worksheet)
+    Dim menuContextuel As CommandBar
+    Dim nouvelleOption As CommandBarButton
+    
+    ' Vérifier qu'on est dans la zone des données (ligne 7+, colonnes utiles)
+    If Target.Row < 7 Or Target.Column > 8 Then Exit Sub
+    
+    ' Vérifier qu'il y a un code caisson en colonne H
+    If ws.Cells(Target.Row, 8).Value = "" Then Exit Sub
+    
+    Set menuContextuel = Application.CommandBars("Cell")
+    
+    ' Option principale : Navigation vers façade
+    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
+    With nouvelleOption
+        .Caption = "📍 Naviguer vers case Façade"
+        .OnAction = "NaviguerDepuisSourceVersFacade"
+        .Tag = "NavigationPDI"
+        .FaceId = 1695
+    End With
+    
+    ' Option : Régénérer façade
+    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=2)
+    With nouvelleOption
+        .Caption = "🔄 Régénérer la façade"
+        .OnAction = "GenererFacadePDI"
+        .Tag = "NavigationPDI"
+        .BeginGroup = True
+    End With
+End Sub
+
+' =====================================================
+' FONCTIONS DE NAVIGATION AMÉLIORÉES
+' =====================================================
+
+Sub NaviguerDepuisFacadeVersSource()
+    Dim celluleCible As Range
+    Dim wsSource As Worksheet
+    Dim wsFacade As Worksheet
+    Dim codePosition As String
+    Dim ligneSourceCible As Long
+    
+    Set wsFacade = ActiveSheet
+    Set celluleCible = Selection
+    
+    ' Trouver la feuille source correspondante
+    Set wsSource = TrouverFeuilleSource(wsFacade)
+    If wsSource Is Nothing Then
+        MsgBox "❌ Impossible de trouver la feuille source correspondante.", vbExclamation, "Navigation impossible"
+        Exit Sub
+    End If
+    
+    ' Calculer le code de position
+    codePosition = CalculerCodePosition(celluleCible, wsSource)
+    If codePosition = "" Then
+        MsgBox "❌ Impossible de calculer la position. Vérifiez que vous êtes sur une case valide.", vbExclamation, "Navigation impossible"
+        Exit Sub
+    End If
+    
+    ' Chercher la ligne correspondante
+    ligneSourceCible = TrouverLigneAvecCode(wsSource, codePosition)
+    If ligneSourceCible > 0 Then
+        ' Navigation réussie
+        wsSource.Activate
+        wsSource.Cells(ligneSourceCible, 1).Select
+        
+        ' Message de confirmation optionnel
+        Application.StatusBar = "✅ Navigation réussie vers " & wsSource.Name & " ligne " & ligneSourceCible
+        Application.OnTime Now + TimeValue("00:00:03"), "EffacerStatusBar"
+    Else
+        MsgBox "❌ Position " & codePosition & " non trouvée dans la feuille source.", vbExclamation, "Navigation impossible"
+    End If
+End Sub
+
+Sub NaviguerDepuisSourceVersFacade()
+    Dim celluleCible As Range
+    Dim wsSource As Worksheet
+    Dim wsFacade As Worksheet
+    Dim codePosition As String
+    
+    Set wsSource = ActiveSheet
+    Set celluleCible = Selection
+    
+    ' Lire le code en colonne H
+    codePosition = wsSource.Cells(celluleCible.Row, 8).Value
+    If codePosition = "" Then
+        MsgBox "❌ Aucun code de position trouvé sur cette ligne.", vbExclamation, "Navigation impossible"
+        Exit Sub
+    End If
+    
+    ' Trouver la feuille façade correspondante
+    Set wsFacade = TrouverFeuilleFacade(wsSource)
+    If wsFacade Is Nothing Then
+        MsgBox "❌ Aucune feuille façade trouvée. Veuillez d'abord générer la façade.", vbExclamation, "Navigation impossible"
+        Exit Sub
+    End If
+    
+    ' Calculer et naviguer vers la position
+    If NaviguerVersPositionFacade(wsFacade, codePosition, wsSource) Then
+        Application.StatusBar = "✅ Navigation réussie vers " & wsFacade.Name
+        Application.OnTime Now + TimeValue("00:00:03"), "EffacerStatusBar"
+    Else
+        MsgBox "❌ Position " & codePosition & " non trouvée dans la façade.", vbExclamation, "Navigation impossible"
+    End If
+End Sub
+
+' =====================================================
+' FONCTIONS UTILITAIRES AMÉLIORÉES
+' =====================================================
+
+Function EstFeuilleSource(ws As Worksheet) As Boolean
+    ' Vérifier si c'est une feuille source en cherchant des indicateurs
+    On Error Resume Next
+    
+    ' Vérifier s'il y a des données en colonne A à partir de la ligne 7
+    If ws.Cells(7, 1).Value <> "" Then
+        ' Vérifier s'il y a une valeur en C1 (max par caisson)
+        If IsNumeric(ws.Range("C1").Value) Then
+            EstFeuilleSource = True
+            Exit Function
+        End If
+    End If
+    
+    EstFeuilleSource = False
+    On Error GoTo 0
+End Function
+
+Function TrouverFeuilleSource(wsFacade As Worksheet) As Worksheet
+    Dim ws As Worksheet
+    Dim nomTournee As String
+    
+    ' Extraire le nom de la tournée du nom de la façade
+    nomTournee = Replace(wsFacade.Name, "Fac", "")
+    
+    ' Chercher une feuille avec ce nom
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = nomTournee And EstFeuilleSource(ws) Then
+            Set TrouverFeuilleSource = ws
+            Exit Function
+        End If
+    Next ws
+    
+    ' Si pas trouvé par nom, chercher la feuille précédente
+    On Error Resume Next
+    Set ws = wsFacade.Previous
+    If Not ws Is Nothing And EstFeuilleSource(ws) Then
+        Set TrouverFeuilleSource = ws
+        Exit Function
+    End If
+    On Error GoTo 0
+    
+    Set TrouverFeuilleSource = Nothing
+End Function
+
+Function TrouverFeuilleFacade(wsSource As Worksheet) As Worksheet
+    Dim ws As Worksheet
+    Dim nomTournee As String
+    Dim nomFacadeAttendu As String
+    
+    ' Construire le nom de façade attendu
+    nomTournee = Trim(CStr(wsSource.Range("A1").Value))
+    If nomTournee = "" Then nomTournee = wsSource.Name
+    nomFacadeAttendu = NettoyerNomFeuille(nomTournee) & "Fac"
+    
+    ' Chercher la feuille façade
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = nomFacadeAttendu Then
+            Set TrouverFeuilleFacade = ws
+            Exit Function
+        End If
+    Next ws
+    
+    ' Si pas trouvé par nom exact, chercher toute feuille contenant "Fac"
+    For Each ws In ThisWorkbook.Worksheets
+        If InStr(ws.Name, "Fac") > 0 And ws.Name <> wsSource.Name Then
+            Set TrouverFeuilleFacade = ws
+            Exit Function
+        End If
+    Next ws
+    
+    Set TrouverFeuilleFacade = Nothing
+End Function
+
+Function CalculerCodePosition(cellule As Range, wsSource As Worksheet) As String
+    Dim ligneFacade As Long, colonneFacade As Long
+    Dim maxParCaisson As Integer
+    Dim numeroCaisson As Integer, lettreCaisson As String
+    Dim indiceLigne As Integer, lettreIndex As Integer
+    Dim numeroPosition As String
+    
+    On Error GoTo ErreurCalcul
+    
+    ' Obtenir la position de référence
+    Set cellule = cellule.Cells(1, 1) ' Première cellule de la sélection
+    ligneFacade = cellule.Row
+    colonneFacade = cellule.Column
+    
+    ' Ajuster pour ligne du haut si on est sur ligne du bas
+    If ligneFacade Mod 2 = 0 Then ligneFacade = ligneFacade - 1
+    
+    ' Pour cellules fusionnées, prendre la colonne de début
+    If cellule.MergeCells Then
+        colonneFacade = cellule.MergeArea.Column
+    End If
+    
+    ' Récupérer les paramètres
+    maxParCaisson = val(wsSource.Range("C1").Value)
+    If maxParCaisson <= 0 Then maxParCaisson = 4
+    
+    ' Calculer le caisson
+    indiceLigne = (ligneFacade + 1) / 2
+    numeroCaisson = ((indiceLigne - 1) Mod (maxParCaisson * 4)) Mod maxParCaisson + 1
+    lettreIndex = ((indiceLigne - 1) \ maxParCaisson) Mod 4
+    lettreCaisson = Chr(Asc("A") + lettreIndex)
+    
+    ' Construire le code
+    numeroPosition = Format(colonneFacade, "00")
+    CalculerCodePosition = numeroCaisson & lettreCaisson & " " & numeroPosition
+    
+    Exit Function
+    
+ErreurCalcul:
+    CalculerCodePosition = ""
+End Function
+
+Function TrouverLigneAvecCode(ws As Worksheet, codeRecherche As String) As Long
+    Dim i As Long
+    Dim derniereLigne As Long
+    
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    For i = 7 To derniereLigne
+        If ws.Cells(i, 8).Value = codeRecherche Then
+            TrouverLigneAvecCode = i
+            Exit Function
+        End If
+    Next i
+    
+    TrouverLigneAvecCode = 0
+End Function
+
+Function NaviguerVersPositionFacade(wsFacade As Worksheet, codePosition As String, wsSource As Worksheet) As Boolean
+    Dim partieCode As String, partiePosition As String
+    Dim posEspace As Integer
+    Dim numeroCaisson As Integer, lettreCaisson As String
+    Dim maxParCaisson As Integer
+    Dim lettreIndex As Integer, indiceLigne As Integer
+    Dim ligneFacade As Integer, colonneFacade As Integer
+    
+    On Error GoTo ErreurNavigation
+    
+    ' Parser le code (ex: "2A 15")
+    posEspace = InStr(codePosition, " ")
+    If posEspace = 0 Then GoTo ErreurNavigation
+    
+    partieCode = Left(codePosition, posEspace - 1)
+    partiePosition = Right(codePosition, Len(codePosition) - posEspace)
+    
+    ' Extraire numéro et lettre
+    numeroCaisson = val(Left(partieCode, Len(partieCode) - 1))
+    lettreCaisson = Right(partieCode, 1)
+    colonneFacade = val(partiePosition)
+    
+    ' Calculer la ligne
+    maxParCaisson = val(wsSource.Range("C1").Value)
+    If maxParCaisson <= 0 Then maxParCaisson = 4
+    
+    lettreIndex = Asc(lettreCaisson) - Asc("A")
+    indiceLigne = (lettreIndex * maxParCaisson) + numeroCaisson
+    ligneFacade = (indiceLigne * 2) - 1
+    
+    ' Naviguer
+    wsFacade.Activate
+    wsFacade.Cells(ligneFacade, colonneFacade).Select
+    
+    NaviguerVersPositionFacade = True
+    Exit Function
+    
+ErreurNavigation:
+    NaviguerVersPositionFacade = False
+End Function
+
+' =====================================================
+' NETTOYAGE ET UTILITAIRES
+' =====================================================
+
+Sub EffacerStatusBar()
+    Application.StatusBar = False
+End Sub
+
+' Version améliorée de la suppression du menu contextuel
+Sub SupprimerOptionMenuContextuel()
+    Dim ctrl As CommandBarControl
+    Dim menuContextuel As CommandBar
+    Dim i As Integer
+    
+    On Error Resume Next
+    Set menuContextuel = Application.CommandBars("Cell")
+    
+    ' Supprimer en partant de la fin pour éviter les décalages d'index
+    For i = menuContextuel.Controls.Count To 1 Step -1
+        Set ctrl = menuContextuel.Controls(i)
+        If ctrl.Tag = "NavigationPDI" Then
+            ctrl.Delete
+        End If
+    Next i
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
+' MACROS POUR LES OPTIONS DU MENU CONTEXTUEL
+' =====================================================
+
+Sub OptimiserZoneSelectionnee()
+    Dim cellule As Range
+    Set cellule = Selection
+    
+    MsgBox "🔧 Optimisation de la zone autour de " & cellule.Address & vbCrLf & _
+           "Cette fonctionnalité peut être développée selon vos besoins spécifiques.", _
+           vbInformation, "Optimisation locale"
+End Sub
+
+Sub InsererImageCellule()
+    Dim cellule As Range
+    Set cellule = Selection
+    
+    If IsEmpty(cellule.Value) Then
+        ' Appeler la fonction d'insertion d'image existante ou créer une nouvelle
+        MsgBox "🖼️ Insertion d'image dans " & cellule.Address & vbCrLf & _
+               "Sélectionnez un fichier image à insérer.", _
+               vbInformation, "Insertion d'image"
+        ' Ici vous pouvez appeler votre fonction d'insertion d'image existante
+        ' Call InsererImagesDansCellulesVides
+    Else
+        MsgBox "⚠️ Cette cellule n'est pas vide. Veuillez sélectionner une cellule vide.", _
+               vbExclamation, "Cellule non vide"
+    End If
+End Sub
 
 ' =====================================================
 ' SUB : Gérer les changements en temps réel de la colonne G - CALCUL PAR CAISSON
@@ -598,8 +1003,6 @@ Sub RecalculerCellulesVidesParCaisson(ws As Worksheet)
     horsCapacitePermanent = False
     derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     ligneDebutCaisson = 7
-    
-    'Call EnleverProtectionFeuille ' Décommenter si la feuille est protégée
     
     ' Effacer d'abord toute la colonne W
     ws.Range("W7:W" & derniereLigne).ClearContents
@@ -673,8 +1076,6 @@ Sub RecalculerCellulesVidesParCaisson(ws As Worksheet)
     
 End Sub
 
-' =====================================================
-' FONCTION : Calculer les espaces vides pour une ligne spécifique - SUPPRIMÉE
 ' =====================================================
 ' SUB : Ajuster la taille de police intelligemment selon contenu et largeur
 ' =====================================================
@@ -986,153 +1387,6 @@ FormatageFallback:
     
 End Sub
 
-'' =====================================================
-'' SUB : Ajouter le code VBA dans la feuille Source pour navigation inverse
-'' =====================================================
-'Sub AjouterCodeMenuContextuelAccueil(wsSource As Worksheet)
-'    Dim codeModule As Object
-'    Dim codeVBA As String
-'
-'    ' Tenter d'accéder au module de code de la feuille source
-'    On Error GoTo ErreurAccesVBAAccueil
-'
-'    Set codeModule = ThisWorkbook.VBProject.VBComponents(wsSource.CodeName).codeModule
-'
-'    ' Supprimer tout le code existant pour éviter les conflits
-'    If codeModule.CountOfLines > 0 Then
-'        codeModule.DeleteLines 1, codeModule.CountOfLines
-'    End If
-'
-'    ' Code VBA à ajouter dans la feuille Source (version propre)
-'    codeVBA = "Private Sub Worksheet_BeforeRightClick(ByVal Target As Range, Cancel As Boolean)" & vbCrLf
-'    codeVBA = codeVBA & "    ' Navigation vers façade PDI" & vbCrLf
-'    codeVBA = codeVBA & "    Call AjouterOptionMenuContextuelAccueil(Target)" & vbCrLf
-'    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
-'
-'    codeVBA = codeVBA & "Private Sub Worksheet_Change(ByVal Target As Range)" & vbCrLf
-'    codeVBA = codeVBA & "    ' Mise à jour en temps réel de la colonne W si modification en colonne G" & vbCrLf
-'    codeVBA = codeVBA & "    Call GererChangementColonneG(Target)" & vbCrLf
-'    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
-'
-'    codeVBA = codeVBA & "Private Sub Worksheet_Deactivate()" & vbCrLf
-'    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
-'    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
-'
-'    codeVBA = codeVBA & "Private Sub Worksheet_Activate()" & vbCrLf
-'    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
-'    codeVBA = codeVBA & "End Sub"
-'
-'    ' Insérer le code proprement
-'    codeModule.InsertLines 1, codeVBA
-'
-'    Exit Sub
-'
-'ErreurAccesVBAAccueil:
-'    ' Si erreur, ne rien faire (navigation inverse non disponible)
-'End Sub
-'
-'' =====================================================
-'' SUB : Ajouter option menu contextuel dans la feuille source
-'' =====================================================
-'Sub AjouterOptionMenuContextuelAccueil(Target As Range)
-'    Dim menuContextuel As CommandBar
-'    Dim nouvelleOption As CommandBarButton
-'
-'    ' Supprimer l'option existante
-'    Call SupprimerOptionMenuContextuel
-'
-'    ' Vérifier qu'on est dans la zone des données (ligne 7+, colonne A-H)
-'    If Target.Row < 7 Or Target.Column > 8 Then
-'        Exit Sub
-'    End If
-'
-'    ' Vérifier qu'il y a un code caisson en colonne H
-'    If Target.Worksheet.Cells(Target.Row, 8).Value = "" Then
-'        Exit Sub
-'    End If
-'
-'    ' Accéder au menu contextuel
-'    Set menuContextuel = Application.CommandBars("Cell")
-'
-'    ' Ajouter l'option
-'    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
-'    With nouvelleOption
-'        .Caption = "Naviguer vers case Façade"
-'        .OnAction = "NaviguerVersFacadeDepuisAccueil"
-'        .Tag = "NavigationPDI"
-'        .FaceId = 1695
-'    End With
-'End Sub
-'
-'' =====================================================
-'' SUB : Navigation Feuille Source vers Facade
-'' =====================================================
-'Sub NaviguerVersFacadeDepuisAccueil()
-'    Dim wsSource As Worksheet
-'    Dim wsFacade As Worksheet
-'    Dim celluleCible As Range
-'    Dim codePosition As String
-'    Dim ligneSource As Long
-'
-'    ' MODIFICATION : La feuille source est la feuille active
-'    Set wsSource = ActiveSheet
-'    Set celluleCible = Selection
-'    ligneSource = celluleCible.Row
-'
-'    ' MODIFICATION : Le test sur le nom "Accueil" est supprimé pour plus de flexibilité.
-'
-'    ' Lire le code en colonne H
-'    codePosition = wsSource.Cells(ligneSource, 8).Value
-'    If codePosition = "" Then Exit Sub
-'
-'    ' Vérifier que la feuille Facade_PDI existe
-'    On Error GoTo FacadeInexistante
-'    Set wsFacade = ThisWorkbook.Sheets("Facade_PDI")
-'    On Error GoTo 0
-'
-'    ' Extraire les informations du code (ex: "2A 15")
-'    Dim partieCode As String, partiePosition As String
-'    Dim posEspace As Integer
-'    posEspace = InStr(codePosition, " ")
-'    If posEspace = 0 Then Exit Sub
-'
-'    partieCode = Left(codePosition, posEspace - 1) ' "2A"
-'    partiePosition = Right(codePosition, Len(codePosition) - posEspace) ' "15"
-'
-'    ' Extraire numéro et lettre du code caisson
-'    Dim numeroCaisson As Integer, lettreCaisson As String
-'    numeroCaisson = val(Left(partieCode, Len(partieCode) - 1))
-'    lettreCaisson = Right(partieCode, 1)
-'
-'    ' Calculer la ligne de la façade
-'    Dim maxParCaisson As Integer
-'    maxParCaisson = val(wsSource.Range("C1").Value)
-'    If maxParCaisson <= 0 Then maxParCaisson = 4
-'
-'    Dim lettreIndex As Integer
-'    lettreIndex = Asc(lettreCaisson) - Asc("A") ' A=0, B=1, C=2, D=3
-'
-'    Dim indiceLigne As Integer
-'    indiceLigne = (lettreIndex * maxParCaisson) + numeroCaisson
-'
-'    Dim ligneFacade As Integer
-'    ligneFacade = (indiceLigne * 2) - 1 ' Ligne du haut du caisson
-'
-'    ' Colonne de la façade
-'    Dim colonneFacade As Integer
-'    colonneFacade = val(partiePosition)
-'
-'    ' Naviguer vers la façade
-'    wsFacade.Activate
-'    wsFacade.Cells(ligneFacade, colonneFacade).Select
-'
-'    Exit Sub
-'
-'FacadeInexistante:
-'    ' La feuille n'existe pas, ne rien faire
-'End Sub
-
-
 ' =====================================================
 ' SUB MODIFIÉE : Ajouter les boutons avec macros intégrées - DISPOSITION VERTICALE COLONNE AC
 ' =====================================================
@@ -1203,8 +1457,8 @@ Sub OptimiserAffichageFromButton()
     Set ws = ActiveSheet
     
     ' Vérifier qu'on est sur la bonne feuille
-    If ws.Name <> "Facade_PDI" Then
-        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+    If InStr(ws.Name, "Fac") = 0 Then
+        MsgBox "Cette fonction doit être utilisée sur une feuille façade", vbExclamation
         Exit Sub
     End If
     
@@ -1224,8 +1478,8 @@ Sub SimplifierBornesFromButton()
     Set ws = ActiveSheet
     
     ' Vérifier qu'on est sur la bonne feuille
-    If ws.Name <> "Facade_PDI" Then
-        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+    If InStr(ws.Name, "Fac") = 0 Then
+        MsgBox "Cette fonction doit être utilisée sur une feuille façade", vbExclamation
         Exit Sub
     End If
     
@@ -1245,8 +1499,8 @@ Sub AjusterPolicesFromButton()
     Set ws = ActiveSheet
     
     ' Vérifier qu'on est sur la bonne feuille
-    If ws.Name <> "Facade_PDI" Then
-        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+    If InStr(ws.Name, "Fac") = 0 Then
+        MsgBox "Cette fonction doit être utilisée sur une feuille façade", vbExclamation
         Exit Sub
     End If
     
@@ -1266,8 +1520,8 @@ Sub InsererImagesFromButton()
     Set ws = ActiveSheet
     
     ' Vérifier qu'on est sur la bonne feuille
-    If ws.Name <> "Facade_PDI" Then
-        MsgBox "Cette fonction doit être utilisée sur la feuille Facade_PDI", vbExclamation
+    If InStr(ws.Name, "Fac") = 0 Then
+        MsgBox "Cette fonction doit être utilisée sur une feuille façade", vbExclamation
         Exit Sub
     End If
     
@@ -1279,504 +1533,6 @@ Sub InsererImagesFromButton()
         ' Exécuter la macro d'insertion d'images
         Call InsererImagesDansCellulesVides
     End If
-End Sub
-
-
-' =====================================================
-' MACRO UTILITAIRE : Ajuster paramètres d'impression
-' =====================================================
-Sub AjusterParametresImpression()
-    ' Fonction utilitaire pour optimiser l'impression de la façade
-    Dim ws As Worksheet
-    Set ws = ActiveSheet
-    
-    ' Configuration de l'impression
-    With ws.PageSetup
-        .Orientation = xlLandscape
-        .FitToPagesWide = 1
-        .FitToPagesTall = False
-        .CenterHorizontally = True
-        .CenterVertically = False
-        .PrintArea = "A1:AA" & ws.UsedRange.Rows.Count
-        .LeftMargin = Application.InchesToPoints(0.25)
-        .RightMargin = Application.InchesToPoints(0.25)
-        .TopMargin = Application.InchesToPoints(0.25)
-        .BottomMargin = Application.InchesToPoints(0.25)
-        .HeaderMargin = Application.InchesToPoints(0.1)
-        .FooterMargin = Application.InchesToPoints(0.1)
-    End With
-End Sub
-
-' =====================================================
-' FONCTION UTILITAIRE : Obtenir le nom de l'onglet actif
-' =====================================================
-Sub NomOngletActif()
-    ' Fonction utilitaire utilisée par les autres macros
-    ' (Cette fonction semble être une dépendance des macros importées)
-    Dim nomOnglet As String
-    nomOnglet = ActiveSheet.Name
-    ' Vous pouvez ajouter ici du code si nécessaire
-End Sub
-
-'' =====================================================
-'' MACRO AVANCÉE : Menu contextuel intelligent
-'' =====================================================
-'Sub AjouterMenuContextuelAvance(ws As Worksheet)
-'    ' Version avancée du menu contextuel avec plus d'options
-'    Dim codeModule As Object
-'    Dim codeVBA As String
-'
-'    On Error GoTo ErreurAccesVBA
-'
-'    Set codeModule = ThisWorkbook.VBProject.VBComponents(ws.CodeName).codeModule
-'
-'    ' Supprimer l'ancien code s'il existe
-'    If codeModule.CountOfLines > 0 Then
-'        codeModule.DeleteLines 1, codeModule.CountOfLines
-'    End If
-'
-'    ' Code VBA avancé pour le menu contextuel
-'    codeVBA = "Private Sub Worksheet_BeforeRightClick(ByVal Target As Range, Cancel As Boolean)" & vbCrLf
-'    codeVBA = codeVBA & "    Call AjouterMenuContextuelIntelligent(Target)" & vbCrLf
-'    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
-'
-'    codeVBA = codeVBA & "Private Sub Worksheet_Deactivate()" & vbCrLf
-'    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
-'    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
-'
-'    codeVBA = codeVBA & "Private Sub Worksheet_Activate()" & vbCrLf
-'    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
-'    codeVBA = codeVBA & "End Sub"
-'
-'    ' Insérer le code
-'    codeModule.InsertLines 1, codeVBA
-'
-'    Exit Sub
-'
-'ErreurAccesVBA:
-'    ' Si erreur d'accès VBA, ne rien faire
-'End Sub
-'
-'' =====================================================
-'' MENU CONTEXTUEL INTELLIGENT
-'' =====================================================
-'Sub AjouterMenuContextuelIntelligent(Target As Range)
-'    Dim menuContextuel As CommandBar
-'    Dim nouvelleOption As CommandBarButton
-'
-'    ' Supprimer les options existantes
-'    Call SupprimerOptionMenuContextuel
-'
-'    ' Vérifier la zone cliquée
-'    If Target.Column = 27 Then Exit Sub ' Colonne des codes caisson
-'
-'    Set menuContextuel = Application.CommandBars("Cell")
-'
-'    ' Option principale de navigation
-'    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
-'    With nouvelleOption
-'        .Caption = "Naviguer vers ligne Source"
-'        .OnAction = "NaviguerDepuisMenuContextuel"
-'        .Tag = "NavigationPDI"
-'        .FaceId = 1695
-'    End With
-'
-'    ' Séparateur
-'    menuContextuel.Controls.Add Type:=msoControlButton, before:=2
-'    menuContextuel.Controls(2).BeginGroup = True
-'
-'    ' Options d'optimisation si cellule non vide
-'    If Not IsEmpty(Target.Value) Then
-'        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
-'        With nouvelleOption
-'            .Caption = "? Optimiser cette zone"
-'            .OnAction = "OptimiserZoneSelectionnee"
-'            .Tag = "NavigationPDI"
-'        End With
-'    End If
-'
-'    ' Option pour cellules vides
-'    If IsEmpty(Target.Value) Then
-'        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
-'        With nouvelleOption
-'            .Caption = "Insérer image ici"
-'            .OnAction = "InsererImageCellule"
-'            .Tag = "NavigationPDI"
-'        End With
-'    End If
-'End Sub
-'
-'' =====================================================
-'' MACROS POUR LES OPTIONS DU MENU CONTEXTUEL
-'' =====================================================
-'Sub OptimiserZoneSelectionnee()
-'    ' Optimise la zone autour de la cellule sélectionnée
-'    Dim cellule As Range
-'    Set cellule = Selection
-'
-'    MsgBox "Optimisation de la zone autour de " & cellule.Address, vbInformation
-'    ' Ici vous pouvez ajouter la logique d'optimisation locale
-'End Sub
-
-Sub InsererImageCellule()
-    ' Insère une image dans la cellule sélectionnée uniquement
-    Dim cellule As Range
-    Set cellule = Selection
-    
-    If IsEmpty(cellule.Value) Then
-        MsgBox "Insertion d'image dans " & cellule.Address, vbInformation
-        ' Appel à une version modifiée d'insertion d'image pour une seule cellule
-    Else
-        MsgBox "Cette cellule n'est pas vide", vbExclamation
-    End If
-End Sub
-
-
-' =====================================================
-' SUB : Ajouter automatiquement le code du menu contextuel
-' =====================================================
-Sub AjouterCodeMenuContextuel(wsFacade As Worksheet)
-    Dim codeModule As Object
-    Dim codeVBA As String
-    
-    ' Tenter d'accéder au module de code de la feuille
-    On Error GoTo ErreurAccesVBA
-    
-    Set codeModule = ThisWorkbook.VBProject.VBComponents(wsFacade.CodeName).codeModule
-    
-    ' Supprimer l'ancien code s'il existe
-    If codeModule.CountOfLines > 0 Then
-        codeModule.DeleteLines 1, codeModule.CountOfLines
-    End If
-    
-    ' Code VBA à insérer dans la feuille Facade_PDI
-    codeVBA = "Private Sub Worksheet_BeforeRightClick(ByVal Target As Range, Cancel As Boolean)" & vbCrLf
-    codeVBA = codeVBA & "    ' Ajouter une option au menu contextuel" & vbCrLf
-    codeVBA = codeVBA & "    Call AjouterOptionMenuContextuel(Target)" & vbCrLf
-    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
-    
-    codeVBA = codeVBA & "Private Sub Worksheet_Deactivate()" & vbCrLf
-    codeVBA = codeVBA & "    ' Nettoyer le menu contextuel quand on quitte la feuille" & vbCrLf
-    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
-    codeVBA = codeVBA & "End Sub" & vbCrLf & vbCrLf
-    
-    codeVBA = codeVBA & "Private Sub Worksheet_Activate()" & vbCrLf
-    codeVBA = codeVBA & "    ' Nettoyer le menu contextuel au cas où" & vbCrLf
-    codeVBA = codeVBA & "    Call SupprimerOptionMenuContextuel" & vbCrLf
-    codeVBA = codeVBA & "End Sub"
-    
-    ' Insérer le code dans le module de la feuille
-    codeModule.InsertLines 1, codeVBA
-    
-    Exit Sub
-    
-ErreurAccesVBA:
-    ' Si l'accès VBA est bloqué, ne rien afficher (message supprimé)
-End Sub
-
-' =====================================================
-' SUB : Ajouter une option au menu contextuel Excel
-' =====================================================
-Sub AjouterOptionMenuContextuel(Target As Range)
-    Dim menuContextuel As CommandBar
-    Dim nouvelleOption As CommandBarButton
-    
-    ' Supprimer l'option existante si elle existe déjà
-    Call SupprimerOptionMenuContextuel
-    
-    ' Vérifier qu'on est dans une zone valide de la façade
-    ' Exclure seulement la colonne AA (codes caisson)
-    ' Les boutons sont positionnés différemment et ne gênent pas les cases PDI
-    If Target.Column = 27 Then
-        Exit Sub ' Ne pas ajouter l'option dans la colonne des codes caisson
-    End If
-    
-    ' Accéder au menu contextuel des cellules
-    Set menuContextuel = Application.CommandBars("Cell")
-    
-    ' Ajouter une nouvelle option au début du menu
-    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
-    With nouvelleOption
-        .Caption = "Naviguer vers ligne Source" ' MODIFICATION : "Accueil" -> "Source"
-        .OnAction = "NaviguerDepuisMenuContextuel"
-        .Tag = "NavigationPDI"
-        .FaceId = 1695 ' Icône de navigation
-    End With
-End Sub
-
-' =====================================================
-' SUB : Supprimer l'option du menu contextuel - VERSION AMÉLIORÉE
-' =====================================================
-Sub SupprimerOptionMenuContextuel()
-    Dim ctrl As CommandBarControl
-    Dim menuContextuel As CommandBar
-    Dim i As Integer
-    
-    On Error Resume Next
-    Set menuContextuel = Application.CommandBars("Cell")
-    
-    ' NOUVELLE APPROCHE : Supprimer en partant de la fin pour éviter les décalages d'index
-    For i = menuContextuel.Controls.Count To 1 Step -1
-        Set ctrl = menuContextuel.Controls(i)
-        ' Supprimer si c'est notre contrôle OU si c'est un contrôle vide/corrompu
-        If ctrl.Tag = "NavigationPDI" Or ctrl.Caption = "" Or ctrl.Caption Like "*Naviguer*" Then
-            ctrl.Delete
-        End If
-    Next i
-    
-    On Error GoTo 0
-End Sub
-
-' =====================================================
-' SUB : Navigation depuis le menu contextuel
-' =====================================================
-Sub NaviguerDepuisMenuContextuel()
-    Dim celluleCible As Range
-    Dim wsSource As Worksheet
-    Dim wsFacade As Worksheet
-    
-    Set wsFacade = ActiveSheet
-    
-    ' MODIFICATION : La feuille source est la feuille qui précède la feuille "Facade_PDI"
-    On Error Resume Next
-    Set wsSource = wsFacade.Previous
-    If wsSource Is Nothing Then
-        MsgBox "Impossible de trouver la feuille source. Elle doit être juste avant la feuille 'Facade_PDI'.", vbExclamation
-        Exit Sub
-    End If
-    On Error GoTo 0
-    
-    Set celluleCible = Selection
-    
-    ' Vérifier qu'on est bien sur la feuille Facade_PDI
-    If wsFacade.Name <> "Facade_PDI" Then
-        Exit Sub
-    End If
-    
-    ' Calculer la position
-    Dim celluleReference As Range
-    Set celluleReference = celluleCible.Cells(1, 1)
-    
-    Dim ligneFacade As Long, colonneFacade As Long
-    ligneFacade = celluleReference.Row
-    colonneFacade = celluleReference.Column
-    
-    ' Ajuster pour ligne du haut
-    If ligneFacade Mod 2 = 0 Then ligneFacade = ligneFacade - 1
-    
-    ' Pour cellules fusionnées
-    On Error Resume Next
-    If celluleReference.MergeCells Then
-        colonneFacade = celluleReference.MergeArea.Column
-    End If
-    On Error GoTo 0
-    
-    ' Calculer le code
-    Dim maxParCaisson As Integer
-    maxParCaisson = val(wsSource.Range("C1").Value) ' Prend la valeur de la feuille source
-    If maxParCaisson <= 0 Then maxParCaisson = 4
-    
-    Dim indiceLigne As Integer
-    indiceLigne = (ligneFacade + 1) / 2
-    Dim numeroCaissonCalcule As Integer
-    numeroCaissonCalcule = ((indiceLigne - 1) Mod (maxParCaisson * 4)) Mod maxParCaisson + 1
-    Dim lettreIndex As Integer
-    lettreIndex = ((indiceLigne - 1) \ maxParCaisson) Mod 4
-    Dim lettreCaissonCalculee As String
-    lettreCaissonCalculee = Chr(Asc("A") + lettreIndex)
-    
-    Dim codePosition As String
-    codePosition = numeroCaissonCalcule & lettreCaissonCalculee & " " & Format(colonneFacade, "00")
-    
-    ' Chercher et naviguer
-    Dim ligneSourceCible As Long
-    Dim derniereLigne As Long
-    derniereLigne = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
-    
-    For ligneSourceCible = 7 To derniereLigne
-        If wsSource.Cells(ligneSourceCible, 8).Value = codePosition Then
-            ' Naviguer vers cette ligne
-            wsSource.Activate
-            wsSource.Cells(ligneSourceCible, 1).Select
-            Exit Sub
-        End If
-    Next ligneSourceCible
-    
-    ' Si pas trouvé, ne rien faire (pas de message)
-End Sub
-
-
-' =====================================================
-' SUB : Fonctions pour les boutons (dans module standard)
-' =====================================================
-Sub RegénérerFaçadeFromButton()
-    Call GenererFacadePDI
-End Sub
-
-Sub RetourAccueilFromButton()
-    ' MODIFICATION : Retourne à la feuille précédente (la feuille source)
-    On Error Resume Next
-    ActiveSheet.Previous.Activate
-    If Err.Number <> 0 Then
-        MsgBox "Impossible de trouver la feuille source.", vbExclamation
-        Err.Clear
-    End If
-    On Error GoTo 0
-End Sub
-
-Sub NavigationManuelle()
-    ' Navigation manuelle basée sur la cellule sélectionnée
-    Dim celluleCible As Range
-    Dim wsSource As Worksheet
-    Dim wsFacade As Worksheet
-    Dim ligneSource As Long
-    Dim codePosition As String
-    Dim numeroPosition As String
-    Dim ligneFacade As Long
-    Dim colonneFacade As Long
-    
-    Set wsFacade = ActiveSheet
-    
-    ' MODIFICATION : La feuille source est la feuille précédente
-    On Error Resume Next
-    Set wsSource = wsFacade.Previous
-    If wsSource Is Nothing Then
-        MsgBox "Feuille source non trouvée.", vbExclamation
-        Exit Sub
-    End If
-    On Error GoTo 0
-    
-    Set celluleCible = Selection
-    
-    ' Vérifier qu'on est bien sur la feuille Facade_PDI
-    If wsFacade.Name <> "Facade_PDI" Then
-        MsgBox "Veuillez d'abord sélectionner une cellule sur la feuille Facade_PDI", vbExclamation
-        Exit Sub
-    End If
-    
-    ' NOUVELLE LOGIQUE SÉCURISÉE : Gérer les cellules fusionnées
-    Dim celluleReference As Range
-    
-    ' Prendre la première cellule de la sélection (gère automatiquement fusionné ou normal)
-    Set celluleReference = celluleCible.Cells(1, 1)
-    
-    ' Ignorer si on clique sur la colonne AA (codes caisson)
-    If celluleReference.Column = 27 Then
-        MsgBox "Veuillez sélectionner une case de PDI dans la façade (colonnes A à Z)", vbExclamation
-        Exit Sub
-    End If
-    
-    ' Déterminer la ligne et colonne de la façade (basé sur la cellule de référence)
-    ligneFacade = celluleReference.Row
-    colonneFacade = celluleReference.Column
-    
-    ' Ajuster pour prendre la ligne du haut si on clique sur la ligne du bas
-    If ligneFacade Mod 2 = 0 Then ligneFacade = ligneFacade - 1
-    
-    ' Pour les cellules fusionnées, chercher la vraie colonne de début
-    On Error Resume Next
-    If celluleReference.MergeCells Then
-        colonneFacade = celluleReference.MergeArea.Column
-    End If
-    On Error GoTo 0
-    
-    ' Calculer le code caisson et position
-    Dim maxParCaisson As Integer
-    maxParCaisson = val(wsSource.Range("C1").Value) ' MODIFICATION : Référence à wsSource
-    If maxParCaisson <= 0 Then maxParCaisson = 4
-    
-    ' Calcul du numéro de caisson basé sur la ligne de la façade
-    Dim numeroCaissonCalcule As Integer
-    Dim lettreCaissonCalculee As String
-    Dim indiceLigne As Integer
-    
-    indiceLigne = (ligneFacade + 1) / 2 ' 1, 2, 3...
-    numeroCaissonCalcule = ((indiceLigne - 1) Mod (maxParCaisson * 4)) Mod maxParCaisson + 1
-    Dim lettreIndex As Integer
-    lettreIndex = ((indiceLigne - 1) \ maxParCaisson) Mod 4
-    lettreCaissonCalculee = Chr(Asc("A") + lettreIndex)
-    
-    ' Construire le code de position complet
-    numeroPosition = Format(colonneFacade, "00")
-    codePosition = numeroCaissonCalcule & lettreCaissonCalculee & " " & numeroPosition
-    
-    ' DEBUG: Afficher les informations de calcul
-    Dim msgDebug As String
-    msgDebug = "INFORMATIONS DE NAVIGATION :" & vbCrLf & vbCrLf
-    msgDebug = msgDebug & "Position sélectionnée :" & vbCrLf
-    msgDebug = msgDebug & "• Ligne façade : " & ligneFacade & vbCrLf
-    msgDebug = msgDebug & "• Colonne façade : " & colonneFacade & vbCrLf
-    
-    ' Vérification sécurisée de la fusion
-    Dim estFusionne As Boolean
-    On Error Resume Next
-    estFusionne = celluleReference.MergeCells
-    On Error GoTo 0
-    
-    msgDebug = msgDebug & "• Cellule fusionnée : " & IIf(estFusionne, "Oui", "Non") & vbCrLf
-    msgDebug = msgDebug & "• Code calculé : " & codePosition & vbCrLf & vbCrLf
-    msgDebug = msgDebug & "Recherche en cours dans la colonne H de la feuille '" & wsSource.Name & "'..."
-    
-    ' Chercher dans la colonne H de la feuille Source
-    Dim derniereLigne As Long
-    derniereLigne = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
-    
-    For ligneSource = 7 To derniereLigne
-        If wsSource.Cells(ligneSource, 8).Value = codePosition Then
-            ' Naviguer vers cette ligne
-            wsSource.Activate
-            wsSource.Cells(ligneSource, 1).Select
-            MsgBox "? Navigation réussie !" & vbCrLf & _
-                   "Ligne " & ligneSource & " - PDI : " & wsSource.Cells(ligneSource, 1).Value & vbCrLf & _
-                   "Position façade : " & codePosition, vbInformation, "Navigation"
-            Exit Sub
-        End If
-    Next ligneSource
-    
-    ' Si pas trouvé, afficher les détails pour debug
-    msgDebug = msgDebug & vbCrLf & "? RÉSULTAT : Position non trouvée" & vbCrLf & vbCrLf
-    msgDebug = msgDebug & "Codes présents en colonne H (échantillon) :" & vbCrLf
-    For ligneSource = 7 To Application.Min(16, derniereLigne) ' Afficher les 10 premiers
-        If wsSource.Cells(ligneSource, 8).Value <> "" Then
-            msgDebug = msgDebug & "• Ligne " & ligneSource & " : " & wsSource.Cells(ligneSource, 8).Value & vbCrLf
-        End If
-    Next ligneSource
-    
-    MsgBox msgDebug, vbExclamation, "Debug Navigation"
-End Sub
-
-' =====================================================
-' SUB : Afficher l'aide pour la navigation
-' =====================================================
-Sub AfficherAideNavigation()
-    Dim msg As String
-    Dim valC1 As String
-    
-    ' MODIFICATION : Récupérer la valeur de C1 de la feuille source (précédente)
-    On Error Resume Next
-    valC1 = ActiveSheet.Previous.Range("C1").Value
-    If Err.Number <> 0 Then valC1 = "[valeur C1 non trouvée]"
-    On Error GoTo 0
-
-    msg = "AIDE NAVIGATION FAÇADE PDI" & vbCrLf & vbCrLf
-    msg = msg & "NAVIGATION ALTERNATIVE :" & vbCrLf
-    msg = msg & "   • Sélectionnez une case sur la façade" & vbCrLf
-    msg = msg & "   • Cliquez sur le bouton 'Navigation Manuelle'" & vbCrLf
-    msg = msg & "   • Vous serez dirigé vers la ligne correspondante" & vbCrLf & vbCrLf
-    msg = msg & "BOUTONS :" & vbCrLf
-    msg = msg & "   • Régénérer Façade : Recrée la façade avec les données actuelles" & vbCrLf
-    msg = msg & "   • Retour Source : Retourne à la feuille de données" & vbCrLf & vbCrLf
-    msg = msg & "CODES COULEUR :" & vbCrLf
-    msg = msg & "   • Rouge : Cases hors capacité (> " & valC1 & "D)" & vbCrLf
-    msg = msg & "   • Jaune : Cases marquées 'B' en colonne V" & vbCrLf
-    msg = msg & "   • Couleurs diverses : Différentes voies" & vbCrLf & vbCrLf
-    msg = msg & "SYMBOLES :" & vbCrLf
-    msg = msg & "   • ? Triangle : Type 'Bat P'" & vbCrLf
-    msg = msg & "   • ¦ Carré : Type 'Bat C'" & vbCrLf
-    msg = msg & "   • ? Cercle : Voies multiples (affiché dans nom de voie)" & vbCrLf
-    msg = msg & "   • HC : Hors Capacité en colonne AA"
-    
-    MsgBox msg, vbInformation, "Aide Navigation"
 End Sub
 
 ' =====================================================
@@ -1844,36 +1600,6 @@ Sub MettreAJourColonneHAvecCouleur(wsSource As Worksheet, dictCodes As Object, d
         End If
     Next cle
 End Sub
-
-' =====================================================
-' FONCTION : Compter les cellules vides en fin de ligne
-' =====================================================
-Function CompterCellulesVidesFinLigne(ws As Worksheet, Ligne As Long) As Integer
-    Dim compte As Integer
-    Dim col As Integer
-    
-    compte = 0
-    
-    ' Parcourir de la colonne Z (26) vers la gauche
-    For col = 26 To 1 Step -1
-        ' Vérifier les deux lignes du caisson
-        If ws.Cells(Ligne, col).Value = "" And ws.Cells(Ligne + 1, col).Value = "" Then
-            ' Si la cellule n'est pas fusionnée ou fait partie d'une zone vide
-            If Not ws.Cells(Ligne, col).MergeCells Or _
-               (ws.Cells(Ligne, col).MergeCells And ws.Cells(Ligne, col).MergeArea.Cells(1, 1).Value = "") Then
-                compte = compte + 1
-            Else
-                ' On a trouvé une cellule non vide, on arrête
-                Exit For
-            End If
-        Else
-            ' On a trouvé une cellule non vide, on arrête
-            Exit For
-        End If
-    Next col
-    
-    CompterCellulesVidesFinLigne = compte
-End Function
 
 ' =====================================================
 ' SUB : Mettre à jour les cellules vides dans la feuille source - MODIFIÉE POUR DERNIÈRE LIGNE PAR CAISSON
@@ -1984,33 +1710,6 @@ Function ConvertirEnEntier(valeur As Variant, valeurParDefaut As Integer) As Int
         Err.Clear
     End If
     On Error GoTo 0
-End Function
-
-' =====================================================
-' FONCTION : Obtenir la couleur de texte adaptée
-' =====================================================
-Function ObtenirCouleurTexte(indexCouleur As Long) As Long
-    Dim couleurRGB As Long
-    Dim r As Integer, g As Integer, b As Integer
-    Dim luminosite As Double
-    
-    ' Obtenir la valeur RGB de la couleur d'index
-    couleurRGB = ThisWorkbook.Colors(indexCouleur)
-    
-    ' Extraire les composantes RGB
-    r = couleurRGB Mod 256
-    g = (couleurRGB \ 256) Mod 256
-    b = (couleurRGB \ 65536) Mod 256
-    
-    ' Calculer la luminosité (formule standard)
-    luminosite = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-    
-    ' Si la couleur est sombre, texte blanc, sinon texte noir
-    If luminosite < 0.5 Then
-        ObtenirCouleurTexte = RGB(255, 255, 255) ' Blanc
-    Else
-        ObtenirCouleurTexte = RGB(0, 0, 0) ' Noir
-    End If
 End Function
 
 ' =====================================================
@@ -2180,61 +1879,6 @@ Sub FusionnerVoiesAdjacentes(ws As Worksheet)
     Next ligneVoie
 End Sub
 
-
-' =====================================================
-' MACRO DE TEST : Vérifier la logique de dépassement
-' =====================================================
-Sub TesterLogiquleDepassement()
-    Dim ws As Worksheet
-    Dim maxPar As Integer
-    Dim msg As String
-    
-    Set ws = ActiveSheet ' MODIFICATION: Test sur la feuille active
-    maxPar = val(ws.Range("C1").Value)
-    If maxPar <= 0 Then maxPar = 4
-    
-    msg = "TEST DE LA LOGIQUE DE DÉPASSEMENT" & vbCrLf & vbCrLf
-    msg = msg & "Valeur max par caisson (C1 de '" & ws.Name & "') : " & maxPar & vbCrLf & vbCrLf
-    msg = msg & "EXEMPLES DE TESTS :" & vbCrLf
-    
-    ' Tester quelques codes
-    msg = msg & "1A : " & IIf(CaissonDepasse("1A", maxPar), "DÉPASSE", "OK") & vbCrLf
-    msg = msg & maxPar & "D : " & IIf(CaissonDepasse(maxPar & "D", maxPar), "DÉPASSE", "OK") & vbCrLf
-    msg = msg & (maxPar + 1) & "D : " & IIf(CaissonDepasse((maxPar + 1) & "D", maxPar), "DÉPASSE", "OK") & vbCrLf
-    msg = msg & "1E : " & IIf(CaissonDepasse("1E", maxPar), "DÉPASSE", "OK") & vbCrLf & vbCrLf
-    
-    msg = msg & "LIMITE : Tout au-delà de " & maxPar & "D devrait être en ROUGE avec HC" & vbCrLf
-    msg = msg & "IMPORTANT : Une fois dépassé, même si ça repart à 1A, ça reste ROUGE !"
-    
-    MsgBox msg, vbInformation, "Test logique dépassement"
-End Sub
-
-' =====================================================
-' MACRO DE TEST : Vérifier la structure des données
-' =====================================================
-Sub VerifierStructureDonnees()
-    Dim ws As Worksheet
-    Dim msg As String
-    
-    Set ws = ActiveSheet ' MODIFICATION: Test sur la feuille active
-    
-    msg = "VÉRIFICATION DE LA STRUCTURE DES DONNÉES SUR '" & ws.Name & "'" & vbCrLf & vbCrLf
-    msg = msg & "Valeur max par caisson (C1) : " & ws.Range("C1").Value & vbCrLf & vbCrLf
-    msg = msg & "Exemple de la ligne 7 :" & vbCrLf
-    msg = msg & "- Colonne A (N°) : " & ws.Cells(7, 1).Text & vbCrLf
-    msg = msg & "- Colonne B (Nom voie) : " & ws.Cells(7, 2).Text & vbCrLf
-    msg = msg & "- Colonne D (Observations) : " & ws.Cells(7, 4).Text & vbCrLf
-    msg = msg & "- Colonne F (Type PDI) : " & ws.Cells(7, 6).Text & vbCrLf
-    msg = msg & "- Colonne G (Largeur) : " & ws.Cells(7, 7).Text & vbCrLf
-    msg = msg & "- Colonne V (Valeur B) : " & ws.Cells(7, 22).Text & vbCrLf & vbCrLf
-    
-    msg = msg & "RÉSULTAT ATTENDU :" & vbCrLf
-    msg = msg & "Cellule du HAUT : " & ws.Cells(7, 1).Text & " - " & ws.Cells(7, 4).Text & vbCrLf
-    msg = msg & "Cellule du BAS : " & ws.Cells(7, 2).Text
-    
-    MsgBox msg, vbInformation, "Structure des données"
-End Sub
-
 ' =====================================================
 ' GESTION DES COULEURS ÉTENDUES
 ' =====================================================
@@ -2385,29 +2029,7 @@ Sub InitialiserPaletteCouleursEtendues(dictPalette As Object)
     dictPalette.Add i, RGB(211, 84, 0):    i = i + 1  ' Orange foncé pumpkin
 End Sub
 
-' Obtient une couleur distincte pour une voie donnée (ANCIENNE VERSION - gardée pour compatibilité)
-Function ObtenirCouleurDistinctePourVoie(nomVoie As String, paletteCouleurs As Object, indexActuel As Integer) As Long
-    ' Calculer un hash simple basé sur le nom de la voie pour une attribution déterministe
-    Dim hashVoie As Long
-    Dim i As Integer
-    
-    hashVoie = 0
-    For i = 1 To Len(nomVoie)
-        hashVoie = hashVoie + Asc(Mid(nomVoie, i, 1)) * i
-    Next i
-    
-    ' Utiliser le hash pour choisir une couleur dans la palette, en évitant la séquence
-    Dim indexCouleur As Integer
-    indexCouleur = (hashVoie Mod paletteCouleurs.Count)
-    
-    ' S'assurer que l'index est valide
-    If indexCouleur < 0 Then indexCouleur = indexCouleur + paletteCouleurs.Count
-    
-    ' Retourner la couleur RGB correspondante
-    ObtenirCouleurDistinctePourVoie = paletteCouleurs(indexCouleur)
-End Function
-
-' Obtient une couleur distincte pour une voie avec vérification d'adjacence (NOUVELLE VERSION AMÉLIORÉE)
+' Obtient une couleur distincte pour une voie avec vérification d'adjacence (VERSION AMÉLIORÉE)
 Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, paletteCouleurs As Object, dictCouleursExistantes As Object, colonne As Long, ws As Worksheet, Ligne As Long) As Long
     Dim hashVoie As Long
     Dim i As Integer
@@ -2540,6 +2162,10 @@ Function ObtenirCouleurTexteRGB(couleurFondRGB As Long) As Long
     End If
 End Function
 
+' =====================================================
+' FONCTIONS DE DIAGNOSTIC ET TEST
+' =====================================================
+
 ' Fonction de diagnostic pour afficher les couleurs attribuées
 Sub AfficherDiagnosticCouleurs()
     Dim ws As Worksheet
@@ -2570,8 +2196,8 @@ Sub AfficherDiagnosticCouleurs()
                 
                 If couleur <> xlNone And couleur <> RGB(255, 255, 255) Then
                     rapport = rapport & "Voie: " & nomVoie & vbCrLf
-                    rapport = rapport & "  Couleur RGB: " & couleur & vbCrLf
-                    rapport = rapport & "  Cellule: " & cellule.Address & vbCrLf & vbCrLf
+                    rapport = rapport & "  Couleur RGB: " & couleur & vbCrLf
+                    rapport = rapport & "  Cellule: " & cellule.Address & vbCrLf & vbCrLf
                     
                     voiesTraitees.Add nomVoie, True
                 End If
@@ -2584,72 +2210,95 @@ Sub AfficherDiagnosticCouleurs()
     MsgBox rapport, vbInformation, "Diagnostic Couleurs"
 End Sub
 
-' Fonction de diagnostic pour vérifier les couleurs adjacentes
-Sub DiagnostiquerCouleursAdjacentes()
+' =====================================================
+' MACROS UTILITAIRES COMPLÉMENTAIRES
+' =====================================================
+
+' MACRO UTILITAIRE : Ajuster paramètres d'impression
+Sub AjusterParametresImpression()
+    ' Fonction utilitaire pour optimiser l'impression de la façade
     Dim ws As Worksheet
-    Dim Ligne As Long, colonne As Long
-    Dim rapport As String
-    Dim celluleVoie As Range, celluleVoieGauche As Range, celluleVoieDroite As Range
-    Dim nomVoie As String, nomVoieGauche As String, nomVoieDroite As String
-    Dim couleur As Long, couleurGauche As Long, couleurDroite As Long
-    Dim contraste As Double
-    Dim problemesDetectes As Integer
+    Set ws = ActiveSheet
+    
+    ' Configuration de l'impression
+    With ws.PageSetup
+        .Orientation = xlLandscape
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .CenterHorizontally = True
+        .CenterVertically = False
+        .PrintArea = "A1:AA" & ws.UsedRange.Rows.Count
+        .LeftMargin = Application.InchesToPoints(0.25)
+        .RightMargin = Application.InchesToPoints(0.25)
+        .TopMargin = Application.InchesToPoints(0.25)
+        .BottomMargin = Application.InchesToPoints(0.25)
+        .HeaderMargin = Application.InchesToPoints(0.1)
+        .FooterMargin = Application.InchesToPoints(0.1)
+    End With
+End Sub
+
+' FONCTION UTILITAIRE : Obtenir le nom de l'onglet actif
+Sub NomOngletActif()
+    ' Fonction utilitaire utilisée par les autres macros
+    Dim nomOnglet As String
+    nomOnglet = ActiveSheet.Name
+End Sub
+
+' POINT D'ENTRÉE POUR L'IMPORT BDC
+Sub LancerImportBDC()
+    MsgBox "La fonctionnalité d'import BDC n'est pas définie dans le code fourni.", vbInformation
+End Sub
+
+' =====================================================
+' MACROS DE TEST ET VÉRIFICATION
+' =====================================================
+
+' MACRO DE TEST : Vérifier la logique de dépassement
+Sub TesterLogiquleDepassement()
+    Dim ws As Worksheet
+    Dim maxPar As Integer
+    Dim msg As String
+    
+    Set ws = ActiveSheet
+    maxPar = val(ws.Range("C1").Value)
+    If maxPar <= 0 Then maxPar = 4
+    
+    msg = "TEST DE LA LOGIQUE DE DÉPASSEMENT" & vbCrLf & vbCrLf
+    msg = msg & "Valeur max par caisson (C1 de '" & ws.Name & "') : " & maxPar & vbCrLf & vbCrLf
+    msg = msg & "EXEMPLES DE TESTS :" & vbCrLf
+    
+    ' Tester quelques codes
+    msg = msg & "1A : " & IIf(CaissonDepasse("1A", maxPar), "DÉPASSE", "OK") & vbCrLf
+    msg = msg & maxPar & "D : " & IIf(CaissonDepasse(maxPar & "D", maxPar), "DÉPASSE", "OK") & vbCrLf
+    msg = msg & (maxPar + 1) & "D : " & IIf(CaissonDepasse((maxPar + 1) & "D", maxPar), "DÉPASSE", "OK") & vbCrLf
+    msg = msg & "1E : " & IIf(CaissonDepasse("1E", maxPar), "DÉPASSE", "OK") & vbCrLf & vbCrLf
+    
+    msg = msg & "LIMITE : Tout au-delà de " & maxPar & "D devrait être en ROUGE avec HC" & vbCrLf
+    msg = msg & "IMPORTANT : Une fois dépassé, même si ça repart à 1A, ça reste ROUGE !"
+    
+    MsgBox msg, vbInformation, "Test logique dépassement"
+End Sub
+
+' MACRO DE TEST : Vérifier la structure des données
+Sub VerifierStructureDonnees()
+    Dim ws As Worksheet
+    Dim msg As String
     
     Set ws = ActiveSheet
     
-    If ws Is Nothing Then
-        MsgBox "Aucune feuille active détectée.", vbExclamation
-        Exit Sub
-    End If
+    msg = "VÉRIFICATION DE LA STRUCTURE DES DONNÉES SUR '" & ws.Name & "'" & vbCrLf & vbCrLf
+    msg = msg & "Valeur max par caisson (C1) : " & ws.Range("C1").Value & vbCrLf & vbCrLf
+    msg = msg & "Exemple de la ligne 7 :" & vbCrLf
+    msg = msg & "- Colonne A (N°) : " & ws.Cells(7, 1).Text & vbCrLf
+    msg = msg & "- Colonne B (Nom voie) : " & ws.Cells(7, 2).Text & vbCrLf
+    msg = msg & "- Colonne D (Observations) : " & ws.Cells(7, 4).Text & vbCrLf
+    msg = msg & "- Colonne F (Type PDI) : " & ws.Cells(7, 6).Text & vbCrLf
+    msg = msg & "- Colonne G (Largeur) : " & ws.Cells(7, 7).Text & vbCrLf
+    msg = msg & "- Colonne V (Valeur B) : " & ws.Cells(7, 22).Text & vbCrLf & vbCrLf
     
-    rapport = "DIAGNOSTIC DES COULEURS ADJACENTES" & vbCrLf & vbCrLf
-    problemesDetectes = 0
+    msg = msg & "RÉSULTAT ATTENDU :" & vbCrLf
+    msg = msg & "Cellule du HAUT : " & ws.Cells(7, 1).Text & " - " & ws.Cells(7, 4).Text & vbCrLf
+    msg = msg & "Cellule du BAS : " & ws.Cells(7, 2).Text
     
-    ' Parcourir les lignes de voies (lignes paires)
-    For Ligne = 2 To ws.UsedRange.Rows.Count Step 2
-        For colonne = 1 To 26 ' Colonnes A à Z
-            Set celluleVoie = ws.Cells(Ligne, colonne)
-            
-            ' Si la cellule contient une voie
-            If Not IsEmpty(celluleVoie.Value) And Not IsNumeric(celluleVoie.Value) Then
-                nomVoie = Trim(CStr(celluleVoie.Value))
-                couleur = celluleVoie.Interior.Color
-                
-                ' Vérifier la voie à droite
-                If colonne < 26 Then
-                    Set celluleVoieDroite = ws.Cells(Ligne, colonne + 1)
-                    If Not IsEmpty(celluleVoieDroite.Value) And Not IsNumeric(celluleVoieDroite.Value) Then
-                        nomVoieDroite = Trim(CStr(celluleVoieDroite.Value))
-                        couleurDroite = celluleVoieDroite.Interior.Color
-                        
-                        ' Calculer le contraste
-                        If couleur <> xlNone And couleurDroite <> xlNone And couleur <> 0 And couleurDroite <> 0 Then
-                            contraste = CalculerContrasteRGB(couleur, couleurDroite)
-                            
-                            ' Si le contraste est insuffisant
-                            If contraste < 25000 Then ' Seuil plus bas pour le diagnostic
-                                problemesDetectes = problemesDetectes + 1
-                                rapport = rapport & "PROBLÈME " & problemesDetectes & ":" & vbCrLf
-                                rapport = rapport & "  Voie 1: " & nomVoie & " (colonne " & Chr(64 + colonne) & ")" & vbCrLf
-                                rapport = rapport & "  Voie 2: " & nomVoieDroite & " (colonne " & Chr(64 + colonne + 1) & ")" & vbCrLf
-                                rapport = rapport & "  Contraste: " & Round(contraste, 0) & " (< 25000 = insuffisant)" & vbCrLf
-                                rapport = rapport & "  Couleur 1: RGB(" & (couleur Mod 256) & "," & ((couleur \ 256) Mod 256) & "," & ((couleur \ 65536) Mod 256) & ")" & vbCrLf
-                                rapport = rapport & "  Couleur 2: RGB(" & (couleurDroite Mod 256) & "," & ((couleurDroite \ 256) Mod 256) & "," & ((couleurDroite \ 65536) Mod 256) & ")" & vbCrLf & vbCrLf
-                            End If
-                        End If
-                    End If
-                End If
-            End If
-        Next colonne
-    Next Ligne
-    
-    If problemesDetectes = 0 Then
-        rapport = rapport & "? Aucun problème de contraste détecté !" & vbCrLf
-        rapport = rapport & "Toutes les voies adjacentes ont des couleurs suffisamment distinctes."
-    Else
-        rapport = rapport & "?? " & problemesDetectes & " problème(s) de contraste détecté(s)." & vbCrLf
-        rapport = rapport & "Relancez la génération de façade pour corriger automatiquement."
-    End If
-    
-    MsgBox rapport, vbInformation, "Diagnostic Couleurs Adjacentes"
+    MsgBox msg, vbInformation, "Structure des données"
 End Sub
