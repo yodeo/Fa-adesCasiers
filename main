@@ -27,6 +27,7 @@ Sub GenererFacadePDI()
     ' MACRO : Génération automatique d'une façade de casiers PDI
     ' MODIFICATION : La source est maintenant la feuille active, et non plus "Accueil".
     ' Destination : Nouvelle feuille nommée avec le nom de la tournée + "Fac"
+    ' NOUVEAU : Ajout des hachures pour les cases multivoies
     '=====================================================
     
     Dim wsSource As Worksheet, wsDest As Worksheet
@@ -305,7 +306,7 @@ Sub GenererFacadePDI()
                 End If
             Next k
             
-            ' Créer la cellule du haut (N° + Observations) - AVEC FORMATAGE DIFFÉRENCIÉ
+            ' Créer la cellule du haut (N° + Observations) - AVEC FORMATAGE DIFFÉRENCIÉ ET HACHURES
             Set rngHaut = wsDest.Range(wsDest.Cells(ligneActuelle, colonneActuelle), _
                                         wsDest.Cells(ligneActuelle, colonneActuelle + largeurBloc - 1))
             rngHaut.Merge
@@ -318,14 +319,12 @@ Sub GenererFacadePDI()
                 Dim symbole As String
                 symbole = ""
                 
-                
                 ' Ajouter un symbole pour Bat P ou Bat C SEULEMENT
                 If typePDI = "Bat P" Then
                     symbole = ChrW(&H25B2) & " " ' Triangle Unicode
                 ElseIf typePDI = "Bat C" Then
                     symbole = ChrW(&H25B2) & " " ' Triangle Unicode
                 End If
-
                 
                 ' Construction du texte avec formatage différencié et saut de ligne
                 If obsAccumulees <> "" Then
@@ -345,15 +344,35 @@ Sub GenererFacadePDI()
                 .Borders.LineStyle = xlContinuous
                 .Borders.Weight = xlThin
                 
-                ' Priorité : rouge si dépasse > jaune si colonne V = "B" > pas de couleur
-                If fondRouge Then
-                    .Interior.Color = RGB(255, 0, 0) ' Rouge (priorité 1)
-                    .Font.Color = RGB(255, 255, 255) ' Texte blanc sur fond rouge
-                ElseIf valeurColV = "B" Then
-                    .Interior.Color = RGB(255, 255, 0) ' Jaune (priorité 2)
-                    .Font.Color = RGB(0, 0, 0) ' Texte noir sur fond jaune
+                ' NOUVEAU : Appliquer les hachures pour les cases multivoies
+                If estMultiVoies Then
+                    ' Appliquer le motif de hachures pour multivoies
+                    .Interior.Pattern = xlPatternLightDown
+                    .Interior.PatternColor = RGB(100, 100, 100)  ' Couleur des hachures (gris foncé)
+                    ' Priorité : rouge si dépasse > hachures multivoies > jaune si colonne V = "B" > pas de couleur
+                    If fondRouge Then
+                        .Interior.Color = RGB(255, 0, 0) ' Rouge (priorité 1)
+                        .Font.Color = RGB(255, 255, 255) ' Texte blanc sur fond rouge
+                    ElseIf valeurColV = "B" Then
+                        .Interior.Color = RGB(255, 255, 0) ' Jaune (priorité 2)
+                        .Font.Color = RGB(0, 0, 0) ' Texte noir sur fond jaune
+                    Else
+                        .Interior.Color = RGB(255, 255, 255) ' Fond blanc avec hachures
+                        .Font.Color = RGB(0, 0, 0) ' Texte noir
+                    End If
                 Else
-                    .Interior.pattern = xlNone ' Pas de couleur
+                    ' Pas de hachures pour les voies simples
+                    .Interior.Pattern = xlNone
+                    ' Priorité : rouge si dépasse > jaune si colonne V = "B" > pas de couleur
+                    If fondRouge Then
+                        .Interior.Color = RGB(255, 0, 0) ' Rouge (priorité 1)
+                        .Font.Color = RGB(255, 255, 255) ' Texte blanc sur fond rouge
+                    ElseIf valeurColV = "B" Then
+                        .Interior.Color = RGB(255, 255, 0) ' Jaune (priorité 2)
+                        .Font.Color = RGB(0, 0, 0) ' Texte noir sur fond jaune
+                    Else
+                        .Interior.pattern = xlNone ' Pas de couleur
+                    End If
                 End If
             End With
             
@@ -510,11 +529,506 @@ Sub GenererFacadePDI()
            "Feuille destination créée : '" & nomFeuilleDestination & "'" & vbCrLf & _
            "Nom de tournée utilisé : '" & nomTournee & "'" & vbCrLf & _
            "Nombre de lignes traitées : " & (derniereLigne - 6) & vbCrLf & _
-           "Les paramètres d'impression ont été configurés.", _
+           "Les paramètres d'impression ont été configurés." & vbCrLf & _
+           "Les cases multivoies sont hachurées pour faciliter l'identification.", _
            vbInformation, "Génération terminée"
     
     wsDest.Activate
     
+End Sub
+
+' =====================================================
+' NOUVELLE FONCTION : Appliquer/Supprimer les hachures multivoies
+' =====================================================
+Sub AppliquerHachuresMultivoies()
+    ' Macro pour appliquer les hachures aux cases multivoies existantes
+    Dim ws As Worksheet
+    Dim lastRow As Long, lastCol As Long
+    Dim ligneNum As Long, col As Long
+    Dim celluleNum As Range, celluleVoie As Range
+    Dim contenuVoie As String
+    Dim compteurHachures As Long
+    
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur une feuille façade
+    If InStr(ws.Name, "Fac") = 0 Then
+        MsgBox "Cette fonction doit être utilisée sur une feuille façade.", vbExclamation
+        Exit Sub
+    End If
+    
+    Application.ScreenUpdating = False
+    
+    lastRow = ws.UsedRange.Rows.Count
+    lastCol = 26 ' Colonnes A à Z
+    compteurHachures = 0
+    
+    ' Parcourir toutes les lignes de numéros (lignes impaires)
+    For ligneNum = 1 To lastRow Step 2
+        For col = 1 To lastCol
+            Set celluleNum = ws.Cells(ligneNum, col)
+            
+            ' Vérifier si la cellule contient des numéros
+            If Not IsEmpty(celluleNum.Value) And celluleNum.Value <> "" Then
+                ' Vérifier la cellule de voie correspondante (ligne suivante)
+                Set celluleVoie = ws.Cells(ligneNum + 1, col)
+                
+                If Not IsEmpty(celluleVoie.Value) Then
+                    contenuVoie = Trim(CStr(celluleVoie.Value))
+                    
+                    ' Vérifier si c'est une voie multiple (contient "/" ou cercle blanc)
+                    If InStr(contenuVoie, " / ") > 0 Or Left(contenuVoie, 1) = ChrW(&H25CB) Then
+                        ' Appliquer les hachures
+                        With celluleNum.Interior
+                            .Pattern = xlPatternLightDown
+                            .PatternColor = RGB(100, 100, 100)  ' Hachures grises
+                            ' Conserver la couleur de fond existante si elle existe
+                            If .Color = xlNone Or .Color = RGB(255, 255, 255) Then
+                                .Color = RGB(255, 255, 255) ' Fond blanc
+                            End If
+                        End With
+                        compteurHachures = compteurHachures + 1
+                    End If
+                End If
+            End If
+        Next col
+    Next ligneNum
+    
+    Application.ScreenUpdating = True
+    
+    MsgBox "Hachures appliquées à " & compteurHachures & " cases multivoies.", vbInformation, "Hachures Multivoies"
+End Sub
+
+Sub SupprimerHachuresMultivoies()
+    ' Macro pour supprimer toutes les hachures
+    Dim ws As Worksheet
+    Dim lastRow As Long, lastCol As Long
+    Dim ligneNum As Long, col As Long
+    Dim cellule As Range
+    Dim compteurSupprimees As Long
+    
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur une feuille façade
+    If InStr(ws.Name, "Fac") = 0 Then
+        MsgBox "Cette fonction doit être utilisée sur une feuille façade.", vbExclamation
+        Exit Sub
+    End If
+    
+    Application.ScreenUpdating = False
+    
+    lastRow = ws.UsedRange.Rows.Count
+    lastCol = 26 ' Colonnes A à Z
+    compteurSupprimees = 0
+    
+    ' Parcourir toutes les lignes de numéros (lignes impaires)
+    For ligneNum = 1 To lastRow Step 2
+        For col = 1 To lastCol
+            Set cellule = ws.Cells(ligneNum, col)
+            
+            ' Vérifier si la cellule a des hachures
+            If cellule.Interior.Pattern = xlPatternLightDown Then
+                ' Supprimer les hachures
+                With cellule.Interior
+                    .Pattern = xlNone
+                    ' Conserver la couleur de fond si elle existe (rouge, jaune, etc.)
+                End With
+                compteurSupprimees = compteurSupprimees + 1
+            End If
+        Next col
+    Next ligneNum
+    
+    Application.ScreenUpdating = True
+    
+    MsgBox "Hachures supprimées de " & compteurSupprimees & " cellules.", vbInformation, "Suppression Hachures"
+End Sub
+
+' =====================================================
+' MACRO UTILITAIRE : Basculer les hachures multivoies
+' =====================================================
+Sub BasculerHachuresMultivoies()
+    ' Fonction pour activer/désactiver les hachures selon l'état actuel
+    Dim ws As Worksheet
+    Dim cellule As Range
+    Dim aDesHachures As Boolean
+    
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur une feuille façade
+    If InStr(ws.Name, "Fac") = 0 Then
+        MsgBox "Cette fonction doit être utilisée sur une feuille façade.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Vérifier s'il y a déjà des hachures
+    aDesHachures = False
+    For Each cellule In ws.UsedRange
+        If cellule.Interior.Pattern = xlPatternLightDown Then
+            aDesHachures = True
+            Exit For
+        End If
+    Next cellule
+    
+    ' Basculer selon l'état actuel
+    If aDesHachures Then
+        Call SupprimerHachuresMultivoies
+    Else
+        Call AppliquerHachuresMultivoies
+    End If
+End Sub
+
+' =====================================================
+' MODIFICATION DES BOUTONS POUR INCLURE LES HACHURES
+' =====================================================
+Sub AjouterBoutonsSeulement(wsFacade As Worksheet)
+    Dim btn As Object
+    Dim positionX As Double
+    Dim espacement As Double
+    Dim largeurBouton As Double
+    Dim hauteurBouton As Double
+    
+    ' Supprimer les boutons existants s'ils existent
+    Dim shp As Shape
+    For Each shp In wsFacade.Shapes
+        If shp.Type = msoFormControl Then shp.Delete
+    Next shp
+    
+    ' Configuration de la disposition verticale en colonne AC
+    positionX = wsFacade.Columns("AC").Left + 2
+    largeurBouton = wsFacade.Columns("AC").Width + 80
+    hauteurBouton = 25
+    espacement = 20
+    
+    ' BOUTON 1 : Optimiser Affichage
+    Set btn = wsFacade.Buttons.Add(positionX, 10, largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "1. Supprimer contenu voies uniques"
+        .OnAction = "OptimiserAffichageFromButton"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+    
+    ' BOUTON 2 : Insérer Images
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 2), largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "2. Insérer Images voies uniques"
+        .OnAction = "InsererImagesFromButton"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+    
+    ' BOUTON 3 : Simplifier Bornes
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 4), largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "3. Simplifier Bornes"
+        .OnAction = "SimplifierBornesFromButton"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+    
+    ' NOUVEAU BOUTON 4 : Basculer Hachures Multivoies
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 6), largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "4. Hachures Multivoies ON/OFF"
+        .OnAction = "BasculerHachuresMultivoies"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+    
+    ' BOUTON 5 : Ajuster Polices
+    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 8), largeurBouton, hauteurBouton)
+    With btn
+        .Characters.Text = "5. Ajuster taille polices"
+        .OnAction = "AjusterPolicesFromButton"
+        .Font.Bold = True
+        .Font.Size = 9
+    End With
+End Sub
+
+' =====================================================
+' FONCTION UTILITAIRE : Identifier automatiquement les cases multivoies
+' =====================================================
+Function EstCaseMultivoie(celluleNum As Range, celluleVoie As Range) As Boolean
+    ' Fonction pour déterminer si une case contient plusieurs voies
+    Dim contenuNum As String, contenuVoie As String
+    
+    EstCaseMultivoie = False
+    
+    ' Vérifier le contenu des cellules
+    If IsEmpty(celluleNum.Value) Or IsEmpty(celluleVoie.Value) Then Exit Function
+    
+    contenuNum = Trim(CStr(celluleNum.Value))
+    contenuVoie = Trim(CStr(celluleVoie.Value))
+    
+    ' Méthode 1 : Vérifier si la voie contient des séparateurs
+    If InStr(contenuVoie, " / ") > 0 Then
+        EstCaseMultivoie = True
+        Exit Function
+    End If
+    
+    ' Méthode 2 : Vérifier si la voie commence par un cercle blanc (indicateur multivoie)
+    If Left(contenuVoie, 1) = ChrW(&H25CB) Then
+        EstCaseMultivoie = True
+        Exit Function
+    End If
+    
+    ' Méthode 3 : Vérifier si les numéros contiennent des slashes (différentes voies)
+    If InStr(contenuNum, " / ") > 0 Then
+        EstCaseMultivoie = True
+        Exit Function
+    End If
+    
+    ' Méthode 4 : Vérifier s'il y a soulignement sur la voie (indicateur multivoie)
+    If celluleVoie.Font.Underline = xlUnderlineStyleSingle Then
+        EstCaseMultivoie = True
+        Exit Function
+    End If
+End Function
+
+' =====================================================
+' DIAGNOSTIC : Analyser les cases multivoies détectées
+' =====================================================
+Sub DiagnostiquerCasesMultivoiesHachures()
+    Dim ws As Worksheet
+    Dim lastRow As Long, lastCol As Long
+    Dim ligneNum As Long, col As Long
+    Dim celluleNum As Range, celluleVoie As Range
+    Dim compteurMultivoies As Long
+    Dim compteurAvecHachures As Long
+    Dim rapport As String
+    
+    Set ws = ActiveSheet
+    
+    ' Vérifier qu'on est sur une feuille façade
+    If InStr(ws.Name, "Fac") = 0 Then
+        MsgBox "Cette fonction doit être utilisée sur une feuille façade.", vbExclamation
+        Exit Sub
+    End If
+    
+    lastRow = ws.UsedRange.Rows.Count
+    lastCol = 26
+    compteurMultivoies = 0
+    compteurAvecHachures = 0
+    
+    rapport = "DIAGNOSTIC DES CASES MULTIVOIES ET HACHURES" & vbCrLf & vbCrLf
+    
+    ' Analyser toutes les cases
+    For ligneNum = 1 To lastRow Step 2
+        For col = 1 To lastCol
+            Set celluleNum = ws.Cells(ligneNum, col)
+            Set celluleVoie = ws.Cells(ligneNum + 1, col)
+            
+            If Not IsEmpty(celluleNum.Value) Then
+                If EstCaseMultivoie(celluleNum, celluleVoie) Then
+                    compteurMultivoies = compteurMultivoies + 1
+                    
+                    If celluleNum.Interior.Pattern = xlPatternLightDown Then
+                        compteurAvecHachures = compteurAvecHachures + 1
+                    End If
+                End If
+            End If
+        Next col
+    Next ligneNum
+    
+    rapport = rapport & "Cases multivoies détectées : " & compteurMultivoies & vbCrLf
+    rapport = rapport & "Cases avec hachures : " & compteurAvecHachures & vbCrLf & vbCrLf
+    
+    If compteurMultivoies = compteurAvecHachures Then
+        rapport = rapport & "✅ Toutes les cases multivoies sont hachurées !"
+    ElseIf compteurAvecHachures = 0 Then
+        rapport = rapport & "⚠️ Aucune case n'est hachurée." & vbCrLf
+        rapport = rapport & "Utilisez le bouton 'Hachures Multivoies ON/OFF' pour les afficher."
+    Else
+        rapport = rapport & "⚠️ " & (compteurMultivoies - compteurAvecHachures) & " cases multivoies ne sont pas hachurées." & vbCrLf
+        rapport = rapport & "Utilisez le bouton 'Hachures Multivoies ON/OFF' pour corriger."
+    End If
+    
+    MsgBox rapport, vbInformation, "Diagnostic Hachures Multivoies"
+End Sub
+
+' =====================================================
+' AMÉLIORATION : Fonction FusionnerVoiesAdjacentes avec préservation des hachures
+' =====================================================
+Sub FusionnerVoiesAdjacentes(ws As Worksheet)
+    Dim ligneVoie As Long
+    Dim col As Long, colDebut As Long
+    Dim nomVoieActuel As String, nomVoieSuivant As String
+    Dim rngFusion As Range
+    Dim derniereLigne As Long
+    Dim derniereColonne As Long
+    Dim couleurIndex As Long
+    Dim couleurTexte As Long
+    Dim avaitHachures As Boolean  ' NOUVEAU : pour préserver les hachures
+    
+    ' Trouver les limites de la feuille utilisée
+    derniereLigne = ws.UsedRange.Rows.Count
+    derniereColonne = 26 ' S'arrêter à la colonne Z
+    
+    ' Parcourir toutes les lignes de noms de voies (lignes 2, 4, 6, etc.)
+    For ligneVoie = 2 To derniereLigne Step 2
+        col = 1
+        
+        ' Parcourir les colonnes de cette ligne
+        Do While col <= derniereColonne
+            ' Ignorer les cellules vides
+            If ws.Cells(ligneVoie, col).Value = "" Then
+                col = col + 1
+            Else
+                ' Récupérer le nom de voie actuel
+                nomVoieActuel = Trim(ws.Cells(ligneVoie, col).Value)
+                
+                ' Extraire le nom de voie sans le cercle blanc pour la comparaison
+                Dim nomVoieComparaison As String
+                If Left(nomVoieActuel, 1) = ChrW(&H25CB) Then
+                    nomVoieComparaison = Trim(Mid(nomVoieActuel, 3))
+                Else
+                    nomVoieComparaison = nomVoieActuel
+                End If
+                
+                ' Si c'est une voie multiple, ne pas fusionner
+                If InStr(nomVoieComparaison, " / ") > 0 Then
+                    ' Passer à la cellule suivante sans fusionner
+                    If ws.Cells(ligneVoie, col).MergeCells Then
+                        col = ws.Cells(ligneVoie, col).MergeArea.Column + _
+                              ws.Cells(ligneVoie, col).MergeArea.Columns.Count
+                    Else
+                        col = col + 1
+                    End If
+                Else
+                    ' Procéder à la fusion normale pour les voies simples
+                    colDebut = col
+                    
+                    ' NOUVEAU : Vérifier si la cellule de numéro correspondante a des hachures
+                    avaitHachures = (ws.Cells(ligneVoie - 1, col).Interior.Pattern = xlPatternLightDown)
+                    
+                    ' Mémoriser la couleur et vérifier si c'est rouge (hors capacité)
+                    Dim estRouge As Boolean
+                    estRouge = False
+                    If ws.Cells(ligneVoie, col).Interior.Color = RGB(255, 0, 0) Then
+                        estRouge = True
+                        couleurIndex = xlNone
+                        couleurTexte = RGB(255, 255, 255)
+                    ElseIf ws.Cells(ligneVoie, col).Interior.ColorIndex <> xlNone Then
+                        couleurIndex = ws.Cells(ligneVoie, col).Interior.ColorIndex
+                        couleurTexte = ws.Cells(ligneVoie, col).Font.Color
+                    Else
+                        couleurIndex = xlNone
+                    End If
+                    
+                    ' Trouver la fin de la cellule fusionnée actuelle
+                    If ws.Cells(ligneVoie, col).MergeCells Then
+                        col = ws.Cells(ligneVoie, col).MergeArea.Column + _
+                              ws.Cells(ligneVoie, col).MergeArea.Columns.Count - 1
+                    End If
+                    
+                    ' Vérifier les cellules suivantes pour le même nom de voie
+                    Do While col < derniereColonne
+                        ' Vérifier la cellule suivante
+                        If ws.Cells(ligneVoie, col + 1).Value = "" Then
+                            Exit Do
+                        End If
+                        
+                        nomVoieSuivant = Trim(ws.Cells(ligneVoie, col + 1).Value)
+                        
+                        ' Extraire le nom de voie sans le cercle blanc pour la comparaison
+                        Dim nomVoieSuivantComparaison As String
+                        If Left(nomVoieSuivant, 1) = ChrW(&H25CB) Then
+                            nomVoieSuivantComparaison = Trim(Mid(nomVoieSuivant, 3))
+                        Else
+                            nomVoieSuivantComparaison = nomVoieSuivant
+                        End If
+                        
+                        ' Ne pas fusionner si la cellule suivante contient des voies multiples
+                        If InStr(nomVoieSuivantComparaison, " / ") > 0 Then
+                            Exit Do
+                        End If
+                        
+                        ' Si c'est le même nom de voie, étendre la fusion
+                        If nomVoieComparaison = nomVoieSuivantComparaison And nomVoieComparaison <> "" Then
+                            ' NOUVEAU : Vérifier les hachures sur toute la plage
+                            If ws.Cells(ligneVoie - 1, col + 1).Interior.Pattern = xlPatternLightDown Then
+                                avaitHachures = True
+                            End If
+                            
+                            ' Trouver la fin de la cellule suivante
+                            If ws.Cells(ligneVoie, col + 1).MergeCells Then
+                                col = ws.Cells(ligneVoie, col + 1).MergeArea.Column + _
+                                      ws.Cells(ligneVoie, col + 1).MergeArea.Columns.Count - 1
+                            Else
+                                col = col + 1
+                            End If
+                        Else
+                            Exit Do
+                        End If
+                    Loop
+                    
+                    ' Si on a trouvé plusieurs cellules adjacentes avec le même nom
+                    If col > colDebut Then
+                        ' Défusionner d'abord toutes les cellules concernées
+                        For i = colDebut To col
+                            If ws.Cells(ligneVoie, i).MergeCells Then
+                                ws.Cells(ligneVoie, i).MergeArea.UnMerge
+                            End If
+                        Next i
+                        
+                        ' Refusionner l'ensemble
+                        Set rngFusion = ws.Range(ws.Cells(ligneVoie, colDebut), ws.Cells(ligneVoie, col))
+                        rngFusion.Merge
+                        
+                        ' NOUVEAU : Appliquer les hachures aux numéros correspondants si nécessaire
+                        If avaitHachures Then
+                            Dim rngNumerosCorrespondants As Range
+                            Set rngNumerosCorrespondants = ws.Range(ws.Cells(ligneVoie - 1, colDebut), ws.Cells(ligneVoie - 1, col))
+                            With rngNumerosCorrespondants.Interior
+                                .Pattern = xlPatternLightDown
+                                .PatternColor = RGB(100, 100, 100)
+                                If .Color = xlNone Then .Color = RGB(255, 255, 255)
+                            End With
+                        End If
+                        
+                        ' Réappliquer le formatage avec le nom abrégé et le cercle blanc si nécessaire
+                        Dim texteVoieFusionne As String
+                        ' Vérifier si le texte original contenait un cercle blanc
+                        If InStr(nomVoieActuel, ChrW(&H25CB)) > 0 Then
+                            texteVoieFusionne = ChrW(&H25CB) & " " & AbregerTypeVoie(nomVoieComparaison)
+                        Else
+                            texteVoieFusionne = AbregerTypeVoie(nomVoieComparaison)
+                        End If
+                        
+                        With rngFusion
+                            .NumberFormat = "@"
+                            .Value = texteVoieFusionne
+                            .HorizontalAlignment = xlCenter
+                            .VerticalAlignment = xlCenter
+                            .Font.Bold = True
+                            .WrapText = True
+                            .Borders.LineStyle = xlContinuous
+                            .Borders.Weight = xlThin
+                            
+                            ' Souligner si c'était une voie multiple
+                            If InStr(nomVoieActuel, ChrW(&H25CB)) > 0 Then
+                                .Font.Underline = xlUnderlineStyleSingle
+                            End If
+                            
+                            ' Appliquer la couleur appropriée
+                            If estRouge Then
+                                .Interior.Color = RGB(255, 0, 0)
+                                .Font.Color = RGB(255, 255, 255)
+                            ElseIf couleurIndex <> xlNone Then
+                                .Interior.ColorIndex = couleurIndex
+                                .Font.Color = couleurTexte
+                            End If
+                        End With
+                        
+                        ' APPLIQUER LA TAILLE DE POLICE OPTIMISÉE POUR LES VOIES FUSIONNÉES
+                        Call AjusterTaillePoliceVoiesSelonLargeur(rngFusion, col - colDebut + 1)
+                    End If
+                    
+                    col = col + 1
+                End If
+            End If
+        Loop
+    Next ligneVoie
 End Sub
 
 ' =====================================================
