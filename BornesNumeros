@@ -1,4 +1,194 @@
 ' =====================================================
+' FONCTIONS UTILITAIRES NÉCESSAIRES
+' =====================================================
+
+' Fonction pour vérifier si une valeur contient seulement des symboles
+Function EstUnSymbole(valeur As String) As Boolean
+    On Error Resume Next
+    EstUnSymbole = False
+    
+    ' Si la valeur est vide, ce n'est pas un symbole
+    If Len(Trim(valeur)) = 0 Then Exit Function
+    
+    ' Test simple : si la valeur ne contient aucun chiffre, c'est probablement un symbole
+    Dim reg As Object
+    Set reg = CreateObject("VBScript.RegExp")
+    reg.pattern = "\d"
+    reg.Global = True
+    
+    ' Si pas de chiffres trouvés, c'est un symbole
+    If Not reg.Test(valeur) Then
+        EstUnSymbole = True
+    End If
+    
+    On Error GoTo 0
+End Function
+
+' Fonction pour extraire le symbole en début de chaîne
+Function ExtraireSymboleDebut(texte As String) As String
+    Dim premier As String
+    
+    If Len(texte) = 0 Then
+        ExtraireSymboleDebut = ""
+        Exit Function
+    End If
+    
+    premier = Left(texte, 1)
+    
+    ' Vérifier si c'est un symbole Unicode
+    If premier = ChrW(&H25B2) Or premier = ChrW(&H25A0) Or premier = ChrW(&H25CB) Then
+        ' Inclure l'espace qui suit si présent
+        If Len(texte) > 1 And Mid(texte, 2, 1) = " " Then
+            ExtraireSymboleDebut = Left(texte, 2)
+        Else
+            ExtraireSymboleDebut = premier
+        End If
+    Else
+        ExtraireSymboleDebut = ""
+    End If
+End Function
+
+' Fonction pour enlever le symbole en début de chaîne
+Function EnleverSymboleDebut(texte As String) As String
+    Dim symbole As String
+    symbole = ExtraireSymboleDebut(texte)
+    
+    If symbole <> "" Then
+        EnleverSymboleDebut = Trim(Mid(texte, Len(symbole) + 1))
+    Else
+        EnleverSymboleDebut = texte
+    End If
+End Function
+
+' Fonction pour extraire les observations d'un texte PDI
+Function ExtraireObservations(texte As String) As String
+    Dim lignes As Variant
+    
+    ' Si il y a un saut de ligne, la deuxième partie sont les observations
+    If InStr(texte, vbCrLf) > 0 Then
+        lignes = Split(texte, vbCrLf)
+        If UBound(lignes) > 0 Then
+            ExtraireObservations = Trim(lignes(1))
+        Else
+            ExtraireObservations = ""
+        End If
+    Else
+        ExtraireObservations = ""
+    End If
+End Function
+
+' Fonction pour obtenir le libellé de voie pour une cellule PDI
+Function ObtenirLibelleVoiePDI(ws As Worksheet, ligneNum As Long, colonne As Long) As String
+    Dim ligneVoie As Long
+    Dim valVoie As String
+    
+    ligneVoie = ligneNum + 1 ' La ligne de voie est juste en dessous
+    
+    ' Vérifier que la ligne de voie existe
+    If ligneVoie > ws.Rows.Count Then
+        ObtenirLibelleVoiePDI = ""
+        Exit Function
+    End If
+    
+    ' Récupérer la valeur de la cellule de voie
+    valVoie = Trim(CStr(ws.Cells(ligneVoie, colonne).Value))
+    
+    ' Si la cellule de voie n'est pas vide, la retourner
+    If valVoie <> "" Then
+        ' Nettoyer le libellé (enlever le cercle blanc si présent)
+        If Left(valVoie, 1) = ChrW(&H25CB) Then ' Cercle blanc
+            valVoie = Trim(Mid(valVoie, 3)) ' Enlever le cercle et l'espace
+        End If
+        ObtenirLibelleVoiePDI = valVoie
+        Exit Function
+    End If
+    
+    ' Si la cellule est fusionnée, récupérer la valeur de la première cellule
+    If ws.Cells(ligneVoie, colonne).MergeCells Then
+        valVoie = Trim(CStr(ws.Cells(ligneVoie, colonne).MergeArea.Cells(1, 1).Value))
+        If Left(valVoie, 1) = ChrW(&H25CB) Then
+            valVoie = Trim(Mid(valVoie, 3))
+        End If
+        ObtenirLibelleVoiePDI = valVoie
+        Exit Function
+    End If
+    
+    ' Sinon, chercher dans les cellules adjacentes
+    Dim offset As Long
+    For offset = 1 To 5
+        ' Chercher à gauche
+        If colonne - offset > 0 Then
+            valVoie = Trim(CStr(ws.Cells(ligneVoie, colonne - offset).Value))
+            If valVoie <> "" Then
+                If Left(valVoie, 1) = ChrW(&H25CB) Then
+                    valVoie = Trim(Mid(valVoie, 3))
+                End If
+                ObtenirLibelleVoiePDI = valVoie
+                Exit Function
+            End If
+        End If
+        
+        ' Chercher à droite
+        If colonne + offset <= ws.Columns.Count Then
+            valVoie = Trim(CStr(ws.Cells(ligneVoie, colonne + offset).Value))
+            If valVoie <> "" Then
+                If Left(valVoie, 1) = ChrW(&H25CB) Then
+                    valVoie = Trim(Mid(valVoie, 3))
+                End If
+                ObtenirLibelleVoiePDI = valVoie
+                Exit Function
+            End If
+        End If
+    Next offset
+    
+    ObtenirLibelleVoiePDI = ""
+End Function
+
+' Fonction pour extraire les numéros pairs et impairs
+Sub ExtraireNumerosPDI(valeur As String, ByRef numsP As Collection, ByRef numsI As Collection)
+    On Error Resume Next
+    
+    ' Utiliser seulement l'expression régulière pour extraire les numéros
+    Dim reg As Object
+    Set reg = CreateObject("VBScript.RegExp")
+    reg.pattern = "\d+"
+    reg.Global = True
+    
+    Dim matches As Object
+    Set matches = reg.Execute(valeur)
+    
+    Dim i As Long
+    Dim n As Long
+    
+    For i = 0 To matches.Count - 1
+        n = CLng(matches(i).Value)
+        If Err.Number = 0 And n > 0 Then
+            If n Mod 2 = 0 Then
+                numsP.Add n
+            Else
+                numsI.Add n
+            End If
+        End If
+        Err.Clear
+    Next i
+    
+    On Error GoTo 0
+End Sub
+
+' Fonction pour appliquer le formatage différencié (version simplifiée)
+Sub AppliquerFormatageDifferencieBornes(rng As Range, contenu As String)
+    ' Réappliquer le formatage de base
+    On Error Resume Next
+    With rng
+        .Font.Bold = True
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+    End With
+    On Error GoTo 0
+End Sub
+
+' =====================================================
 ' SUB : Simplification des bornes avec regroupement par voies (VERSION MULTIVOIES)
 ' =====================================================
 Sub SimplificationBornesNumPDIMultivoies()
