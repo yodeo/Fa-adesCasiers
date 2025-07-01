@@ -1,6 +1,117 @@
-Tablo = ShBDC.Range("A4:BG" & Derligne)
-MsgBox "Tablo(1,1)=" & Tablo(1, 1) & vbCrLf & _
-       "Tablo(2,1)=" & Tablo(2, 1) & vbCrLf & _
-       "Tablo(3,1)=" & Tablo(3, 1) & vbCrLf & _
-       "Tablo(1,6)=" & Tablo(1, 6) & vbCrLf & _
-       "Tablo(2,6)=" & Tablo(2, 6)
+Sub RegrouperPDIMemesVoies()
+    Dim wsAccueil As Worksheet
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim voieActuelle As String
+    Dim voiePrecedente As String
+    Dim typePDI As String
+    Dim numPDI As String
+    Dim nbModifications As Long
+    Dim nbGroupes As Long
+    Dim largeurCase As Variant
+    Dim largeurCaseNum As Integer
+    Dim compteurVoie As Integer
+
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+
+    Set wsAccueil = ActiveSheet
+    derniereLigne = wsAccueil.Cells(wsAccueil.Rows.Count, "A").End(xlUp).Row
+
+    ' Demander la largeur de case
+    Do
+        largeurCase = InputBox("Veuillez entrer la largeur de case souhaitée (entre 1 et 26) :" & vbCrLf & _
+                               "Par défaut : 4", "Largeur de case", "4")
+        If largeurCase = "" Then
+            MsgBox "Opération annulée.", vbInformation
+            Exit Sub
+        End If
+        If IsNumeric(largeurCase) Then
+            largeurCaseNum = CInt(largeurCase)
+            If largeurCaseNum >= 1 And largeurCaseNum <= 26 Then Exit Do
+        End If
+        MsgBox "Veuillez entrer un nombre valide entre 1 et 26.", vbExclamation
+    Loop
+    nbModifications = 0
+    nbGroupes = 0
+    voiePrecedente = ""
+    compteurVoie = 0
+
+    If MsgBox("Cette macro va regrouper les PDI ayant la même voie consécutive (max 10 par groupe)." & vbCrLf & _
+              "- Premier PDI du groupe : largeur = " & largeurCaseNum & vbCrLf & _
+              "- PDI suivants même voie : largeur = 0" & vbCrLf & _
+              "- Les PDI rattachés seront ignorés" & vbCrLf & vbCrLf & _
+              "Voulez-vous continuer ?", vbQuestion + vbYesNo, "Confirmation") = vbNo Then Exit Sub
+
+    For i = 7 To derniereLigne
+        numPDI = CStr(wsAccueil.Cells(i, 1).Text)
+        voieActuelle = CStr(wsAccueil.Cells(i, 2).Text)
+        typePDI = CStr(wsAccueil.Cells(i, 6).Text)
+
+        If EstPDIRattache(typePDI) Then
+            voiePrecedente = ""
+            compteurVoie = 0
+        ElseIf voieActuelle <> "" Then
+            If voieActuelle = voiePrecedente Then
+                compteurVoie = compteurVoie + 1
+                If compteurVoie Mod 10 = 1 Then
+                    wsAccueil.Cells(i, 7).Value = largeurCaseNum
+                    nbGroupes = nbGroupes + 1
+                Else
+                    wsAccueil.Cells(i, 7).Value = 0
+                End If
+            Else
+                voiePrecedente = voieActuelle
+                compteurVoie = 1
+                wsAccueil.Cells(i, 7).Value = largeurCaseNum
+                nbGroupes = nbGroupes + 1
+            End If
+            nbModifications = nbModifications + 1
+        Else
+            voiePrecedente = ""
+            compteurVoie = 0
+        End If
+    Next i
+
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+
+    MsgBox "Regroupement terminé !" & vbCrLf & vbCrLf & _
+           "Largeur de case utilisée : " & largeurCaseNum & vbCrLf & _
+           "Nombre de lignes modifiées : " & nbModifications & vbCrLf & _
+           "Nombre de groupes créés : " & nbGroupes & vbCrLf & _
+           "Total de lignes traitées : " & (derniereLigne - 6), _
+           vbInformation, "Regroupement PDI"
+End Sub
+
+
+Function EstPDIRattache(typePDI As String) As Boolean
+    '=====================================================
+    ' FONCTION : Déterminer si un PDI est rattaché
+    ' Retourne True si le type est "rattaché C" ou "rattaché P"
+    '=====================================================
+    
+    Dim typeClean As String
+    
+    ' Nettoyer le type (enlever espaces en trop, mettre en majuscules)
+    typeClean = UCase(Trim(typePDI))
+    
+    ' Vérifier si c'est exactement "RATTACHÉ C" ou "RATTACHÉ P"
+    ' On accepte aussi "RATTACHE" sans accent
+    Select Case typeClean
+        Case "RATTACHÉ C", "RATTACHE C", "RATTACHÉ P", "RATTACHE P"
+            EstPDIRattache = True
+        Case Else
+            ' On peut aussi accepter avec des espaces multiples
+            If typeClean = "RATTACHÉ  C" Or typeClean = "RATTACHE  C" Or _
+               typeClean = "RATTACHÉ  P" Or typeClean = "RATTACHE  P" Or _
+               typeClean = "RATTACHÉ   C" Or typeClean = "RATTACHE   C" Or _
+               typeClean = "RATTACHÉ   P" Or typeClean = "RATTACHE   P" Then
+                EstPDIRattache = True
+            Else
+                EstPDIRattache = False
+            End If
+    End Select
+    
+End Function
+
