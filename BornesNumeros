@@ -189,7 +189,7 @@ Sub AppliquerFormatageDifferencieBornes(rng As Range, contenu As String)
 End Sub
 
 ' =====================================================
-' SUB : Simplification des bornes avec regroupement par voies (VERSION MULTIVOIES)
+' SUB : Simplification des bornes avec regroupement par voies (VERSION MULTIVOIES AVEC EXCLUSIONS)
 ' =====================================================
 Sub SimplificationBornesNumPDIMultivoies()
     Dim ws As Worksheet
@@ -197,6 +197,7 @@ Sub SimplificationBornesNumPDIMultivoies()
     Dim lastRow As Long
     Dim lastCol As Long
     Dim nbModifiees As Long
+    Dim dataParCellule As Object
     
     ' Vérifier qu'on est sur la bonne feuille
     Set ws = ActiveSheet
@@ -211,11 +212,14 @@ Sub SimplificationBornesNumPDIMultivoies()
     lastRow = wsFacade.Cells(wsFacade.Rows.Count, 1).End(xlUp).Row
     lastCol = 26 ' Colonnes A à Z
     
-    Application.ScreenUpdating = False
+    ' ÉTAPE 1 : INDEXER TOUS LES NUMÉROS PAR VOIE DANS TOUTE LA FAÇADE
+    Set dataParCellule = CreateObject("Scripting.Dictionary")
+    Call IndexerTousLesNumerosFacade(wsFacade, lastRow, lastCol, dataParCellule)
     
+    Application.ScreenUpdating = False
     nbModifiees = 0
     
-    ' Traiter chaque cellule de numéros PDI
+    ' ÉTAPE 2 : TRAITER CHAQUE CELLULE AVEC VÉRIFICATION DES EXCLUSIONS
     Dim i As Long, j As Long
     For i = 1 To lastRow Step 2 ' Lignes impaires (numéros PDI)
         For j = 1 To lastCol
@@ -232,9 +236,9 @@ Sub SimplificationBornesNumPDIMultivoies()
                 voies = ObtenirLibelleVoiePDI(wsFacade, i, j)
                 
                 If voies <> "" Then
-                    ' Traiter la case multivoie
+                    ' Traiter la case multivoie avec exclusions
                     Dim nouveauTexte As String
-                    nouveauTexte = TraiterCaseMultivoies(valeurNum, voies)
+                    nouveauTexte = TraiterCaseMultivoiesAvecExclusions(valeurNum, voies, dataParCellule, celluleNum.Address)
                     
                     If nouveauTexte <> "" And nouveauTexte <> celluleNum.Value Then
                         ' Conserver le formatage existant
@@ -271,9 +275,320 @@ Sub SimplificationBornesNumPDIMultivoies()
     
     ' Message de confirmation
     MsgBox "Simplification des bornes multivoies terminée." & vbCrLf & _
-           "Nombre de cellules modifiées : " & nbModifiees, _
-           vbInformation, "Bornes Multivoies"
+           "Nombre de cellules modifiées : " & nbModifiees & vbCrLf & _
+           "Exclusions appliquées selon l'usage dans la façade.", _
+           vbInformation, "Bornes Multivoies avec Exclusions"
 End Sub
+
+' =====================================================
+' SUB : Indexer tous les numéros de la façade par voie
+' =====================================================
+Sub IndexerTousLesNumerosFacade(ws As Worksheet, lastRow As Long, lastCol As Long, dataParCellule As Object)
+    Dim i As Long, j As Long
+    
+    For i = 1 To lastRow Step 2 ' Lignes impaires (numéros PDI)
+        For j = 1 To lastCol
+            Dim celluleNum As Range
+            Set celluleNum = ws.Cells(i, j)
+            
+            Dim valeurNum As String
+            valeurNum = Trim(CStr(celluleNum.Value))
+            
+            If valeurNum <> "" And Not EstUnSymbole(valeurNum) Then
+                Dim voie As String
+                voie = ObtenirLibelleVoiePDI(ws, i, j)
+                
+                If voie <> "" Then
+                    Dim adresse As String
+                    adresse = celluleNum.Address
+                    
+                    ' Créer la structure de données si nécessaire
+                    If Not dataParCellule.Exists(voie) Then
+                        dataParCellule.Add voie, CreateObject("Scripting.Dictionary")
+                    End If
+                    
+                    If Not dataParCellule(voie).Exists(adresse) Then
+                        Dim pairImp As Object
+                        Set pairImp = CreateObject("Scripting.Dictionary")
+                        pairImp.Add "pairs", New Collection
+                        pairImp.Add "impairs", New Collection
+                        dataParCellule(voie).Add adresse, pairImp
+                    End If
+                    
+                    ' Extraire les numéros pairs et impairs
+                    Dim collPairs As Collection
+                    Dim collImpairs As Collection
+                    Set collPairs = New Collection
+                    Set collImpairs = New Collection
+                    
+                    Call ExtraireNumerosPDI(valeurNum, collPairs, collImpairs)
+                    
+                    ' Ajouter aux collections (avec suppression des doublons)
+                    Dim dictPairsUniques As Object
+                    Dim dictImpairsUniques As Object
+                    Set dictPairsUniques = CreateObject("Scripting.Dictionary")
+                    Set dictImpairsUniques = CreateObject("Scripting.Dictionary")
+                    
+                    Dim num As Variant
+                    For Each num In collPairs
+                        If Not dictPairsUniques.Exists(num) Then
+                            dictPairsUniques.Add num, True
+                            dataParCellule(voie)(adresse)("pairs").Add num
+                        End If
+                    Next
+                    For Each num In collImpairs
+                        If Not dictImpairsUniques.Exists(num) Then
+                            dictImpairsUniques.Add num, True
+                            dataParCellule(voie)(adresse)("impairs").Add num
+                        End If
+                    Next
+                End If
+            End If
+        Next j
+    Next i
+End Sub
+
+' =====================================================
+' FUNCTION : Traiter une case multivoies avec exclusions
+' =====================================================
+Function TraiterCaseMultivoiesAvecExclusions(numerosTexte As String, voiesTexte As String, dataParCellule As Object, adresseCellule As String) As String
+    ' Extraire le symbole de début et les observations
+    Dim symbole As String
+    Dim observations As String
+    symbole = ExtraireSymboleDebut(numerosTexte)
+    observations = ExtraireObservations(numerosTexte)
+    
+    ' Nettoyer le texte des numéros
+    Dim numerosSeuls As String
+    numerosSeuls = EnleverSymboleDebut(numerosTexte)
+    If InStr(numerosSeuls, vbCrLf) > 0 Then
+        numerosSeuls = Split(numerosSeuls, vbCrLf)(0)
+    End If
+    
+    ' Séparer les voies
+    Dim voiesArray As Variant
+    If InStr(voiesTexte, " / ") > 0 Then
+        voiesArray = Split(voiesTexte, " / ")
+    Else
+        ReDim voiesArray(0)
+        voiesArray(0) = voiesTexte
+    End If
+    
+    ' Si une seule voie, traitement avec exclusions
+    If UBound(voiesArray) = 0 Then
+        Dim voieUnique As String
+        voieUnique = Trim(voiesArray(0))
+        Dim res As String
+        res = TraiterVoieAvecExclusions(numerosSeuls, voieUnique, dataParCellule, adresseCellule)
+        If observations <> "" Then
+            res = res & vbCrLf & observations
+        End If
+        TraiterCaseMultivoiesAvecExclusions = symbole & res
+        Exit Function
+    End If
+    
+    ' Cas multivoies : traiter chaque voie avec ses exclusions
+    Dim resultatsVoies As Collection
+    Set resultatsVoies = New Collection
+    
+    Dim indexVoie As Integer
+    For indexVoie = 0 To UBound(voiesArray)
+        Dim voieActuelle As String
+        voieActuelle = Trim(voiesArray(indexVoie))
+        
+        ' Extraire les numéros correspondant à cette voie
+        Dim numerosVoie As Collection
+        Set numerosVoie = ExtraireNumerosParVoie(numerosSeuls, indexVoie, UBound(voiesArray) + 1)
+        
+        ' Construire la chaîne des numéros pour cette voie
+        Dim chaineVoie As String
+        chaineVoie = ""
+        Dim k As Integer
+        For k = 1 To numerosVoie.Count
+            If k > 1 Then chaineVoie = chaineVoie & "-"
+            chaineVoie = chaineVoie & numerosVoie(k)
+        Next k
+        
+        ' Générer les bornes pour cette voie avec exclusions
+        Dim bornesVoie As String
+        bornesVoie = TraiterVoieAvecExclusions(chaineVoie, voieActuelle, dataParCellule, adresseCellule)
+        
+        If bornesVoie <> "" Then
+            resultatsVoies.Add "[" & bornesVoie & "]"
+        End If
+    Next indexVoie
+    
+    ' Construire le résultat final
+    Dim resultatFinal As String
+    resultatFinal = ""
+    
+    Dim i As Integer
+    For i = 1 To resultatsVoies.Count
+        If i > 1 Then resultatFinal = resultatFinal & " "
+        resultatFinal = resultatFinal & resultatsVoies(i)
+    Next i
+    
+    ' Ajouter les observations si présentes
+    If observations <> "" Then
+        resultatFinal = resultatFinal & vbCrLf & observations
+    End If
+    
+    TraiterCaseMultivoiesAvecExclusions = symbole & resultatFinal
+End Function
+
+' =====================================================
+' FUNCTION : Traiter une voie avec exclusions
+' =====================================================
+Function TraiterVoieAvecExclusions(numerosTexte As String, nomVoie As String, dataParCellule As Object, adresseCellule As String) As String
+    Dim collPairs As New Collection
+    Dim collImpairs As New Collection
+    
+    ' Extraire les numéros pairs et impairs
+    Call ExtraireNumerosPDI(numerosTexte, collPairs, collImpairs)
+    
+    ' Récupérer les numéros utilisés dans d'autres cellules de la même voie
+    Dim autresP As Object
+    Dim autresI As Object
+    Set autresP = CreateObject("Scripting.Dictionary")
+    Set autresI = CreateObject("Scripting.Dictionary")
+    
+    If dataParCellule.Exists(nomVoie) Then
+        Dim otherAdr As Variant
+        For Each otherAdr In dataParCellule(nomVoie).Keys
+            If otherAdr <> adresseCellule Then
+                Dim num As Variant
+                For Each num In dataParCellule(nomVoie)(otherAdr)("pairs")
+                    autresP(num) = True
+                Next
+                For Each num In dataParCellule(nomVoie)(otherAdr)("impairs")
+                    autresI(num) = True
+                Next
+            End If
+        Next
+    End If
+    
+    ' Générer les bornes avec exclusions
+    Dim res As String
+    res = ""
+    
+    If collPairs.Count > 0 Then
+        Dim resPairs As String
+        resPairs = GenererBornesAvecExclusions(collPairs, autresP, True)
+        If resPairs <> "" Then res = resPairs
+    End If
+    
+    If collImpairs.Count > 0 Then
+        Dim resImpairs As String
+        resImpairs = GenererBornesAvecExclusions(collImpairs, autresI, False)
+        If resImpairs <> "" Then
+            If res <> "" Then
+                res = res & " / " & resImpairs
+            Else
+                res = resImpairs
+            End If
+        End If
+    End If
+    
+    TraiterVoieAvecExclusions = res
+End Function
+
+' =====================================================
+' FUNCTION : Générer des bornes avec exclusions (LOGIQUE CRUCIALE RESTAURÉE)
+' =====================================================
+Function GenererBornesAvecExclusions(coll As Collection, exclus As Object, estPair As Boolean) As String
+    ' Éliminer les doublons
+    Dim dictUniques As Object
+    Set dictUniques = CreateObject("Scripting.Dictionary")
+    
+    Dim i As Long
+    For i = 1 To coll.Count
+        Dim numero As Long
+        numero = coll(i)
+        If Not dictUniques.Exists(numero) Then
+            dictUniques.Add numero, True
+        End If
+    Next i
+    
+    ' Convertir en tableau et trier
+    Dim arr() As Long
+    ReDim arr(dictUniques.Count - 1)
+    i = 0
+    Dim k As Variant
+    For Each k In dictUniques.Keys
+        arr(i) = CLng(k)
+        i = i + 1
+    Next
+    
+    ' Tri simple
+    Dim j As Long, temp As Long
+    For i = 0 To UBound(arr) - 1
+        For j = i + 1 To UBound(arr)
+            If arr(i) > arr(j) Then
+                temp = arr(i)
+                arr(i) = arr(j)
+                arr(j) = temp
+            End If
+        Next j
+    Next i
+    
+    ' Créer les plages en vérifiant les exclusions
+    Dim plages As New Collection
+    Dim debut As Long, fin As Long
+    debut = arr(0)
+    fin = arr(0)
+    
+    For i = 1 To UBound(arr)
+        Dim actuel As Long
+        actuel = arr(i)
+        
+        ' Vérifier s'il y a des exclusions entre fin et actuel
+        Dim ok As Boolean
+        ok = True
+        
+        ' LOGIQUE CRUCIALE : vérifier les numéros intermédiaires de même parité
+        Dim numeroTest As Long
+        For numeroTest = fin + 2 To actuel - 2 Step 2 ' +2/-2 pour rester dans la même parité
+            If exclus.Exists(numeroTest) Then
+                ok = False
+                Exit For
+            End If
+        Next numeroTest
+        
+        If ok And actuel = fin + 2 Then
+            ' Numéros consécutifs de même parité ET pas d'exclusions
+            fin = actuel
+        ElseIf ok And actuel > fin + 2 Then
+            ' Gap mais pas d'exclusions intermédiaires -> on peut faire une borne continue
+            fin = actuel
+        Else
+            ' Terminer la plage actuelle
+            If debut = fin Then
+                plages.Add CStr(debut)
+            Else
+                plages.Add debut & " à " & fin
+            End If
+            debut = actuel
+            fin = actuel
+        End If
+    Next i
+    
+    ' Ajouter la dernière plage
+    If debut = fin Then
+        plages.Add CStr(debut)
+    Else
+        plages.Add debut & " à " & fin
+    End If
+    
+    ' Construire le résultat
+    Dim res As String
+    res = ""
+    For i = 1 To plages.Count
+        If i > 1 Then res = res & ", "
+        res = res & plages(i)
+    Next i
+    
+    GenererBornesAvecExclusions = res
+End Function
 
 ' =====================================================
 ' FUNCTION : Traiter une case multivoies
@@ -623,9 +938,9 @@ Sub SimplifierBornesFromButtonMultivoies()
 End Sub
 
 ' =====================================================
-' MACRO DE TEST : Analyser une cellule multivoies (AVEC EXEMPLE DE DOUBLONS)
+' MACRO DE TEST : Analyser une cellule multivoies (AVEC EXCLUSIONS)
 ' =====================================================
-Sub TesterCelluleMultivoies()
+Sub TesterCelluleMultivoiesAvecExclusions()
     On Error Resume Next
     
     Dim cellule As Range
@@ -644,15 +959,20 @@ Sub TesterCelluleMultivoies()
         valeurNum = CStr(ActiveSheet.Cells(cellule.Row - 1, cellule.Column).Value)
     End If
     
+    ' Indexer toute la façade pour les exclusions
+    Dim dataParCellule As Object
+    Set dataParCellule = CreateObject("Scripting.Dictionary")
+    Call IndexerTousLesNumerosFacade(ActiveSheet, ActiveSheet.UsedRange.Rows.Count, 26, dataParCellule)
+    
     Dim msg As String
-    msg = "TEST CELLULE MULTIVOIES (AVEC SUPPRESSION DOUBLONS)" & vbCrLf & vbCrLf
+    msg = "TEST CELLULE MULTIVOIES (AVEC EXCLUSIONS)" & vbCrLf & vbCrLf
     msg = msg & "Adresse : " & cellule.Address & vbCrLf
     msg = msg & "Numéros : " & valeurNum & vbCrLf
     msg = msg & "Voies : " & valeurVoie & vbCrLf & vbCrLf
     
-    ' Test de traitement
+    ' Test de traitement avec exclusions
     Dim resultat As String
-    resultat = TraiterCaseMultivoies(valeurNum, valeurVoie)
+    resultat = TraiterCaseMultivoiesAvecExclusions(valeurNum, valeurVoie, dataParCellule, cellule.Address)
     
     msg = msg & "RÉSULTAT APRÈS TRAITEMENT :" & vbCrLf
     msg = msg & resultat & vbCrLf & vbCrLf
@@ -660,17 +980,19 @@ Sub TesterCelluleMultivoies()
     ' Comparer avec l'original
     If resultat <> valeurNum Then
         msg = msg & "✅ La cellule sera modifiée" & vbCrLf
-        msg = msg & "📋 Doublons supprimés et bornes créées"
+        msg = msg & "📋 Doublons supprimés + exclusions appliquées"
     Else
         msg = msg & "ℹ️ Aucune modification nécessaire"
     End If
     
-    ' Ajouter un exemple pratique
-    msg = msg & vbCrLf & vbCrLf & "💡 EXEMPLE :" & vbCrLf
-    msg = msg & "• Avant : '12,12,12,99,78'" & vbCrLf
-    msg = msg & "• Après : '12,78,99' (doublons supprimés, puis triés)"
+    ' Ajouter un exemple pratique avec exclusions
+    msg = msg & vbCrLf & vbCrLf & "💡 LOGIQUE D'EXCLUSIONS :" & vbCrLf
+    msg = msg & "• Si vous avez : 2,8,10,12 dans cette case" & vbCrLf
+    msg = msg & "• Et que 4,6 ne sont PAS utilisés ailleurs" & vbCrLf
+    msg = msg & "• Alors résultat : '2 à 12' (borne continue)" & vbCrLf
+    msg = msg & "• Sinon : '2,8 à 12' (borne avec gap)"
     
-    MsgBox msg, vbInformation, "Test Multivoies - Anti-doublons"
+    MsgBox msg, vbInformation, "Test Multivoies - Avec Exclusions"
     
     On Error GoTo 0
 End Sub
