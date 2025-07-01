@@ -388,10 +388,14 @@ Function TraiterVoieSimple(numerosTexte As String) As String
 End Function
 
 ' =====================================================
-' FUNCTION : Extraire les numéros correspondant à une voie spécifique (VERSION AMÉLIORÉE)
+' FUNCTION : Extraire les numéros correspondant à une voie spécifique (SANS DOUBLONS)
 ' =====================================================
 Function ExtraireNumerosParVoie(numerosTexte As String, indexVoie As Integer, totalVoies As Integer) As Collection
     Set ExtraireNumerosParVoie = New Collection
+    
+    ' Dictionnaire pour éviter les doublons
+    Dim dictUniques As Object
+    Set dictUniques = CreateObject("Scripting.Dictionary")
     
     ' Nouvelle approche : analyser la structure du texte pour identifier les groupes par voie
     ' Si le texte contient des séparateurs de voies (" / "), les utiliser
@@ -418,7 +422,8 @@ Function ExtraireNumerosParVoie(numerosTexte As String, indexVoie As Integer, to
             For i = 0 To matches.Count - 1
                 Dim numero As Long
                 numero = CLng(matches(i).Value)
-                If numero > 0 Then
+                If numero > 0 And Not dictUniques.Exists(numero) Then
+                    dictUniques.Add numero, True
                     ExtraireNumerosParVoie.Add numero
                 End If
             Next i
@@ -428,7 +433,10 @@ Function ExtraireNumerosParVoie(numerosTexte As String, indexVoie As Integer, to
         Dim tousNumeros As Collection
         Set tousNumeros = New Collection
         
-        ' Extraire tous les numéros dans l'ordre
+        ' Extraire tous les numéros dans l'ordre (sans doublons)
+        Dim dictTousUniques As Object
+        Set dictTousUniques = CreateObject("Scripting.Dictionary")
+        
         'Dim reg As Object
         Set reg = CreateObject("VBScript.RegExp")
         reg.Pattern = "\d+"
@@ -441,12 +449,13 @@ Function ExtraireNumerosParVoie(numerosTexte As String, indexVoie As Integer, to
         For i = 0 To matches.Count - 1
             'Dim numero As Long
             numero = CLng(matches(i).Value)
-            If numero > 0 Then
+            If numero > 0 And Not dictTousUniques.Exists(numero) Then
+                dictTousUniques.Add numero, True
                 tousNumeros.Add numero
             End If
         Next i
         
-        ' Répartir les numéros entre les voies
+        ' Répartir les numéros uniques entre les voies
         For i = indexVoie + 1 To tousNumeros.Count Step totalVoies
             ExtraireNumerosParVoie.Add tousNumeros(i)
         Next i
@@ -503,7 +512,7 @@ Function GenererBornesVoieUnique(numerosVoie As Collection) As String
 End Function
 
 ' =====================================================
-' FUNCTION : Générer des bornes simples pour une collection de numéros (AVEC PARITÉ)
+' FUNCTION : Générer des bornes simples pour une collection de numéros (AVEC PARITÉ ET SANS DOUBLONS)
 ' =====================================================
 Function GenererBornesSimples(coll As Collection) As String
     If coll.Count = 0 Then
@@ -511,16 +520,31 @@ Function GenererBornesSimples(coll As Collection) As String
         Exit Function
     End If
     
-    ' Convertir en tableau et trier
-    Dim arr() As Long
-    ReDim arr(coll.Count - 1)
+    ' ÉTAPE 1 : Éliminer les doublons avec un dictionnaire
+    Dim dictUniques As Object
+    Set dictUniques = CreateObject("Scripting.Dictionary")
     
     Dim i As Long
     For i = 1 To coll.Count
-        arr(i - 1) = coll(i)
+        Dim numero As Long
+        numero = coll(i)
+        If Not dictUniques.Exists(numero) Then
+            dictUniques.Add numero, True
+        End If
     Next i
     
-    ' Tri simple
+    ' ÉTAPE 2 : Convertir en tableau et trier
+    Dim arr() As Long
+    ReDim arr(dictUniques.Count - 1)
+    
+    i = 0
+    Dim cle As Variant
+    For Each cle In dictUniques.Keys
+        arr(i) = CLng(cle)
+        i = i + 1
+    Next cle
+    
+    ' ÉTAPE 3 : Tri simple
     Dim j As Long, temp As Long
     For i = 0 To UBound(arr) - 1
         For j = i + 1 To UBound(arr)
@@ -532,14 +556,14 @@ Function GenererBornesSimples(coll As Collection) As String
         Next j
     Next i
     
-    ' Créer les plages en respectant la parité
+    ' ÉTAPE 4 : Créer les plages en respectant la parité
     Dim plages As New Collection
     Dim debut As Long, fin As Long
     debut = arr(0)
     fin = arr(0)
     
     For i = 1 To UBound(arr)
-        ' CORRECTION : Vérifier la parité ET la consécutivité
+        ' Vérifier la parité ET la consécutivité
         If arr(i) = fin + 2 And (arr(i) Mod 2 = debut Mod 2) Then
             ' Même parité et numéros consécutifs dans cette parité
             fin = arr(i)
@@ -562,7 +586,7 @@ Function GenererBornesSimples(coll As Collection) As String
         plages.Add debut & " à " & fin
     End If
     
-    ' Construire le résultat
+    ' ÉTAPE 5 : Construire le résultat
     Dim res As String
     res = ""
     For i = 1 To plages.Count
@@ -599,7 +623,7 @@ Sub SimplifierBornesFromButtonMultivoies()
 End Sub
 
 ' =====================================================
-' MACRO DE TEST : Analyser une cellule multivoies
+' MACRO DE TEST : Analyser une cellule multivoies (AVEC EXEMPLE DE DOUBLONS)
 ' =====================================================
 Sub TesterCelluleMultivoies()
     On Error Resume Next
@@ -621,7 +645,7 @@ Sub TesterCelluleMultivoies()
     End If
     
     Dim msg As String
-    msg = "TEST CELLULE MULTIVOIES" & vbCrLf & vbCrLf
+    msg = "TEST CELLULE MULTIVOIES (AVEC SUPPRESSION DOUBLONS)" & vbCrLf & vbCrLf
     msg = msg & "Adresse : " & cellule.Address & vbCrLf
     msg = msg & "Numéros : " & valeurNum & vbCrLf
     msg = msg & "Voies : " & valeurVoie & vbCrLf & vbCrLf
@@ -635,12 +659,18 @@ Sub TesterCelluleMultivoies()
     
     ' Comparer avec l'original
     If resultat <> valeurNum Then
-        msg = msg & "✅ La cellule sera modifiée"
+        msg = msg & "✅ La cellule sera modifiée" & vbCrLf
+        msg = msg & "📋 Doublons supprimés et bornes créées"
     Else
         msg = msg & "ℹ️ Aucune modification nécessaire"
     End If
     
-    MsgBox msg, vbInformation, "Test Multivoies"
+    ' Ajouter un exemple pratique
+    msg = msg & vbCrLf & vbCrLf & "💡 EXEMPLE :" & vbCrLf
+    msg = msg & "• Avant : '12,12,12,99,78'" & vbCrLf
+    msg = msg & "• Après : '12,78,99' (doublons supprimés, puis triés)"
+    
+    MsgBox msg, vbInformation, "Test Multivoies - Anti-doublons"
     
     On Error GoTo 0
 End Sub
