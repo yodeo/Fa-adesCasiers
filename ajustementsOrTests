@@ -46,20 +46,18 @@ Sub RegrouperPDIMemesVoies()
               "- Les PDI rattachés seront forcés à largeur = 0" & vbCrLf & vbCrLf & _
               "Voulez-vous continuer ?", vbQuestion + vbYesNo, "Confirmation") = vbNo Then Exit Sub
 
+    ' ÉTAPE 1 : Regroupement normal (ignore les PDI rattachés pour le regroupement)
     For i = 7 To derniereLigne
         numPDI = CStr(wsAccueil.Cells(i, 1).Text)
         voieActuelle = CStr(wsAccueil.Cells(i, 2).Text)
         typePDI = CStr(wsAccueil.Cells(i, 6).Text)
 
-        ' MODIFICATION : Vérifier d'abord si c'est un PDI rattaché
+        ' Si c'est un PDI rattaché, ignorer pour le regroupement mais compter
         If EstPDIRattache(typePDI) Then
-            ' Forcer la largeur à 0 pour les PDI rattachés
-            wsAccueil.Cells(i, 7).Value = 0
-            nbPDIRattaches = nbPDIRattaches + 1
-            
             ' Reset des compteurs car un PDI rattaché interrompt la séquence
             voiePrecedente = ""
             compteurVoie = 0
+            ' On ne touche pas à la largeur ici, on le fera à la fin
         ElseIf voieActuelle <> "" Then
             ' Traitement normal pour les PDI non rattachés avec une voie
             If voieActuelle = voiePrecedente Then
@@ -87,6 +85,18 @@ Sub RegrouperPDIMemesVoies()
         End If
     Next i
 
+    ' ÉTAPE 2 : PASSAGE DÉDIÉ POUR FORCER TOUS LES PDI RATTACHÉS À 0
+    ' Cette étape s'exécute après le regroupement pour garantir le résultat
+    For i = 7 To derniereLigne
+        typePDI = CStr(wsAccueil.Cells(i, 6).Text)
+        
+        If EstPDIRattache(typePDI) Then
+            ' Forcer impérativement la largeur à 0 pour tous les PDI rattachés
+            wsAccueil.Cells(i, 7).Value = 0
+            nbPDIRattaches = nbPDIRattaches + 1
+        End If
+    Next i
+
     Application.EnableEvents = True
     Application.ScreenUpdating = True
 
@@ -104,32 +114,42 @@ Function EstPDIRattache(typePDI As String) As Boolean
     '=====================================================
     ' FONCTION : Déterminer si un PDI est rattaché
     ' Retourne True si le type est "rattaché C" ou "rattaché P"
-    ' AMÉLIORATION : Gestion plus robuste des variations d'écriture
+    ' AMÉLIORATION : Gestion très robuste des variations d'écriture
     '=====================================================
     
     Dim typeClean As String
     
+    ' Gestion des valeurs vides ou nulles
+    If IsEmpty(typePDI) Or IsNull(typePDI) Or typePDI = "" Then
+        EstPDIRattache = False
+        Exit Function
+    End If
+    
     ' Nettoyer le type (enlever espaces en trop, mettre en majuscules)
-    typeClean = UCase(Trim(typePDI))
+    typeClean = UCase(Trim(CStr(typePDI)))
     
     ' Remplacer les accents pour une détection plus robuste
     typeClean = Replace(typeClean, "É", "E")
     typeClean = Replace(typeClean, "È", "E")
     typeClean = Replace(typeClean, "Ê", "E")
+    typeClean = Replace(typeClean, "Ë", "E")
     
     ' Normaliser les espaces multiples en espaces simples
     Do While InStr(typeClean, "  ") > 0
         typeClean = Replace(typeClean, "  ", " ")
     Loop
     
-    ' Vérifier si c'est un PDI rattaché (avec ou sans accent)
+    ' Vérification stricte d'abord
     Select Case typeClean
         Case "RATTACHE C", "RATTACHE P", "RATTACHÉ C", "RATTACHÉ P"
             EstPDIRattache = True
+        Case "RATTACHEC", "RATTACHEP", "RATTACHÉC", "RATTACHÉP"  ' Sans espace
+            EstPDIRattache = True
         Case Else
-            ' Vérification additionnelle pour des variations possibles
-            If InStr(typeClean, "RATTACHE") > 0 And _
-               (InStr(typeClean, " C") > 0 Or InStr(typeClean, " P") > 0) Then
+            ' Vérification plus souple : contient "RATTACH" ET ("C" OU "P")
+            If (InStr(typeClean, "RATTACH") > 0) And _
+               ((Right(typeClean, 1) = "C") Or (Right(typeClean, 1) = "P") Or _
+                (InStr(typeClean, " C") > 0) Or (InStr(typeClean, " P") > 0)) Then
                 EstPDIRattache = True
             Else
                 EstPDIRattache = False
@@ -137,3 +157,44 @@ Function EstPDIRattache(typePDI As String) As Boolean
     End Select
     
 End Function
+
+' MACRO DE DIAGNOSTIC POUR VÉRIFIER LES PDI RATTACHÉS
+Sub DiagnostiquerPDIRattaches()
+    '=====================================================
+    ' MACRO UTILITAIRE : Affiche tous les PDI rattachés trouvés
+    ' Utile pour vérifier si la détection fonctionne correctement
+    '=====================================================
+    
+    Dim wsAccueil As Worksheet
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim typePDI As String
+    Dim numPDI As String
+    Dim largeur As String
+    Dim rapport As String
+    Dim nbTrouves As Long
+    
+    Set wsAccueil = ActiveSheet
+    derniereLigne = wsAccueil.Cells(wsAccueil.Rows.Count, "A").End(xlUp).Row
+    
+    rapport = "DIAGNOSTIC DES PDI RATTACHÉS" & vbCrLf & vbCrLf
+    nbTrouves = 0
+    
+    For i = 7 To derniereLigne
+        numPDI = CStr(wsAccueil.Cells(i, 1).Text)
+        typePDI = CStr(wsAccueil.Cells(i, 6).Text)
+        largeur = CStr(wsAccueil.Cells(i, 7).Value)
+        
+        If EstPDIRattache(typePDI) Then
+            nbTrouves = nbTrouves + 1
+            rapport = rapport & "Ligne " & i & " - PDI : " & numPDI & vbCrLf
+            rapport = rapport & "  Type : '" & typePDI & "'" & vbCrLf
+            rapport = rapport & "  Largeur actuelle : " & largeur & vbCrLf
+            rapport = rapport & "  Status : " & IIf(largeur = "0", "✓ OK", "✗ PROBLÈME") & vbCrLf & vbCrLf
+        End If
+    Next i
+    
+    rapport = rapport & "Total trouvé : " & nbTrouves & " PDI rattachés"
+    
+    MsgBox rapport, vbInformation, "Diagnostic PDI Rattachés"
+End Sub
