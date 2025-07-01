@@ -388,42 +388,69 @@ Function TraiterVoieSimple(numerosTexte As String) As String
 End Function
 
 ' =====================================================
-' FUNCTION : Extraire les numéros correspondant à une voie spécifique
+' FUNCTION : Extraire les numéros correspondant à une voie spécifique (VERSION AMÉLIORÉE)
 ' =====================================================
 Function ExtraireNumerosParVoie(numerosTexte As String, indexVoie As Integer, totalVoies As Integer) As Collection
     Set ExtraireNumerosParVoie = New Collection
     
-    ' Séparer les groupes de numéros par voie
-    ' Logique : diviser les numéros en groupes selon le nombre de voies
-    Dim tousNumeros As Collection
-    Set tousNumeros = New Collection
-    
-    ' Extraire tous les numéros dans l'ordre
-    Dim reg As Object
-    Set reg = CreateObject("VBScript.RegExp")
-    reg.Pattern = "\d+"
-    reg.Global = True
-    
-    Dim matches As Object
-    Set matches = reg.Execute(numerosTexte)
-    
-    Dim i As Long
-    For i = 0 To matches.Count - 1
-        Dim numero As Long
-        numero = CLng(matches(i).Value)
-        If numero > 0 Then
-            tousNumeros.Add numero
+    ' Nouvelle approche : analyser la structure du texte pour identifier les groupes par voie
+    ' Si le texte contient des séparateurs de voies (" / "), les utiliser
+    If InStr(numerosTexte, " / ") > 0 Then
+        ' Le texte est déjà séparé par voies
+        Dim partiesVoies As Variant
+        partiesVoies = Split(numerosTexte, " / ")
+        
+        ' Vérifier que l'index de voie correspond
+        If indexVoie <= UBound(partiesVoies) Then
+            Dim partieVoie As String
+            partieVoie = Trim(partiesVoies(indexVoie))
+            
+            ' Extraire les numéros de cette partie
+            Dim reg As Object
+            Set reg = CreateObject("VBScript.RegExp")
+            reg.Pattern = "\d+"
+            reg.Global = True
+            
+            Dim matches As Object
+            Set matches = reg.Execute(partieVoie)
+            
+            Dim i As Long
+            For i = 0 To matches.Count - 1
+                Dim numero As Long
+                numero = CLng(matches(i).Value)
+                If numero > 0 Then
+                    ExtraireNumerosParVoie.Add numero
+                End If
+            Next i
         End If
-    Next i
-    
-    ' Si pas de numéros, retourner collection vide
-    If tousNumeros.Count = 0 Then Exit Function
-    
-    ' Diviser les numéros entre les voies
-    ' Méthode simple : répartition séquentielle
-    For i = indexVoie + 1 To tousNumeros.Count Step totalVoies
-        ExtraireNumerosParVoie.Add tousNumeros(i)
-    Next i
+    Else
+        ' Pas de séparation explicite : répartir équitablement
+        Dim tousNumeros As Collection
+        Set tousNumeros = New Collection
+        
+        ' Extraire tous les numéros dans l'ordre
+        'Dim reg As Object
+        Set reg = CreateObject("VBScript.RegExp")
+        reg.Pattern = "\d+"
+        reg.Global = True
+        
+        'Dim matches As Object
+        Set matches = reg.Execute(numerosTexte)
+        
+        'Dim i As Long
+        For i = 0 To matches.Count - 1
+            'Dim numero As Long
+            numero = CLng(matches(i).Value)
+            If numero > 0 Then
+                tousNumeros.Add numero
+            End If
+        Next i
+        
+        ' Répartir les numéros entre les voies
+        For i = indexVoie + 1 To tousNumeros.Count Step totalVoies
+            ExtraireNumerosParVoie.Add tousNumeros(i)
+        Next i
+    End If
 End Function
 
 ' =====================================================
@@ -476,7 +503,7 @@ Function GenererBornesVoieUnique(numerosVoie As Collection) As String
 End Function
 
 ' =====================================================
-' FUNCTION : Générer des bornes simples pour une collection de numéros
+' FUNCTION : Générer des bornes simples pour une collection de numéros (AVEC PARITÉ)
 ' =====================================================
 Function GenererBornesSimples(coll As Collection) As String
     If coll.Count = 0 Then
@@ -505,14 +532,16 @@ Function GenererBornesSimples(coll As Collection) As String
         Next j
     Next i
     
-    ' Créer les plages
+    ' Créer les plages en respectant la parité
     Dim plages As New Collection
     Dim debut As Long, fin As Long
     debut = arr(0)
     fin = arr(0)
     
     For i = 1 To UBound(arr)
-        If arr(i) = fin + 2 Then ' Même parité et consécutif
+        ' CORRECTION : Vérifier la parité ET la consécutivité
+        If arr(i) = fin + 2 And (arr(i) Mod 2 = debut Mod 2) Then
+            ' Même parité et numéros consécutifs dans cette parité
             fin = arr(i)
         Else
             ' Terminer la plage actuelle
@@ -537,7 +566,7 @@ Function GenererBornesSimples(coll As Collection) As String
     Dim res As String
     res = ""
     For i = 1 To plages.Count
-        If i > 1 Then res = res & " / "
+        If i > 1 Then res = res & ", "
         res = res & plages(i)
     Next i
     
