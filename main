@@ -1,3 +1,27 @@
+' =====================================================
+' NOUVEAU SYSTÈME DE MENU CONTEXTUEL AMÉLIORÉ
+' =====================================================
+
+' Variables globales pour le menu contextuel
+Public menuContextuelActif As Boolean
+Public derniereFeuilleActive As String
+
+Sub EnleverProtectionFeuilleActive()
+    Dim motDePasse As String
+    motDePasse = "" ' Remplace par le mot de passe réel
+
+    On Error Resume Next
+    ActiveSheet.Unprotect Password:=motDePasse
+
+    If Err.Number <> 0 Then
+        MsgBox "Échec de la suppression de la protection.", vbExclamation
+    Else
+        'MsgBox "La feuille a été déprotégée avec succès.", vbInformation
+    End If
+End Sub
+
+
+
 Sub GenererFacadePDI()
     '=====================================================
     ' MACRO : Génération automatique d'une façade de casiers PDI
@@ -48,6 +72,9 @@ Sub GenererFacadePDI()
     ' NETTOYER LE MENU CONTEXTUEL AVANT DE COMMENCER
     Call SupprimerOptionMenuContextuel
     
+    ' Supprimer la protection de la feuille
+    Call EnleverProtectionFeuilleActive
+    
     ' Créer un dictionnaire pour gérer les couleurs par nom de voie
     Set dictCouleurs = CreateObject("Scripting.Dictionary")
     
@@ -85,7 +112,7 @@ Sub GenererFacadePDI()
     End If
     
     ' Récupérer la valeur max par caisson depuis C1 de la feuille active
-    maxParCaisson = val(wsSource.Range("C1").Value)
+    maxParCaisson = Val(wsSource.Range("C1").Value)
     If maxParCaisson <= 0 Then maxParCaisson = 4 ' Valeur par défaut si C1 est vide ou invalide
     
     ' Initialiser les compteurs de caisson
@@ -326,7 +353,7 @@ Sub GenererFacadePDI()
                     .Interior.Color = RGB(255, 255, 0) ' Jaune (priorité 2)
                     .Font.Color = RGB(0, 0, 0) ' Texte noir sur fond jaune
                 Else
-                    .Interior.Pattern = xlNone ' Pas de couleur
+                    .Interior.pattern = xlNone ' Pas de couleur
                 End If
             End With
             
@@ -526,13 +553,6 @@ Function NettoyerNomFeuille(nomOriginal As String) As String
     NettoyerNomFeuille = nomNettoye
 End Function
 
-' =====================================================
-' NOUVEAU SYSTÈME DE MENU CONTEXTUEL AMÉLIORÉ
-' =====================================================
-
-' Variables globales pour le menu contextuel
-Public menuContextuelActif As Boolean
-Public derniereFeuilleActive As String
 
 ' =====================================================
 ' GESTIONNAIRE UNIVERSEL DU MENU CONTEXTUEL
@@ -568,7 +588,7 @@ Sub AjouterMenuContextuelFacade(Target As Range, ws As Worksheet)
     ' Option principale : Navigation vers source
     Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
     With nouvelleOption
-        .Caption = "📍 Naviguer vers ligne Source"
+        .Caption = "?? Naviguer vers ligne Source"
         .OnAction = "NaviguerDepuisFacadeVersSource"
         .Tag = "NavigationPDI"
         .FaceId = 1695
@@ -586,7 +606,7 @@ Sub AjouterMenuContextuelFacade(Target As Range, ws As Worksheet)
     If Not IsEmpty(Target.Value) Then
         Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
         With nouvelleOption
-            .Caption = "🔧 Optimiser cette zone"
+            .Caption = "?? Optimiser cette zone"
             .OnAction = "OptimiserZoneSelectionnee"
             .Tag = "NavigationPDI"
         End With
@@ -596,7 +616,7 @@ Sub AjouterMenuContextuelFacade(Target As Range, ws As Worksheet)
     If IsEmpty(Target.Value) Then
         Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
         With nouvelleOption
-            .Caption = "🖼️ Insérer image ici"
+            .Caption = "??? Insérer image ici"
             .OnAction = "InsererImageCellule"
             .Tag = "NavigationPDI"
         End With
@@ -622,7 +642,7 @@ Sub AjouterMenuContextuelSource(Target As Range, ws As Worksheet)
     ' Option principale : Navigation vers façade
     Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
     With nouvelleOption
-        .Caption = "📍 Naviguer vers case Façade"
+        .Caption = "?? Naviguer vers case Façade"
         .OnAction = "NaviguerDepuisSourceVersFacade"
         .Tag = "NavigationPDI"
         .FaceId = 1695
@@ -631,7 +651,7 @@ Sub AjouterMenuContextuelSource(Target As Range, ws As Worksheet)
     ' Option : Régénérer façade
     Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=2)
     With nouvelleOption
-        .Caption = "🔄 Régénérer la façade"
+        .Caption = "?? Régénérer la façade"
         .OnAction = "GenererFacadePDI"
         .Tag = "NavigationPDI"
         .BeginGroup = True
@@ -655,14 +675,14 @@ Sub NaviguerDepuisFacadeVersSource()
     ' Trouver la feuille source correspondante
     Set wsSource = TrouverFeuilleSource(wsFacade)
     If wsSource Is Nothing Then
-        MsgBox "❌ Impossible de trouver la feuille source correspondante.", vbExclamation, "Navigation impossible"
+        MsgBox "? Impossible de trouver la feuille source correspondante.", vbExclamation, "Navigation impossible"
         Exit Sub
     End If
     
     ' Calculer le code de position
     codePosition = CalculerCodePosition(celluleCible, wsSource)
     If codePosition = "" Then
-        MsgBox "❌ Impossible de calculer la position. Vérifiez que vous êtes sur une case valide.", vbExclamation, "Navigation impossible"
+        MsgBox "? Impossible de calculer la position. Vérifiez que vous êtes sur une case valide.", vbExclamation, "Navigation impossible"
         Exit Sub
     End If
     
@@ -674,10 +694,10 @@ Sub NaviguerDepuisFacadeVersSource()
         wsSource.Cells(ligneSourceCible, 1).Select
         
         ' Message de confirmation optionnel
-        Application.StatusBar = "✅ Navigation réussie vers " & wsSource.Name & " ligne " & ligneSourceCible
+        Application.StatusBar = "? Navigation réussie vers " & wsSource.Name & " ligne " & ligneSourceCible
         Application.OnTime Now + TimeValue("00:00:03"), "EffacerStatusBar"
     Else
-        MsgBox "❌ Position " & codePosition & " non trouvée dans la feuille source.", vbExclamation, "Navigation impossible"
+        MsgBox "? Position " & codePosition & " non trouvée dans la feuille source.", vbExclamation, "Navigation impossible"
     End If
 End Sub
 
@@ -693,23 +713,23 @@ Sub NaviguerDepuisSourceVersFacade()
     ' Lire le code en colonne H
     codePosition = wsSource.Cells(celluleCible.Row, 8).Value
     If codePosition = "" Then
-        MsgBox "❌ Aucun code de position trouvé sur cette ligne.", vbExclamation, "Navigation impossible"
+        MsgBox "? Aucun code de position trouvé sur cette ligne.", vbExclamation, "Navigation impossible"
         Exit Sub
     End If
     
     ' Trouver la feuille façade correspondante
     Set wsFacade = TrouverFeuilleFacade(wsSource)
     If wsFacade Is Nothing Then
-        MsgBox "❌ Aucune feuille façade trouvée. Veuillez d'abord générer la façade.", vbExclamation, "Navigation impossible"
+        MsgBox "? Aucune feuille façade trouvée. Veuillez d'abord générer la façade.", vbExclamation, "Navigation impossible"
         Exit Sub
     End If
     
     ' Calculer et naviguer vers la position
     If NaviguerVersPositionFacade(wsFacade, codePosition, wsSource) Then
-        Application.StatusBar = "✅ Navigation réussie vers " & wsFacade.Name
+        Application.StatusBar = "? Navigation réussie vers " & wsFacade.Name
         Application.OnTime Now + TimeValue("00:00:03"), "EffacerStatusBar"
     Else
-        MsgBox "❌ Position " & codePosition & " non trouvée dans la façade.", vbExclamation, "Navigation impossible"
+        MsgBox "? Position " & codePosition & " non trouvée dans la façade.", vbExclamation, "Navigation impossible"
     End If
 End Sub
 
@@ -813,7 +833,7 @@ Function CalculerCodePosition(cellule As Range, wsSource As Worksheet) As String
     End If
     
     ' Récupérer les paramètres
-    maxParCaisson = val(wsSource.Range("C1").Value)
+    maxParCaisson = Val(wsSource.Range("C1").Value)
     If maxParCaisson <= 0 Then maxParCaisson = 4
     
     ' Calculer le caisson
@@ -866,12 +886,12 @@ Function NaviguerVersPositionFacade(wsFacade As Worksheet, codePosition As Strin
     partiePosition = Right(codePosition, Len(codePosition) - posEspace)
     
     ' Extraire numéro et lettre
-    numeroCaisson = val(Left(partieCode, Len(partieCode) - 1))
+    numeroCaisson = Val(Left(partieCode, Len(partieCode) - 1))
     lettreCaisson = Right(partieCode, 1)
-    colonneFacade = val(partiePosition)
+    colonneFacade = Val(partiePosition)
     
     ' Calculer la ligne
-    maxParCaisson = val(wsSource.Range("C1").Value)
+    maxParCaisson = Val(wsSource.Range("C1").Value)
     If maxParCaisson <= 0 Then maxParCaisson = 4
     
     lettreIndex = Asc(lettreCaisson) - Asc("A")
@@ -925,7 +945,7 @@ Sub OptimiserZoneSelectionnee()
     Dim cellule As Range
     Set cellule = Selection
     
-    MsgBox "🔧 Optimisation de la zone autour de " & cellule.Address & vbCrLf & _
+    MsgBox "?? Optimisation de la zone autour de " & cellule.Address & vbCrLf & _
            "Cette fonctionnalité peut être développée selon vos besoins spécifiques.", _
            vbInformation, "Optimisation locale"
 End Sub
@@ -936,13 +956,13 @@ Sub InsererImageCellule()
     
     If IsEmpty(cellule.Value) Then
         ' Appeler la fonction d'insertion d'image existante ou créer une nouvelle
-        MsgBox "🖼️ Insertion d'image dans " & cellule.Address & vbCrLf & _
+        MsgBox "??? Insertion d'image dans " & cellule.Address & vbCrLf & _
                "Sélectionnez un fichier image à insérer.", _
                vbInformation, "Insertion d'image"
         ' Ici vous pouvez appeler votre fonction d'insertion d'image existante
         ' Call InsererImagesDansCellulesVides
     Else
-        MsgBox "⚠️ Cette cellule n'est pas vide. Veuillez sélectionner une cellule vide.", _
+        MsgBox "?? Cette cellule n'est pas vide. Veuillez sélectionner une cellule vide.", _
                vbExclamation, "Cellule non vide"
     End If
 End Sub
@@ -989,7 +1009,7 @@ Sub RecalculerCellulesVidesParCaisson(ws As Worksheet)
     Dim ligneDebutCaisson As Long
     
     ' Récupérer la valeur max par caisson
-    maxParCaisson = val(ws.Range("C1").Value)
+    maxParCaisson = Val(ws.Range("C1").Value)
     If maxParCaisson <= 0 Then maxParCaisson = 4
     
     ' Créer les dictionnaires
@@ -1545,7 +1565,7 @@ Function CaissonDepasse(codeCaisson As String, maxParCaisson As Integer) As Bool
     Dim lettre As String
     
     If Len(codeCaisson) >= 2 Then
-        numero = val(Left(codeCaisson, Len(codeCaisson) - 1))
+        numero = Val(Left(codeCaisson, Len(codeCaisson) - 1))
         lettre = Right(codeCaisson, 1)
         
         ' LOGIQUE CORRIGÉE : on dépasse si on est au-delà de [maxParCaisson]D
@@ -1573,27 +1593,27 @@ End Function
 ' SUB AMÉLIORÉE : Mettre à jour la colonne H avec couleur
 ' =====================================================
 Sub MettreAJourColonneHAvecCouleur(wsSource As Worksheet, dictCodes As Object, dictHorsCapacite As Object)
-    Dim Ligne As Long
+    Dim ligne As Long
     Dim cle As Variant
     
     ' Parcourir toutes les clés du dictionnaire (numéros de ligne)
     For Each cle In dictCodes.Keys
-        Ligne = CLng(cle)
+        ligne = CLng(cle)
         
         ' Mettre à jour la colonne H (colonne 8) avec le code calculé
-        wsSource.Cells(Ligne, 8).Value = dictCodes(cle)
+        wsSource.Cells(ligne, 8).Value = dictCodes(cle)
         
         ' Si cette ligne est hors capacité, la colorer en rouge
-        If dictHorsCapacite.Exists(Ligne) Then
-            With wsSource.Cells(Ligne, 8)
+        If dictHorsCapacite.Exists(ligne) Then
+            With wsSource.Cells(ligne, 8)
                 .Interior.Color = RGB(255, 0, 0) ' Fond rouge
                 .Font.Color = RGB(255, 255, 255) ' Texte blanc
                 .Font.Bold = True
             End With
         Else
             ' Réinitialiser le formatage pour les cases normales
-            With wsSource.Cells(Ligne, 8)
-                .Interior.Pattern = xlNone ' Pas de couleur de fond
+            With wsSource.Cells(ligne, 8)
+                .Interior.pattern = xlNone ' Pas de couleur de fond
                 .Font.Color = RGB(0, 0, 0) ' Texte noir
                 .Font.Bold = False
             End With
@@ -1670,11 +1690,11 @@ End Function
 ' =====================================================
 ' SUB : Ajouter le code caisson en colonne AA
 ' =====================================================
-Sub AjouterCodeCaisson(ws As Worksheet, Ligne As Long, code As String)
+Sub AjouterCodeCaisson(ws As Worksheet, ligne As Long, code As String)
     Dim rngCode As Range
     
     ' Fusionner les 2 lignes en colonne AA
-    Set rngCode = ws.Range(ws.Cells(Ligne, 27), ws.Cells(Ligne + 1, 27))
+    Set rngCode = ws.Range(ws.Cells(ligne, 27), ws.Cells(ligne + 1, 27))
     rngCode.Merge
     
     ' Ajouter le code
@@ -1693,7 +1713,7 @@ Sub AjouterCodeCaisson(ws As Worksheet, Ligne As Long, code As String)
             .Interior.Color = RGB(255, 0, 0) ' Fond rouge
             .Font.Color = RGB(255, 255, 255) ' Texte blanc
         Else
-            .Interior.Pattern = xlNone ' Pas de couleur
+            .Interior.pattern = xlNone ' Pas de couleur
             .Font.Color = RGB(0, 0, 0) ' Texte noir
         End If
     End With
@@ -2030,7 +2050,7 @@ Sub InitialiserPaletteCouleursEtendues(dictPalette As Object)
 End Sub
 
 ' Obtient une couleur distincte pour une voie avec vérification d'adjacence (VERSION AMÉLIORÉE)
-Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, paletteCouleurs As Object, dictCouleursExistantes As Object, colonne As Long, ws As Worksheet, Ligne As Long) As Long
+Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, paletteCouleurs As Object, dictCouleursExistantes As Object, colonne As Long, ws As Worksheet, ligne As Long) As Long
     Dim hashVoie As Long
     Dim i As Integer
     Dim indexCouleur As Integer
@@ -2050,8 +2070,8 @@ Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, palette
     Next i
     
     ' Obtenir les couleurs des voies adjacentes
-    couleurGauche = ObtenirCouleurVoieAdjacente(ws, Ligne, colonne - 1)
-    couleurDroite = ObtenirCouleurVoieAdjacente(ws, Ligne, colonne + 1)
+    couleurGauche = ObtenirCouleurVoieAdjacente(ws, ligne, colonne - 1)
+    couleurDroite = ObtenirCouleurVoieAdjacente(ws, ligne, colonne + 1)
     
     ' Essayer de trouver une couleur avec suffisamment de contraste
     tentatives = 0
@@ -2096,7 +2116,7 @@ Function ObtenirCouleurDistinctePourVoieAvecAdjacence(nomVoie As String, palette
 End Function
 
 ' Fonction utilitaire pour obtenir la couleur d'une voie adjacente
-Function ObtenirCouleurVoieAdjacente(ws As Worksheet, Ligne As Long, colonne As Long) As Long
+Function ObtenirCouleurVoieAdjacente(ws As Worksheet, ligne As Long, colonne As Long) As Long
     On Error GoTo ErrorHandler
     
     ' Vérifier que la colonne est dans les limites
@@ -2107,7 +2127,7 @@ Function ObtenirCouleurVoieAdjacente(ws As Worksheet, Ligne As Long, colonne As 
     
     ' Vérifier la cellule de voie (ligne + 1 pour la ligne des voies)
     Dim celluleVoie As Range
-    Set celluleVoie = ws.Cells(Ligne + 1, colonne)
+    Set celluleVoie = ws.Cells(ligne + 1, colonne)
     
     ' Si la cellule contient une voie (pas vide, pas numérique)
     If Not IsEmpty(celluleVoie.Value) And Not IsNumeric(celluleVoie.Value) Then
@@ -2260,7 +2280,7 @@ Sub TesterLogiquleDepassement()
     Dim msg As String
     
     Set ws = ActiveSheet
-    maxPar = val(ws.Range("C1").Value)
+    maxPar = Val(ws.Range("C1").Value)
     If maxPar <= 0 Then maxPar = 4
     
     msg = "TEST DE LA LOGIQUE DE DÉPASSEMENT" & vbCrLf & vbCrLf
@@ -2302,3 +2322,4 @@ Sub VerifierStructureDonnees()
     
     MsgBox msg, vbInformation, "Structure des données"
 End Sub
+
