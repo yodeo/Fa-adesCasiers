@@ -747,14 +747,24 @@ Sub AjouterMiseEnFormeConditionnelleW6(ws As Worksheet)
     ws.Range("W6").FormatConditions.Delete
     plageW.FormatConditions.Delete
     
-    ' Condition W6 : Rouge si des cm libres > 0 existent
+    ' Condition W6 : Rouge si des cellules différentes de vide ou "0 cm libres" existent
     Set condition = ws.Range("W6").FormatConditions.Add( _
         Type:=xlExpression, _
-        Formula1:="=SOMMEPROD(--(ESTNUM(TROUVE(""cm libres"";W7:W" & derniereLigne & "))))>0")
+        Formula1:="=SOMMEPROD((W7:W" & derniereLigne & "<>"""")*(W7:W" & derniereLigne & "<>""0 cm libres""))>0")
     
     With condition
         .Interior.Color = RGB(255, 0, 0) ' Rouge
         .Font.Color = RGB(255, 255, 255) ' Blanc
+    End With
+    
+    ' Condition W6 : Vert si toutes les cellules sont vides ou "0 cm libres"
+    Set condition = ws.Range("W6").FormatConditions.Add( _
+        Type:=xlExpression, _
+        Formula1:="=SOMMEPROD((W7:W" & derniereLigne & "<>"""")*(W7:W" & derniereLigne & "<>""0 cm libres""))=0")
+    
+    With condition
+        .Interior.Color = RGB(0, 255, 0) ' Vert
+        .Font.Color = RGB(0, 0, 0) ' Noir
     End With
     
     ' Condition colonne W : Vert pour "0 cm libres"
@@ -772,6 +782,71 @@ Sub AjouterMiseEnFormeConditionnelleW6(ws As Worksheet)
     Set condition = plageW.FormatConditions.Add( _
         Type:=xlExpression, _
         Formula1:="=ET(W7<>"""";W7<>""0 cm libres"";ESTNUM(TROUVE(""cm libres"";W7)))")
+    
+    With condition
+        .Interior.Color = RGB(255, 0, 0) ' Rouge
+        .Font.Color = RGB(255, 255, 255) ' Blanc
+    End With
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
+' FONCTION : Ajouter mise en forme conditionnelle pour H6 et cases modules
+' =====================================================
+
+Sub AjouterMiseEnFormeConditionnelleH6(ws As Worksheet)
+    Dim derniereLigne As Long
+    Dim plageH As Range
+    Dim condition As FormatCondition
+    Dim nombreColonnes As Integer
+    
+    On Error Resume Next
+    
+    ' Trouver la dernière ligne avec des données
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Calculer le nombre de colonnes max depuis C1
+    nombreColonnes = Val(ws.Range("C1").Value)
+    If nombreColonnes <= 0 Then nombreColonnes = 4
+    
+    ' Afficher le nombre de caissons max en A2
+    ws.Range("A2").Value = "Nb caissons max: " & (nombreColonnes * 4)
+    ws.Range("A2").Font.Bold = True
+    
+    ' Définir la plage H7 à la dernière ligne
+    Set plageH = ws.Range("H7:H" & derniereLigne)
+    
+    ' Supprimer les conditions existantes sur H6 et colonne H
+    ws.Range("H6").FormatConditions.Delete
+    plageH.FormatConditions.Delete
+    
+    ' === MISE EN FORME CONDITIONNELLE POUR H6 ===
+    ' H6 rouge si des cases modules hors casier existent
+    Set condition = ws.Range("H6").FormatConditions.Add( _
+        Type:=xlExpression, _
+        Formula1:="=SOMMEPROD((GAUCHE(H7:H" & derniereLigne & ";1)>""" & nombreColonnes & """)*(H7:H" & derniereLigne & "<>""""))>0")
+    
+    With condition
+        .Interior.Color = RGB(255, 0, 0) ' Rouge
+        .Font.Color = RGB(255, 255, 255) ' Blanc
+    End With
+    
+    ' H6 vert si aucune case module hors casier
+    Set condition = ws.Range("H6").FormatConditions.Add( _
+        Type:=xlExpression, _
+        Formula1:="=SOMMEPROD((GAUCHE(H7:H" & derniereLigne & ";1)>""" & nombreColonnes & """)*(H7:H" & derniereLigne & "<>""""))=0")
+    
+    With condition
+        .Interior.Color = RGB(0, 255, 0) ' Vert
+        .Font.Color = RGB(0, 0, 0) ' Noir
+    End With
+    
+    ' === MISE EN FORME CONDITIONNELLE POUR CASES MODULE HORS CASIER ===
+    ' Cases module rouges si hors casier
+    Set condition = plageH.FormatConditions.Add( _
+        Type:=xlExpression, _
+        Formula1:="=ET(H7<>"""";ESTNUM(VALEUR(GAUCHE(H7;1)));VALEUR(GAUCHE(H7;1))>" & nombreColonnes & ")")
     
     With condition
         .Interior.Color = RGB(255, 0, 0) ' Rouge
@@ -911,8 +986,8 @@ Sub MiseAJourTempsReelComplete(ws As Worksheet)
     'Call AjouterMiseEnFormeConditionnelleCaissons(ws)
     Call AjouterMiseEnFormeConditionnelleW6(ws)
     
-    ' 4. Colorer H6 et W6 selon les valeurs rouges (version robuste)
-    Call ColorerCellulesH6EtW6_Robuste(ws)
+    ' 4. Ajouter mise en forme conditionnelle pour H6 et cases modules hors casier
+    Call AjouterMiseEnFormeConditionnelleH6(ws)
     
     ' 5. Protéger la colonne W contre modification utilisateur
     Call ProtegerColonneW(ws)
