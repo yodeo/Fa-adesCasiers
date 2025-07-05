@@ -33,6 +33,25 @@ Private Sub Workbook_BeforeClose(Cancel As Boolean)
 End Sub
 
 ' =====================================================
+' ÉVÉNEMENT WORKSHEET_CHANGE POUR MISE À JOUR TEMPS RÉEL
+' =====================================================
+
+Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
+    ' Mise à jour temps réel des espaces libres en colonne W
+    On Error Resume Next
+    
+    ' Vérifier si la modification concerne la colonne G (largeurs)
+    If Not Intersect(Target, Sh.Range("G:G")) Is Nothing Then
+        ' Vérifier si on est sur une feuille source (pas une façade)
+        If EstFeuilleSource(Sh) Then
+            Call MettreAJourEspacesLibres(Sh, Target)
+        End If
+    End If
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
 ' GESTIONNAIRE UNIVERSEL DU MENU CONTEXTUEL
 ' =====================================================
 
@@ -460,3 +479,42 @@ Sub AjouterCodeMenuContextuelAccueilSimple(ws As Worksheet)
     ' Gardée pour compatibilité avec l'ancien code
 End Sub
 
+' =====================================================
+' FONCTION DE MISE À JOUR DES ESPACES LIBRES EN TEMPS RÉEL
+' =====================================================
+
+Sub MettreAJourEspacesLibres(ws As Worksheet, Target As Range)
+    Dim ligne As Long
+    Dim largeurUtilisee As Double
+    Dim espaceLibre As Double
+    Dim maxCapacite As Double
+    Dim celluleW As Range
+    
+    On Error Resume Next
+    
+    ' Constante : capacité maximale d'un caisson
+    maxCapacite = 26
+    
+    ' Traiter chaque ligne modifiée
+    For ligne = Target.Row To Target.Row + Target.Rows.Count - 1
+        ' Vérifier qu'on est dans la zone de données (ligne 7+)
+        If ligne >= 7 Then
+            ' Lire la largeur utilisée en colonne G
+            largeurUtilisee = Val(ws.Cells(ligne, 7).Value)
+            
+            ' Calculer l'espace libre
+            espaceLibre = maxCapacite - largeurUtilisee
+            
+            ' Mettre à jour la colonne W
+            Set celluleW = ws.Cells(ligne, 23) ' Colonne W = 23
+            
+            If espaceLibre > 0 Then
+                celluleW.Value = espaceLibre & " cm libres"
+            Else
+                celluleW.Value = ""
+            End If
+        End If
+    Next ligne
+    
+    On Error GoTo 0
+End Sub
