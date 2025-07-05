@@ -596,7 +596,7 @@ Sub GenererFacadePDI()
     wsDest.Tab.Color = RGB(255, 255, 0) ' Jaune
     
     ' Calculer les espaces libres après génération de la façade (version temps réel)
-    Call MiseAJourTempsReelComplete(wsSource)
+    'Call MiseAJourTempsReelComplete(wsSource)
     
     wsDest.Activate
     
@@ -1503,111 +1503,6 @@ Sub GererChangementColonneG(Target As Range)
     
 End Sub
 
-' =====================================================
-' SUB : Recalculer les cellules vides par caisson
-' =====================================================
-Sub RecalculerCellulesVidesParCaisson(ws As Worksheet)
-    Dim maxParCaisson As Integer
-    Dim derniereLigne As Long
-    Dim i As Long
-    Dim largeurActuelle As Integer
-    Dim colonneVirtuelle As Integer
-    Dim ligneVirtuelle As Integer
-    Dim numeroCaisson As Integer
-    Dim lettreCaisson As String
-    Dim horsCapacitePermanent As Boolean
-    Dim dictCaissonsLignes As Object ' Pour stocker la dernière ligne de chaque caisson
-    Dim dictCaissonsVides As Object ' Pour stocker le nombre de cellules vides par caisson
-    Dim codeCaisson As String
-    Dim ligneDebutCaisson As Long
-    
-    ' Récupérer la valeur max par caisson
-    maxParCaisson = Val(ws.Range("C1").Value)
-    If maxParCaisson <= 0 Then maxParCaisson = 4
-    
-    ' Créer les dictionnaires
-    Set dictCaissonsLignes = CreateObject("Scripting.Dictionary")
-    Set dictCaissonsVides = CreateObject("Scripting.Dictionary")
-    
-    ' Initialiser les compteurs
-    colonneVirtuelle = 1
-    numeroCaisson = 1
-    lettreCaisson = "A"
-    horsCapacitePermanent = False
-    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    ligneDebutCaisson = 7
-    
-    ' Effacer d'abord toute la colonne W
-    ws.Range("W7:W" & derniereLigne).ClearContents
-    
-    ' Parcourir toutes les lignes pour simuler la disposition
-    For i = 7 To derniereLigne
-        largeurActuelle = ConvertirEnEntier(ws.Cells(i, 7).Value, 0)
-        
-        ' Si on a une largeur > 0, c'est un bloc PDI
-        If largeurActuelle > 0 Then
-            ' Vérifier si on dépasse la colonne Z (26)
-            If colonneVirtuelle + largeurActuelle - 1 > 26 Then
-                ' Finaliser le caisson précédent
-                codeCaisson = numeroCaisson & lettreCaisson
-                If Not horsCapacitePermanent And Not CaissonDepasse(codeCaisson, maxParCaisson) Then
-                    ' Calculer les cellules vides du caisson précédent
-                    Dim cellulesVides As Integer
-                    cellulesVides = 26 - colonneVirtuelle + 1
-                    
-                    ' Stocker dans le dictionnaire avec la dernière ligne du caisson
-                    If ligneDebutCaisson > 0 Then
-                        dictCaissonsVides.Add codeCaisson, cellulesVides
-                        dictCaissonsLignes.Add codeCaisson, i - 1 ' Ligne précédente = dernière du caisson
-                    End If
-                End If
-                
-                ' Passer au caisson suivant
-                colonneVirtuelle = 1
-                numeroCaisson = numeroCaisson + 1
-                ligneDebutCaisson = i
-                
-                ' Gérer le passage à la lettre suivante
-                If numeroCaisson > maxParCaisson Then
-                    numeroCaisson = 1
-                    If lettreCaisson = "D" Then
-                        horsCapacitePermanent = True
-                        lettreCaisson = "A"
-                    Else
-                        lettreCaisson = Chr(Asc(lettreCaisson) + 1)
-                        If lettreCaisson > "D" And Not horsCapacitePermanent Then
-                            horsCapacitePermanent = True
-                            lettreCaisson = "A"
-                            numeroCaisson = 1
-                        End If
-                    End If
-                End If
-            End If
-            
-            ' Avancer la position virtuelle
-            colonneVirtuelle = colonneVirtuelle + largeurActuelle
-        End If
-    Next i
-    
-    ' Finaliser le dernier caisson
-    codeCaisson = numeroCaisson & lettreCaisson
-    If Not horsCapacitePermanent And Not CaissonDepasse(codeCaisson, maxParCaisson) Then
-        If colonneVirtuelle <= 26 Then
-            cellulesVides = 26 - colonneVirtuelle + 1
-            dictCaissonsVides.Add codeCaisson, cellulesVides
-            dictCaissonsLignes.Add codeCaisson, derniereLigne
-        End If
-    End If
-    
-    ' Maintenant, écrire les valeurs dans la colonne W seulement sur les dernières lignes de chaque caisson
-    Dim cle As Variant
-    For Each cle In dictCaissonsLignes.Keys
-        Dim ligneCible As Long
-        ligneCible = dictCaissonsLignes(cle)
-        ws.Cells(ligneCible, 23).Value = dictCaissonsVides(cle) ' Colonne W = 23
-    Next cle
-    
-End Sub
 
 ' =====================================================
 ' SUB : Ajuster la taille de police intelligemment selon contenu et largeur
