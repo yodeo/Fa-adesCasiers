@@ -19,6 +19,10 @@ Sub OptimiserAffichageFacade()
     Set cellsToEmpty = CreateObject("Scripting.Dictionary")
     nbSuppression = 0
     
+    ' Identifier les cases multi-voies à protéger
+    Dim dictMultivoies As Object
+    Set dictMultivoies = IdentifierCasesMultivoies(ws)
+    
     ' Vérifier qu'on a une feuille active
     If ws Is Nothing Then
         MsgBox "Aucune feuille active détectée.", vbExclamation
@@ -140,7 +144,7 @@ Sub OptimiserAffichageFacade()
         End If
     Next cell
     
-    ' ÉTAPE 4: Identifier les numéros à supprimer pour les libellés uniques
+    ' ÉTAPE 4: Identifier les numéros à supprimer pour les libellés uniques (en excluant les cases multi-voies)
     For Each cell In ws.usedRange
         If cell.Row Mod 2 = 0 Then  ' Ligne paire (libellé de voie)
             If Not IsEmpty(cell.Value) And cell.Value <> "" Then
@@ -151,12 +155,15 @@ Sub OptimiserAffichageFacade()
                     Set cellAbove = ws.Cells(cell.Row - 1, cell.Column)
                     
                     If Not IsEmpty(cellAbove.Value) And cellAbove.Value <> "" Then
-                        ' Si ce libellé est unique
-                        If dictLibelles.Exists(libelle) And dictLibelles(libelle) = 1 Then
-                            If cellAbove.Row Mod 2 = 1 Then ' Vérifier que c'est bien un numéro
-                                If Not cellsToEmpty.Exists(cellAbove.Address) Then
-                                    cellsToEmpty.Add cellAbove.Address, True
-                                    nbSuppression = nbSuppression + 1
+                        ' Vérifier si la case n'est pas multi-voie avant de la traiter
+                        If Not dictMultivoies.Exists(cellAbove.Address) Then
+                            ' Si ce libellé est unique
+                            If dictLibelles.Exists(libelle) And dictLibelles(libelle) = 1 Then
+                                If cellAbove.Row Mod 2 = 1 Then ' Vérifier que c'est bien un numéro
+                                    If Not cellsToEmpty.Exists(cellAbove.Address) Then
+                                        cellsToEmpty.Add cellAbove.Address, True
+                                        nbSuppression = nbSuppression + 1
+                                    End If
                                 End If
                             End If
                         End If
@@ -238,7 +245,8 @@ CleanUp:
     
     ' Message de confirmation
     MsgBox "Optimisation de l'affichage terminée." & vbCrLf & _
-           "Nombre de numéros supprimés : " & nbSuppression, _
+           "Nombre de numéros supprimés : " & nbSuppression & vbCrLf & _
+           "Cases multi-voies protégées : " & dictMultivoies.Count, _
            vbInformation, "Optimisation Façade"
 End Sub
 
@@ -720,4 +728,3 @@ Sub AppelerNomOngletActif()
     Call NomOngletActif
     On Error GoTo 0
 End Sub
-
