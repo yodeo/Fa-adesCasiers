@@ -864,6 +864,9 @@ End Sub
 Sub MiseAJourTempsReelComplete(ws As Worksheet)
     On Error Resume Next
     
+    ' DEBUG : Confirmer l'appel de la fonction
+    MsgBox "DEBUG: MiseAJourTempsReelComplete appelée pour la feuille: " & ws.Name, vbInformation
+    
     ' Désactiver temporairement les événements pour éviter la récursion
     Application.EnableEvents = False
     Application.ScreenUpdating = False
@@ -899,11 +902,18 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
     Dim derniereLigne As Long
     Dim i As Long
     Dim formule As String
+    Dim nbFormulesAjoutees As Long
     
     On Error Resume Next
     
     ' Trouver la dernière ligne avec des données
     derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    nbFormulesAjoutees = 0
+    
+    ' DEBUG : Afficher des informations sur la fonction
+    MsgBox "Debug AjouterFormulesTempsReel:" & vbCrLf & _
+           "Feuille: " & ws.Name & vbCrLf & _
+           "Dernière ligne: " & derniereLigne, vbInformation
     
     ' Ajouter un titre en W6 si il n'existe pas
     If ws.Range("W6").Value = "" Then
@@ -927,11 +937,25 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
                      "(26-SOMME.SI.ENS(G:G;H:H;""=""&GAUCHE(H" & i & ";2)&""*"")) & "" cm libres"";"""")"
             
             ws.Cells(i, 23).Formula = formule ' Colonne W = 23
+            nbFormulesAjoutees = nbFormulesAjoutees + 1
+            
+            ' DEBUG : Afficher quelques exemples de formules
+            If nbFormulesAjoutees <= 3 Then
+                MsgBox "DEBUG Formule ligne " & i & ":" & vbCrLf & _
+                       "Code caisson: " & ws.Cells(i, 8).Value & vbCrLf & _
+                       "Largeur: " & ws.Cells(i, 7).Value & vbCrLf & _
+                       "Formule: " & formule, vbInformation
+            End If
         Else
             ' Effacer la formule si pas de code caisson
             ws.Cells(i, 23).ClearContents
         End If
     Next i
+    
+    ' DEBUG : Afficher le résumé
+    MsgBox "DEBUG Résumé AjouterFormulesTempsReel:" & vbCrLf & _
+           "Formules ajoutées: " & nbFormulesAjoutees & vbCrLf & _
+           "Sur " & (derniereLigne - 6) & " lignes analysées", vbInformation
     
     On Error GoTo 0
 End Sub
