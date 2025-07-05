@@ -130,19 +130,18 @@ Sub PlanDePiquage()
     Dim actualRows As Long
     actualRows = destRow + 3
     
-    ' Redimensionner les tableaux à la taille réelle
-    ReDim Preserve destData(1 To actualRows, 1 To destCols)
-    ReDim Preserve caseModuleData(1 To actualRows, 1 To 1)
-    
     ' Écrire toutes les données principales en une seule opération
-    If actualRows > 0 And destCols > 0 Then
+    ' Note: Pas besoin de ReDim Preserve car les tableaux sont déjà dimensionnés correctement
+    If actualRows > 0 And destCols > 0 And actualRows <= UBound(destData, 1) Then
         wsDest.Range(wsDest.Cells(1, 2), wsDest.Cells(actualRows, destCols)).Value2 = destData
         wsDest.Range(wsDest.Cells(1, 1), wsDest.Cells(actualRows, 1)).Value2 = caseModuleData
     End If
     
     ' FORMATAGE EN LOT optimisé
-    ' Appliquer le format texte à toutes les cellules d'un coup
-    wsDest.Range(wsDest.Cells(1, 1), wsDest.Cells(actualRows, destCols)).NumberFormat = "@"
+    ' Appliquer le format texte à toutes les cellules d'un coup (seulement si actualRows est valide)
+    If actualRows > 0 And actualRows <= UBound(destData, 1) Then
+        wsDest.Range(wsDest.Cells(1, 1), wsDest.Cells(actualRows, destCols)).NumberFormat = "@"
+    End If
     
     ' Appliquer les couleurs et formatage spécifique
     For Each formatItem In formatInfo
@@ -153,11 +152,13 @@ Sub PlanDePiquage()
     Next formatItem
     
     ' Formatage en lot de la colonne des modules de case
-    With wsDest.Range("A1:A" & actualRows)
-        .Orientation = 90
-        .Font.Bold = True
-        .Interior.Color = RGB(230, 230, 230)
-    End With
+    If actualRows > 0 And actualRows <= UBound(destData, 1) Then
+        With wsDest.Range("A1:A" & actualRows)
+            .Orientation = 90
+            .Font.Bold = True
+            .Interior.Color = RGB(230, 230, 230)
+        End With
+    End If
     
     ' BORDURES EN LOT - beaucoup plus rapide
     ApplyBordersOptimized wsDest, actualRows, destCols
