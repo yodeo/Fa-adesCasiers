@@ -5,7 +5,7 @@ Sub PlanDePiquage()
     Dim wsSource As Worksheet, wsDest As Worksheet
     Dim lastRow As Long, dataRows As Long
     Dim sourceData As Variant, destData As Variant
-    Dim colorData As Variant, fontColorData As Variant
+    Dim colorData() As Long, fontColorData() As Long
     Dim i As Long, destCol As Long, destRow As Long
     Dim maxCol As Long, currentCaseModule As String
     Dim nomTournee As String, nomFeuilleDestination As String
@@ -56,8 +56,19 @@ Sub PlanDePiquage()
     
     ' Charger les données source en une seule opération (ÉNORME gain de performance)
     sourceData = wsSource.Range("A7:H" & lastRow).Value2
-    colorData = wsSource.Range("B7:B" & lastRow).Interior.Color
-    fontColorData = wsSource.Range("B7:B" & lastRow).Font.Color
+    
+    ' Charger les données de couleur séparément (les propriétés Interior.Color ne peuvent pas être chargées en tableau)
+    Dim sourceRange As Range
+    Set sourceRange = wsSource.Range("B7:B" & lastRow)
+    ReDim colorData(1 To dataRows)
+    ReDim fontColorData(1 To dataRows)
+    
+    ' Récupérer les couleurs individuellement (optimisé avec une seule boucle)
+    Dim j As Long
+    For j = 1 To dataRows
+        colorData(j) = sourceRange.Cells(j, 1).Interior.Color
+        fontColorData(j) = sourceRange.Cells(j, 1).Font.Color
+    Next j
     
     ' Calculer les dimensions de destination optimales
     destCols = maxCol + 1
