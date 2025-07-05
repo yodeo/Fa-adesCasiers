@@ -48,5 +48,68 @@ Sub MettreEnFormeAccueil()
     ws.Columns("W:W").Hidden = False
     ws.Columns("W:W").ColumnWidth = 15
 
+    ' Coloration conditionnelle pour H6 et W6
+    Call ColorerCellulesH6EtW6(ws)
+
     'MsgBox "Mise en forme conditionnelle appliquée avec succès.", vbInformation
+End Sub
+
+' =====================================================
+' FONCTION : Coloration conditionnelle pour H6 et W6
+' =====================================================
+
+Sub ColorerCellulesH6EtW6(ws As Worksheet)
+    Dim plageH As Range, plageW As Range
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim rougeDetecteH As Boolean, rougeDetecteW As Boolean
+    
+    On Error Resume Next
+    
+    ' Trouver la dernière ligne avec des données
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Vérifier s'il y a des valeurs rouges dans la colonne H
+    Set plageH = ws.Range("H7:H" & derniereLigne)
+    rougeDetecteH = False
+    For i = 7 To derniereLigne
+        If ws.Cells(i, 8).Interior.Color = RGB(255, 0, 0) Then
+            rougeDetecteH = True
+            Exit For
+        End If
+    Next i
+    
+    ' Vérifier s'il y a des valeurs rouges dans la colonne W
+    Set plageW = ws.Range("W7:W" & derniereLigne)
+    rougeDetecteW = False
+    For i = 7 To derniereLigne
+        If ws.Cells(i, 23).Interior.Color = RGB(255, 0, 0) Then
+            rougeDetecteW = True
+            Exit For
+        End If
+    Next i
+    
+    ' Colorer H6 selon la présence de rouge dans la colonne H
+    With ws.Range("H6")
+        If rougeDetecteH Then
+            .Interior.Color = RGB(255, 0, 0) ' Rouge
+            .Font.Color = RGB(255, 255, 255) ' Texte blanc
+        Else
+            .Interior.Color = RGB(0, 255, 0) ' Vert
+            .Font.Color = RGB(0, 0, 0) ' Texte noir
+        End If
+    End With
+    
+    ' Colorer W6 selon la présence de rouge dans la colonne W
+    With ws.Range("W6")
+        If rougeDetecteW Then
+            .Interior.Color = RGB(255, 0, 0) ' Rouge
+            .Font.Color = RGB(255, 255, 255) ' Texte blanc
+        Else
+            .Interior.Color = RGB(0, 255, 0) ' Vert
+            .Font.Color = RGB(0, 0, 0) ' Texte noir
+        End If
+    End With
+    
+    On Error GoTo 0
 End Sub
