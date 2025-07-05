@@ -13,11 +13,11 @@ Function EstUnSymbole(valeur As String) As Boolean
     ' Test simple : si la valeur ne contient aucun chiffre, c'est probablement un symbole
     Dim reg As Object
     Set reg = CreateObject("VBScript.RegExp")
-    reg.pattern = "\d"
+    reg.Pattern = "\d"
     reg.Global = True
     
     ' Si pas de chiffres trouvés, c'est un symbole
-    If Not reg.Test(valeur) Then
+    If Not reg.test(valeur) Then
         EstUnSymbole = True
     End If
     
@@ -151,7 +151,7 @@ Sub ExtraireNumerosPDI(valeur As String, ByRef numsP As Collection, ByRef numsI 
     ' Utiliser seulement l'expression régulière pour extraire les numéros
     Dim reg As Object
     Set reg = CreateObject("VBScript.RegExp")
-    reg.pattern = "\d+"
+    reg.Pattern = "\d+"
     reg.Global = True
     
     Dim matches As Object
@@ -189,56 +189,87 @@ Sub AppliquerFormatageDifferencieBornes(rng As Range, contenu As String)
 End Sub
 
 ' =====================================================
-' SUB : Simplification des bornes avec regroupement par voies (VERSION MULTIVOIES AVEC EXCLUSIONS)
+' SUB : Simplification des bornes de numéros PDI - VERSION ULTRA-SIMPLIFIÉE
 ' =====================================================
-Sub SimplificationBornesNumPDIMultivoies()
+Sub SimplificationBornesNumPDI()
     Dim ws As Worksheet
     Dim wsFacade As Worksheet
     Dim lastRow As Long
     Dim lastCol As Long
-    Dim nbModifiees As Long
     Dim dataParCellule As Object
+    Dim i As Long, j As Long
+    Dim nbModifiees As Long
     
     ' Vérifier qu'on est sur la bonne feuille
     Set ws = ActiveSheet
-    If InStr(ws.Name, "Fac") = 0 Then
-        MsgBox "Veuillez activer une feuille façade avant d'exécuter cette macro.", vbExclamation
-        Exit Sub
-    End If
-    
     Set wsFacade = ws
     
     ' Trouver les limites de la feuille
     lastRow = wsFacade.Cells(wsFacade.Rows.Count, 1).End(xlUp).Row
     lastCol = 26 ' Colonnes A à Z
     
-    ' ÉTAPE 1 : INDEXER TOUS LES NUMÉROS PAR VOIE DANS TOUTE LA FAÇADE
+    ' Dictionnaire pour indexer les données par cellule et voie
     Set dataParCellule = CreateObject("Scripting.Dictionary")
-    Call IndexerTousLesNumerosFacade(wsFacade, lastRow, lastCol, dataParCellule)
     
     Application.ScreenUpdating = False
+    
+    ' === PASSAGE 1 : INDEXER TOUS LES NUMÉROS PAR CELLULE ET VOIE ===
+    Call IndexerTousLesNumerosFacadeAmelioree(wsFacade, lastRow, lastCol, dataParCellule)
+    
+    ' === PASSAGE 2 : TRAITEMENT ET GÉNÉRATION DES BORNES ULTRA-SIMPLIFIÉES ===
     nbModifiees = 0
     
-    ' ÉTAPE 2 : TRAITER CHAQUE CELLULE AVEC VÉRIFICATION DES EXCLUSIONS
-    Dim i As Long, j As Long
     For i = 1 To lastRow Step 2 ' Lignes impaires (numéros PDI)
         For j = 1 To lastCol
             Dim celluleNum As Range
             Set celluleNum = wsFacade.Cells(i, j)
             
-            ' Vérifier si la cellule contient des numéros
             Dim valeurNum As String
             valeurNum = Trim(CStr(celluleNum.Value))
             
             If valeurNum <> "" And Not EstUnSymbole(valeurNum) Then
-                ' Obtenir les libellés de voies correspondants
-                Dim voies As String
-                voies = ObtenirLibelleVoiePDI(wsFacade, i, j)
+                ' Obtenir le libellé de voie correspondant
+                Dim voie As String
+                voie = ObtenirLibelleVoiePDI(wsFacade, i, j)
                 
-                If voies <> "" Then
-                    ' Traiter la case multivoie avec exclusions
+                ' Obtenir le libellé de voie complet (avec cercle blanc si multi-voies)
+                Dim voieComplete As String
+                voieComplete = Trim(CStr(wsFacade.Cells(i + 1, j).Value))
+                
+                Dim adresse As String
+                adresse = celluleNum.Address
+                
+                If voie <> "" And dataParCellule.Exists(voie) And dataParCellule(voie).Exists(adresse) Then
+                    ' Récupérer les collections de la cellule actuelle
+                    Dim collPairsCellule As Collection
+                    Dim collImpairsCellule As Collection
+                    Set collPairsCellule = dataParCellule(voie)(adresse)("pairs")
+                    Set collImpairsCellule = dataParCellule(voie)(adresse)("impairs")
+                    
+                    ' Récupérer les numéros utilisés dans d'autres cellules de la même voie
+                    Dim autresP As Object
+                    Dim autresI As Object
+                    Set autresP = CreateObject("Scripting.Dictionary")
+                    Set autresI = CreateObject("Scripting.Dictionary")
+                    
+                    ' Collecter les exclusions
+                    Dim otherAdr As Variant
+                    For Each otherAdr In dataParCellule(voie).Keys
+                        If otherAdr <> adresse Then
+                            Dim numeroObj As Object
+                            For Each numeroObj In dataParCellule(voie)(otherAdr)("pairs")
+                                autresP(numeroObj("numeroBase")) = True
+                            Next
+                            For Each numeroObj In dataParCellule(voie)(otherAdr)("impairs")
+                                autresI(numeroObj("numeroBase")) = True
+                            Next
+                        End If
+                    Next
+                    
+                    ' Générer le nouveau texte avec bornes ultra-simplifiées
                     Dim nouveauTexte As String
-                    nouveauTexte = TraiterCaseMultivoiesAvecExclusions(valeurNum, voies, dataParCellule, celluleNum.Address)
+                    nouveauTexte = GenererTexteBornesUltraSimplifiees(collPairsCellule, collImpairsCellule, _
+                                                                     autresP, autresI, valeurNum, voieComplete)
                     
                     If nouveauTexte <> "" And nouveauTexte <> celluleNum.Value Then
                         ' Conserver le formatage existant
@@ -274,16 +305,15 @@ Sub SimplificationBornesNumPDIMultivoies()
     Application.ScreenUpdating = True
     
     ' Message de confirmation
-    MsgBox "Simplification des bornes multivoies terminée." & vbCrLf & _
-           "Nombre de cellules modifiées : " & nbModifiees & vbCrLf & _
-           "Exclusions appliquées selon l'usage dans la façade.", _
-           vbInformation, "Bornes Multivoies avec Exclusions"
+    MsgBox "Simplification ultra des bornes terminée." & vbCrLf & _
+           "Nombre de cellules modifiées : " & nbModifiees, _
+           vbInformation, "Bornes Ultra-Simplifiées"
 End Sub
 
 ' =====================================================
-' SUB : Indexer tous les numéros de la façade par voie
+' SUB : Indexer tous les numéros de la façade - VERSION AMÉLIORÉE
 ' =====================================================
-Sub IndexerTousLesNumerosFacade(ws As Worksheet, lastRow As Long, lastCol As Long, dataParCellule As Object)
+Sub IndexerTousLesNumerosFacadeAmelioree(ws As Worksheet, lastRow As Long, lastCol As Long, dataParCellule As Object)
     Dim i As Long, j As Long
     
     For i = 1 To lastRow Step 2 ' Lignes impaires (numéros PDI)
@@ -315,38 +345,743 @@ Sub IndexerTousLesNumerosFacade(ws As Worksheet, lastRow As Long, lastCol As Lon
                         dataParCellule(voie).Add adresse, pairImp
                     End If
                     
-                    ' Extraire les numéros pairs et impairs
+                    ' Extraire les numéros avec extensions
                     Dim collPairs As Collection
                     Dim collImpairs As Collection
                     Set collPairs = New Collection
                     Set collImpairs = New Collection
                     
-                    Call ExtraireNumerosPDI(valeurNum, collPairs, collImpairs)
+                    Call ExtraireNumerosAvecExtensionsAmelioree(valeurNum, collPairs, collImpairs)
                     
-                    ' Ajouter aux collections (avec suppression des doublons)
-                    Dim dictPairsUniques As Object
-                    Dim dictImpairsUniques As Object
-                    Set dictPairsUniques = CreateObject("Scripting.Dictionary")
-                    Set dictImpairsUniques = CreateObject("Scripting.Dictionary")
-                    
-                    Dim num As Variant
-                    For Each num In collPairs
-                        If Not dictPairsUniques.Exists(num) Then
-                            dictPairsUniques.Add num, True
-                            dataParCellule(voie)(adresse)("pairs").Add num
-                        End If
+                    ' Ajouter aux collections
+                    Dim numeroObj As Object
+                    For Each numeroObj In collPairs
+                        dataParCellule(voie)(adresse)("pairs").Add numeroObj
                     Next
-                    For Each num In collImpairs
-                        If Not dictImpairsUniques.Exists(num) Then
-                            dictImpairsUniques.Add num, True
-                            dataParCellule(voie)(adresse)("impairs").Add num
-                        End If
+                    For Each numeroObj In collImpairs
+                        dataParCellule(voie)(adresse)("impairs").Add numeroObj
                     Next
                 End If
             End If
         Next j
     Next i
 End Sub
+
+' =====================================================
+' SUB : Extraire les numéros avec extensions - VERSION AMÉLIORÉE
+' =====================================================
+Sub ExtraireNumerosAvecExtensionsAmelioree(valeur As String, ByRef numsP As Collection, ByRef numsI As Collection)
+    On Error Resume Next
+    
+    ' Expression régulière pour capturer numéros avec extensions
+    Dim reg As Object
+    Set reg = CreateObject("VBScript.RegExp")
+    reg.Pattern = "(\d+)\s*([a-zA-Z]|bis|ter|quater)?"
+    reg.Global = True
+    reg.IgnoreCase = True
+    
+    Dim matches As Object
+    Set matches = reg.Execute(valeur)
+    
+    Dim i As Long
+    Dim numeroBase As Long
+    Dim extension As String
+    Dim numeroObj As Object
+    
+    For i = 0 To matches.Count - 1
+        numeroBase = CLng(matches(i).SubMatches(0))
+        extension = Trim(CStr(matches(i).SubMatches(1)))
+        
+        If Err.Number = 0 And numeroBase > 0 Then
+            ' Créer un objet représentant le numéro avec extension
+            Set numeroObj = CreerObjetNumeroAmelioree(numeroBase, extension, matches(i).Value)
+            
+            ' Classifier selon la parité du numéro de base
+            If numeroBase Mod 2 = 0 Then
+                numsP.Add numeroObj
+            Else
+                numsI.Add numeroObj
+            End If
+        End If
+        Err.Clear
+    Next i
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
+' FUNCTION : Créer un objet numéro amélioré
+' =====================================================
+Function CreerObjetNumeroAmelioree(numeroBase As Long, extension As String, texteOriginal As String) As Object
+    Dim obj As Object
+    Set obj = CreateObject("Scripting.Dictionary")
+    
+    obj.Add "numeroBase", numeroBase
+    obj.Add "extension", NormaliserExtensionAmelioree(extension)
+    obj.Add "texteOriginal", Trim(texteOriginal)
+    obj.Add "cleUnique", numeroBase & "|" & NormaliserExtensionAmelioree(extension)
+    obj.Add "ordreExtension", ObtenirOrdreExtension(extension)
+    
+    Set CreerObjetNumeroAmelioree = obj
+End Function
+
+' =====================================================
+' FUNCTION : Normaliser les extensions - VERSION AMÉLIORÉE
+' =====================================================
+Function NormaliserExtensionAmelioree(ext As String) As String
+    Dim extClean As String
+    extClean = UCase(Trim(ext))
+    
+    Select Case extClean
+        Case "BIS"
+            NormaliserExtensionAmelioree = "BIS"
+        Case "TER"
+            NormaliserExtensionAmelioree = "TER"
+        Case "QUATER"
+            NormaliserExtensionAmelioree = "QUATER"
+        Case ""
+            NormaliserExtensionAmelioree = ""
+        Case Else
+            ' Pour a, b, c, etc.
+            If Len(extClean) = 1 And extClean >= "A" And extClean <= "Z" Then
+                NormaliserExtensionAmelioree = extClean
+            Else
+                NormaliserExtensionAmelioree = extClean
+            End If
+    End Select
+End Function
+
+' =====================================================
+' FUNCTION : Obtenir l'ordre d'une extension pour le tri
+' =====================================================
+Function ObtenirOrdreExtension(extension As String) As Integer
+    Dim ext As String
+    ext = UCase(Trim(extension))
+    
+    Select Case ext
+        Case ""
+            ObtenirOrdreExtension = 0
+        Case "A"
+            ObtenirOrdreExtension = 1
+        Case "B"
+            ObtenirOrdreExtension = 2
+        Case "C"
+            ObtenirOrdreExtension = 3
+        Case "D"
+            ObtenirOrdreExtension = 4
+        Case "BIS"
+            ObtenirOrdreExtension = 5
+        Case "TER"
+            ObtenirOrdreExtension = 6
+        Case "QUATER"
+            ObtenirOrdreExtension = 7
+        Case Else
+            ObtenirOrdreExtension = 10 + Asc(Left(ext, 1)) - Asc("A")
+    End Select
+End Function
+' =====================================================
+' FUNCTION : Générer le texte avec bornes ultra-simplifiées
+' =====================================================
+Function GenererTexteBornesUltraSimplifiees(collPairs As Collection, collImpairs As Collection, _
+                                           autresP As Object, autresI As Object, texteOriginal As String, voieComplete As String) As String
+    
+    Dim res As String
+    res = ""
+    
+    ' Détecter et conserver le début du texte original (symboles)
+    Dim debutTexte As String
+    debutTexte = ExtraireDebutSymbole(texteOriginal)
+    
+    ' Détecter si c'est une case multi-voies
+    Dim estMultiVoies As Boolean
+    estMultiVoies = (InStr(voieComplete, ChrW(&H25CB)) > 0) Or (InStr(voieComplete, " / ") > 0)
+    
+    ' Traiter les numéros pairs
+    If collPairs.Count > 0 Then
+        Dim resPairs As String
+        resPairs = GenererBornesUltraSimplifiees(collPairs, autresP)
+        If resPairs <> "" Then
+            If estMultiVoies Then
+                res = "[" & resPairs & "]"
+            Else
+                res = resPairs
+            End If
+        End If
+    End If
+    
+    ' Traiter les numéros impairs
+    If collImpairs.Count > 0 Then
+        Dim resImpairs As String
+        resImpairs = GenererBornesUltraSimplifiees(collImpairs, autresI)
+        If resImpairs <> "" Then
+            If estMultiVoies Then
+                resImpairs = "[" & resImpairs & "]"
+            End If
+            
+            If res <> "" Then
+                res = res & " / " & resImpairs
+            Else
+                res = resImpairs
+            End If
+        End If
+    End If
+    
+    ' Conserver les observations si elles étaient présentes
+    Dim observations As String
+    observations = ExtraireObservations(texteOriginal)
+    
+    ' Construire le résultat final
+    If res <> "" Then
+        If observations <> "" Then
+            GenererTexteBornesUltraSimplifiees = debutTexte & res & vbCrLf & observations
+        Else
+            GenererTexteBornesUltraSimplifiees = debutTexte & res
+        End If
+    Else
+        GenererTexteBornesUltraSimplifiees = texteOriginal
+    End If
+End Function
+
+' =====================================================
+' FUNCTION : Générer bornes ultra-simplifiées - LOGIQUE PRINCIPALE
+' =====================================================
+Function GenererBornesUltraSimplifiees(coll As Collection, exclus As Object) As String
+    If coll.Count = 0 Then
+        GenererBornesUltraSimplifiees = ""
+        Exit Function
+    End If
+    
+    ' Étape 1 : Regrouper par numéro de base et trier
+    Dim groupesParBase As Object
+    Set groupesParBase = CreerGroupesParNumeroBase(coll)
+    
+    ' Étape 2 : Convertir en tableau trié des numéros de base
+    Dim numerosBase() As Long
+    numerosBase = ExtraireEtTrierNumerosBase(groupesParBase)
+    
+    ' Étape 3 : LOGIQUE ULTRA-SIMPLIFIÉE - Créer des bornes continues maximales
+    Dim plages As Collection
+    Set plages = CreerPlagesContinuesMaximales(numerosBase, groupesParBase, exclus)
+    
+    ' Étape 4 : Construire le résultat
+    Dim res As String
+    res = ""
+    Dim i As Integer
+    For i = 1 To plages.Count
+        If i > 1 Then res = res & ", "
+        res = res & plages(i)
+    Next i
+    
+    GenererBornesUltraSimplifiees = res
+End Function
+
+' =====================================================
+' FUNCTION : Créer des groupes par numéro de base
+' =====================================================
+Function CreerGroupesParNumeroBase(coll As Collection) As Object
+    Dim groupes As Object
+    Set groupes = CreateObject("Scripting.Dictionary")
+    
+    Dim numeroObj As Object
+    For Each numeroObj In coll
+        Dim numeroBase As String
+        numeroBase = CStr(numeroObj("numeroBase"))
+        
+        If Not groupes.Exists(numeroBase) Then
+            groupes.Add numeroBase, New Collection
+        End If
+        
+        groupes(numeroBase).Add numeroObj
+    Next
+    
+    Set CreerGroupesParNumeroBase = groupes
+End Function
+
+' =====================================================
+' FUNCTION : Extraire et trier les numéros de base
+' =====================================================
+Function ExtraireEtTrierNumerosBase(groupes As Object) As Long()
+    Dim arr() As Long
+    ReDim arr(groupes.Count - 1)
+    
+    Dim i As Integer
+    i = 0
+    Dim cle As Variant
+    For Each cle In groupes.Keys
+        arr(i) = CLng(cle)
+        i = i + 1
+    Next
+    
+    ' Tri simple
+    Call TrierTableauLong(arr)
+    
+    ExtraireEtTrierNumerosBase = arr
+End Function
+' =====================================================
+' FUNCTION : Créer des plages continues maximales - LOGIQUE CLEF
+' =====================================================
+Function CreerPlagesContinuesMaximales(numerosBase() As Long, groupes As Object, exclus As Object) As Collection
+    Dim plages As New Collection
+    
+    If UBound(numerosBase) < 0 Then
+        Set CreerPlagesContinuesMaximales = plages
+        Exit Function
+    End If
+    
+    Dim debut As Long, fin As Long
+    debut = numerosBase(0)
+    fin = numerosBase(0)
+    
+    Dim i As Integer
+    For i = 1 To UBound(numerosBase)
+        Dim actuel As Long
+        actuel = numerosBase(i)
+        
+        ' LOGIQUE ULTRA-SIMPLIFIÉE : Vérifier si on peut continuer la borne
+        If PeutEtendreborne(fin, actuel, exclus) Then
+            fin = actuel
+        Else
+            ' Terminer la plage actuelle
+            Dim plageTexte As String
+            plageTexte = FormaterPlage(debut, fin, groupes)
+            plages.Add plageTexte
+            
+            debut = actuel
+            fin = actuel
+        End If
+    Next i
+    
+    ' Ajouter la dernière plage
+    plageTexte = FormaterPlage(debut, fin, groupes)
+    plages.Add plageTexte
+    
+    Set CreerPlagesContinuesMaximales = plages
+End Function
+
+' =====================================================
+' FUNCTION : Vérifier si on peut étendre une borne
+' =====================================================
+Function PeutEtendreborne(fin As Long, actuel As Long, exclus As Object) As Boolean
+    ' Même parité requise
+    If actuel Mod 2 <> fin Mod 2 Then
+        PeutEtendreborne = False
+        Exit Function
+    End If
+    
+    ' Vérifier s'il y a des exclusions entre fin et actuel
+    Dim numeroTest As Long
+    For numeroTest = fin + 2 To actuel - 2 Step 2 ' Même parité
+        If exclus.Exists(numeroTest) Then
+            PeutEtendreborne = False
+            Exit Function
+        End If
+    Next numeroTest
+    
+    PeutEtendreborne = True
+End Function
+
+' =====================================================
+' FUNCTION : Formater une plage avec extensions intelligentes
+' =====================================================
+Function FormaterPlage(debut As Long, fin As Long, groupes As Object) As String
+    If debut = fin Then
+        ' Une seule valeur - prendre la plus haute extension disponible
+        FormaterPlage = ObtenirMeilleureRepresentation(debut, groupes)
+    Else
+        ' Plage - début sans extension, fin avec la plus haute extension
+        Dim debutTexte As String
+        Dim finTexte As String
+        
+        debutTexte = CStr(debut) ' Toujours sans extension pour le début
+        finTexte = ObtenirMeilleureRepresentation(fin, groupes) ' Plus haute extension pour la fin
+        
+        FormaterPlage = debutTexte & " à " & finTexte
+    End If
+End Function
+
+' =====================================================
+' FUNCTION : Obtenir la meilleure représentation d'un numéro
+' =====================================================
+Function ObtenirMeilleureRepresentation(numeroBase As Long, groupes As Object) As String
+    Dim numeroBaseStr As String
+    numeroBaseStr = CStr(numeroBase)
+    
+    If Not groupes.Exists(numeroBaseStr) Then
+        ObtenirMeilleureRepresentation = numeroBaseStr
+        Exit Function
+    End If
+    
+    Dim groupe As Collection
+    Set groupe = groupes(numeroBaseStr)
+    
+    ' Trouver l'extension la plus élevée dans ce groupe
+    Dim meilleureExtension As String
+    Dim meilleurOrdre As Integer
+    meilleureExtension = ""
+    meilleurOrdre = -1
+    
+    Dim numeroObj As Object
+    For Each numeroObj In groupe
+        Dim ordreActuel As Integer
+        ordreActuel = numeroObj("ordreExtension")
+        
+        If ordreActuel > meilleurOrdre Then
+            meilleurOrdre = ordreActuel
+            meilleureExtension = numeroObj("extension")
+        End If
+    Next
+    
+    ' Construire la représentation
+    If meilleureExtension = "" Then
+        ObtenirMeilleureRepresentation = numeroBaseStr
+    Else
+        ObtenirMeilleureRepresentation = numeroBaseStr & meilleureExtension
+    End If
+End Function
+
+' =====================================================
+' SUB : Trier un tableau de Long
+' =====================================================
+Sub TrierTableauLong(arr() As Long)
+    Dim i As Long, j As Long, temp As Long
+    For i = LBound(arr) To UBound(arr) - 1
+        For j = i + 1 To UBound(arr)
+            If arr(i) > arr(j) Then
+                temp = arr(i)
+                arr(i) = arr(j)
+                arr(j) = temp
+            End If
+        Next j
+    Next i
+End Sub
+
+
+
+' =====================================================
+' FUNCTION : Générer bornes avec extensions - VERSION AVEC CONTINUITÉ INTELLIGENTE
+' =====================================================
+Function GenererBornesAvecExtensions(coll As Collection, exclus As Object) As String
+    ' Étape 1 : Regrouper par numéro de base
+    Dim groupes As Object
+    Set groupes = CreateObject("Scripting.Dictionary")
+    
+    Dim numeroObj As Object
+    Dim numeroBase As String
+    
+    For Each numeroObj In coll
+        numeroBase = CStr(numeroObj("numeroBase"))
+        
+        If Not groupes.Exists(numeroBase) Then
+            groupes.Add numeroBase, New Collection
+        End If
+        
+        groupes(numeroBase).Add numeroObj
+    Next
+    
+    ' Étape 2 : Déterminer l'affichage pour chaque groupe
+    Dim affichageParBase As Object
+    Set affichageParBase = CreateObject("Scripting.Dictionary")
+    
+    Dim cle As Variant
+    Dim groupe As Collection
+    
+    For Each cle In groupes.Keys
+        Set groupe = groupes(cle)
+        affichageParBase.Add cle, DeterminerAffichageGroupe(groupe)
+    Next
+    
+    ' Étape 3 : Convertir en tableau et trier par numéro de base
+    Dim arr() As Long
+    ReDim arr(groupes.Count - 1)
+    Dim i As Long
+    i = 0
+    
+    For Each cle In groupes.Keys
+        arr(i) = CLng(cle)
+        i = i + 1
+    Next
+    
+    ' Tri des numéros de base
+    Call TrierTableau(arr)
+    
+    ' Étape 4 : NOUVELLE LOGIQUE - Vérifier la possibilité d'une borne continue globale
+    If UBound(arr) > 0 Then ' Au moins 2 éléments
+        Dim minNum As Long, maxNum As Long
+        minNum = arr(0)
+        maxNum = arr(UBound(arr))
+        
+        ' Vérifier si on peut créer une borne continue du min au max
+        If PeutCreerBorneContinue(arr, minNum, maxNum, exclus) Then
+            ' Créer une seule borne continue
+            If minNum = maxNum Then
+                GenererBornesAvecExtensions = affichageParBase(CStr(minNum))
+            Else
+                GenererBornesAvecExtensions = affichageParBase(CStr(minNum)) & " à " & affichageParBase(CStr(maxNum))
+            End If
+            Exit Function
+        End If
+    End If
+    
+    ' Étape 5 : Si borne continue impossible, utiliser la logique classique avec ruptures
+    Dim plages As New Collection
+    Dim debut As Long, fin As Long
+    debut = arr(0)
+    fin = arr(0)
+    
+    For i = 1 To UBound(arr)
+        Dim actuel As Long
+        actuel = arr(i)
+        
+        ' Vérifier s'il y a des exclusions entre fin et actuel
+        Dim ok As Boolean
+        ok = True
+        
+        Dim k As Long
+        For k = fin + 1 To actuel - 1
+            If exclus.Exists(k) Then
+                ok = False
+                Exit For
+            End If
+        Next k
+        
+        If ok And (actuel = fin + 1) Then
+            ' Continuité : étendre la plage
+            fin = actuel
+        Else
+            ' Rupture : terminer la plage actuelle
+            If debut = fin Then
+                plages.Add affichageParBase(CStr(debut))
+            Else
+                plages.Add affichageParBase(CStr(debut)) & " à " & affichageParBase(CStr(fin))
+            End If
+            debut = actuel
+            fin = actuel
+        End If
+    Next i
+    
+    ' Ajouter la dernière plage
+    If debut = fin Then
+        plages.Add affichageParBase(CStr(debut))
+    Else
+        plages.Add affichageParBase(CStr(debut)) & " à " & affichageParBase(CStr(fin))
+    End If
+    
+    ' Étape 6 : Construire le résultat
+    Dim res As String
+    res = ""
+    For i = 1 To plages.Count
+        If i > 1 Then res = res & ", "
+        res = res & plages(i)
+    Next i
+    
+    GenererBornesAvecExtensions = res
+End Function
+
+' =====================================================
+' FUNCTION : Vérifier si on peut créer une borne continue
+' =====================================================
+Function PeutCreerBorneContinue(numerosPresents() As Long, minNum As Long, maxNum As Long, exclus As Object) As Boolean
+    ' Créer un dictionnaire des numéros présents dans la case actuelle
+    Dim presentsDict As Object
+    Set presentsDict = CreateObject("Scripting.Dictionary")
+    
+    Dim i As Long
+    For i = 0 To UBound(numerosPresents)
+        presentsDict(numerosPresents(i)) = True
+    Next i
+    
+    ' Vérifier tous les numéros entre min et max (même parité)
+    Dim num As Long
+    Dim parite As Integer
+    parite = minNum Mod 2 ' 0 pour pair, 1 pour impair
+    
+    For num = minNum To maxNum
+        ' Ne vérifier que les numéros de même parité
+        If num Mod 2 = parite Then
+            ' Si ce numéro n'est pas dans la case actuelle
+            If Not presentsDict.Exists(num) Then
+                ' Vérifier s'il existe dans d'autres cases (exclusions)
+                If exclus.Exists(num) Then
+                    ' Ce numéro manquant existe ailleurs ? impossible de créer une borne continue
+                    PeutCreerBorneContinue = False
+                    Exit Function
+                End If
+            End If
+        End If
+    Next num
+    
+    ' Si on arrive ici, aucun numéro manquant n'existe ailleurs
+    PeutCreerBorneContinue = True
+End Function
+
+
+' =====================================================
+' FUNCTION : Extraire le début symbolique du texte
+' =====================================================
+Function ExtraireDebutSymbole(texte As String) As String
+    Dim i As Integer
+    For i = 1 To Len(texte)
+        If IsNumeric(Mid(texte, i, 1)) Then
+            ExtraireDebutSymbole = Left(texte, i - 1)
+            Exit Function
+        End If
+    Next i
+    ExtraireDebutSymbole = ""
+End Function
+
+' =====================================================
+' SUB : Trier un tableau d'entiers longs
+' =====================================================
+Sub TrierTableau(arr() As Long)
+    Dim i As Long, j As Long, temp As Long
+    For i = LBound(arr) To UBound(arr) - 1
+        For j = i + 1 To UBound(arr)
+            If arr(i) > arr(j) Then
+                temp = arr(i)
+                arr(i) = arr(j)
+                arr(j) = temp
+            End If
+        Next j
+    Next i
+End Sub
+
+' =====================================================
+' MACRO DE TEST : Tester la continuité intelligente
+' =====================================================
+Sub TesterContinuiteIntelligente()
+    Dim msg As String
+    msg = "TESTS DE LA CONTINUITÉ INTELLIGENTE" & vbCrLf & vbCrLf
+    
+    ' Simuler des tests avec différents cas
+    msg = msg & "Cas 1 : Numéros [1,3,9,11,15] sans conflit" & vbCrLf
+    msg = msg & "  ? Numéros manquants (5,7,13) non présents ailleurs" & vbCrLf
+    msg = msg & "  ? Résultat attendu : '1 à 15'" & vbCrLf & vbCrLf
+    
+    msg = msg & "Cas 2 : Numéros [1,3,9,11,15] avec conflit" & vbCrLf
+    msg = msg & "  ? Numéro manquant 7 présent dans une autre case" & vbCrLf
+    msg = msg & "  ? Résultat attendu : '1, 3', '9, 11', '15' (bornes séparées)" & vbCrLf & vbCrLf
+    
+    msg = msg & "Cas 3 : Numéros [2,6,10,14] sans conflit" & vbCrLf
+    msg = msg & "  ? Numéros manquants pairs (4,8,12) non présents ailleurs" & vbCrLf
+    msg = msg & "  ? Résultat attendu : '2 à 14' (pairs seulement)" & vbCrLf & vbCrLf
+    
+    msg = msg & "LOGIQUE APPLIQUÉE :" & vbCrLf
+    msg = msg & "1. Identifier min et max des numéros présents" & vbCrLf
+    msg = msg & "2. Vérifier tous les numéros manquants de même parité" & vbCrLf
+    msg = msg & "3. Si aucun numéro manquant n'existe ailleurs ? borne continue" & vbCrLf
+    msg = msg & "4. Sinon ? bornes avec ruptures (logique classique)" & vbCrLf & vbCrLf
+    
+    msg = msg & "La macro applique maintenant cette logique automatiquement !"
+    
+    MsgBox msg, vbInformation, "Test Continuité Intelligente"
+End Sub
+
+
+
+' =====================================================
+' FUNCTION : Analyser une collection pour la continuité
+' =====================================================
+Function AnalyserCollectionContinuite(coll As Collection) As String
+    If coll.Count = 0 Then
+        AnalyserCollectionContinuite = "Aucun numéro"
+        Exit Function
+    End If
+    
+    ' Extraire les numéros de base
+    Dim arr() As Long
+    ReDim arr(coll.Count - 1)
+    Dim i As Long
+    
+    For i = 1 To coll.Count
+        arr(i - 1) = coll(i)("numeroBase")
+    Next i
+    
+    ' Trier
+    Call TrierTableau(arr)
+    
+    Dim msg As String
+    Dim minNum As Long, maxNum As Long
+    minNum = arr(0)
+    maxNum = arr(UBound(arr))
+    
+    msg = "Numéros présents : "
+    For i = 0 To UBound(arr)
+        If i > 0 Then msg = msg & ", "
+        msg = msg & arr(i)
+    Next i
+    msg = msg & vbCrLf
+    
+    msg = msg & "Plage : " & minNum & " à " & maxNum & vbCrLf
+    
+    ' Identifier les numéros manquants de même parité
+    Dim manquants As String
+    manquants = ""
+    Dim parite As Integer
+    parite = minNum Mod 2
+    
+    Dim presentDict As Object
+    Set presentDict = CreateObject("Scripting.Dictionary")
+    For i = 0 To UBound(arr)
+        presentDict(arr(i)) = True
+    Next i
+    
+    Dim num As Long
+    For num = minNum To maxNum
+        If num Mod 2 = parite And Not presentDict.Exists(num) Then
+            If manquants <> "" Then manquants = manquants & ", "
+            manquants = manquants & num
+        End If
+    Next num
+    
+    If manquants = "" Then
+        msg = msg & "Aucun numéro manquant ? Borne continue possible : " & minNum & " à " & maxNum
+    Else
+        msg = msg & "Numéros manquants : " & manquants & vbCrLf
+        msg = msg & "? Borne continue SI ces numéros ne sont pas ailleurs"
+    End If
+    
+    AnalyserCollectionContinuite = msg
+End Function
+
+' =====================================================
+' FUNCTION : Déterminer l'affichage optimal pour un groupe
+' =====================================================
+Function DeterminerAffichageGroupe(groupe As Collection) As String
+    ' Si le groupe ne contient qu'un élément, utiliser son texte original
+    If groupe.Count = 1 Then
+        DeterminerAffichageGroupe = groupe(1)("texteOriginal")
+        Exit Function
+    End If
+    
+    ' Si le groupe contient plusieurs éléments, analyser
+    Dim aUneSansExtension As Boolean
+    Dim numeroBase As String
+    aUneSansExtension = False
+    numeroBase = ""
+    
+    Dim numeroObj As Object
+    For Each numeroObj In groupe
+        If numeroBase = "" Then numeroBase = CStr(numeroObj("numeroBase"))
+        
+        If numeroObj("extension") = "" Then
+            aUneSansExtension = True
+            Exit For
+        End If
+    Next
+    
+    ' Si on a le numéro de base sans extension parmi les éléments,
+    ' utiliser le numéro de base seul
+    If aUneSansExtension Then
+        DeterminerAffichageGroupe = numeroBase
+    Else
+        ' Sinon, utiliser la première extension trouvée (arbitraire)
+        DeterminerAffichageGroupe = groupe(1)("texteOriginal")
+    End If
+End Function
+
+
+
+
 
 ' =====================================================
 ' FUNCTION : Traiter une case multivoies avec exclusions
@@ -933,66 +1668,7 @@ Sub SimplifierBornesFromButtonMultivoies()
               vbQuestion + vbYesNo, "Simplifier Bornes Multivoies") = vbYes Then
         
         ' Exécuter la macro de simplification multivoies
-        Call SimplificationBornesNumPDIMultivoies
+        Call SimplificationBornesNumPDI
     End If
 End Sub
 
-' =====================================================
-' MACRO DE TEST : Analyser une cellule multivoies (AVEC EXCLUSIONS)
-' =====================================================
-Sub TesterCelluleMultivoiesAvecExclusions()
-    On Error Resume Next
-    
-    Dim cellule As Range
-    Set cellule = Selection.Cells(1, 1)
-    
-    Dim valeurNum As String
-    Dim valeurVoie As String
-    
-    valeurNum = CStr(cellule.Value)
-    
-    ' Obtenir la voie correspondante
-    If cellule.Row Mod 2 = 1 Then ' Ligne de numéros
-        valeurVoie = CStr(ActiveSheet.Cells(cellule.Row + 1, cellule.Column).Value)
-    Else ' Ligne de voies
-        valeurVoie = valeurNum
-        valeurNum = CStr(ActiveSheet.Cells(cellule.Row - 1, cellule.Column).Value)
-    End If
-    
-    ' Indexer toute la façade pour les exclusions
-    Dim dataParCellule As Object
-    Set dataParCellule = CreateObject("Scripting.Dictionary")
-    Call IndexerTousLesNumerosFacade(ActiveSheet, ActiveSheet.UsedRange.Rows.Count, 26, dataParCellule)
-    
-    Dim msg As String
-    msg = "TEST CELLULE MULTIVOIES (AVEC EXCLUSIONS)" & vbCrLf & vbCrLf
-    msg = msg & "Adresse : " & cellule.Address & vbCrLf
-    msg = msg & "Numéros : " & valeurNum & vbCrLf
-    msg = msg & "Voies : " & valeurVoie & vbCrLf & vbCrLf
-    
-    ' Test de traitement avec exclusions
-    Dim resultat As String
-    resultat = TraiterCaseMultivoiesAvecExclusions(valeurNum, valeurVoie, dataParCellule, cellule.Address)
-    
-    msg = msg & "RÉSULTAT APRÈS TRAITEMENT :" & vbCrLf
-    msg = msg & resultat & vbCrLf & vbCrLf
-    
-    ' Comparer avec l'original
-    If resultat <> valeurNum Then
-        msg = msg & "✅ La cellule sera modifiée" & vbCrLf
-        msg = msg & "📋 Doublons supprimés + exclusions appliquées"
-    Else
-        msg = msg & "ℹ️ Aucune modification nécessaire"
-    End If
-    
-    ' Ajouter un exemple pratique avec exclusions
-    msg = msg & vbCrLf & vbCrLf & "💡 LOGIQUE D'EXCLUSIONS :" & vbCrLf
-    msg = msg & "• Si vous avez : 2,8,10,12 dans cette case" & vbCrLf
-    msg = msg & "• Et que 4,6 ne sont PAS utilisés ailleurs" & vbCrLf
-    msg = msg & "• Alors résultat : '2 à 12' (borne continue)" & vbCrLf
-    msg = msg & "• Sinon : '2,8 à 12' (borne avec gap)"
-    
-    MsgBox msg, vbInformation, "Test Multivoies - Avec Exclusions"
-    
-    On Error GoTo 0
-End Sub
