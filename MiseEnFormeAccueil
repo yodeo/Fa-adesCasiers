@@ -137,10 +137,10 @@ Sub TestCmLibres()
     MsgBox "Test sur la feuille: " & ws.Name & vbCrLf & _
            "EstFeuilleSource: " & EstFeuilleSource(ws), vbInformation
     
-    ' Forcer l'appel direct de la fonction
+    ' Forcer l'appel direct de la nouvelle fonction
     If EstFeuilleSource(ws) Then
-        Call AjouterFormulesTempsReel(ws)
-        MsgBox "AjouterFormulesTempsReel terminé", vbInformation
+        Call CalculerCmLibresDirectement(ws)
+        MsgBox "CalculerCmLibresDirectement terminé", vbInformation
     Else
         MsgBox "Cette feuille n'est pas reconnue comme feuille source", vbExclamation
     End If
@@ -153,30 +153,56 @@ End Sub
 Sub TestCmLibresSimple()
     Dim ws As Worksheet
     Dim i As Long
-    Dim formule As String
+    Dim codeCaisson As String
+    Dim prefixeCaisson As String
+    Dim largeurActuelle As Double
+    Dim totalCaisson As Double
+    Dim derniereLigne As Long
+    Dim j As Long
     
     Set ws = ActiveSheet
     
     ' Déprotéger complètement
     ws.Unprotect
     
-    MsgBox "Test simple sur " & ws.Name & " - Feuille déprotégée", vbInformation
+    MsgBox "Test calcul direct sur " & ws.Name & " - Feuille déprotégée", vbInformation
     
     ' Tester sur une ligne spécifique
     i = 7
     If ws.Cells(i, 8).Value <> "" Then
-        formule = "=SI(H" & i & "<>"""";" & _
-                 "(26-SOMME.SI.ENS(G:G;H:H;""=""&GAUCHE(H" & i & ";2)&""*"")) & "" cm libres"";"""")"
+        codeCaisson = Trim(CStr(ws.Cells(i, 8).Value))
+        prefixeCaisson = Left(codeCaisson, 2)
+        largeurActuelle = Val(ws.Cells(i, 7).Value)
+        derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
         
-        MsgBox "Test ligne " & i & ":" & vbCrLf & _
-               "Code: " & ws.Cells(i, 8).Value & vbCrLf & _
-               "Avant formule: " & ws.Cells(i, 23).Value, vbInformation
+        ' Calculer le total pour ce caisson
+        totalCaisson = 0
+        For j = 7 To derniereLigne
+            If Len(Trim(CStr(ws.Cells(j, 8).Value))) >= 2 Then
+                If Left(Trim(CStr(ws.Cells(j, 8).Value)), 2) = prefixeCaisson Then
+                    totalCaisson = totalCaisson + Val(ws.Cells(j, 7).Value)
+                End If
+            End If
+        Next j
         
-        ws.Cells(i, 23).Formula = formule
+        Dim espaceLibre As Double
+        espaceLibre = 26 - totalCaisson
         
-        MsgBox "Après formule:" & vbCrLf & _
-               "Formule: " & ws.Cells(i, 23).Formula & vbCrLf & _
-               "Valeur: " & ws.Cells(i, 23).Value, vbInformation
+        MsgBox "Test calcul ligne " & i & ":" & vbCrLf & _
+               "Code: " & codeCaisson & vbCrLf & _
+               "Préfixe: " & prefixeCaisson & vbCrLf & _
+               "Largeur ligne: " & largeurActuelle & vbCrLf & _
+               "Total caisson: " & totalCaisson & vbCrLf & _
+               "Espace libre: " & espaceLibre, vbInformation
+        
+        ' Insérer directement la valeur
+        If espaceLibre > 0 Then
+            ws.Cells(i, 23).Value = espaceLibre & " cm libres"
+        Else
+            ws.Cells(i, 23).Value = "0 cm libres"
+        End If
+        
+        MsgBox "Valeur insérée en W" & i & ": " & ws.Cells(i, 23).Value, vbInformation
     Else
         MsgBox "Pas de code caisson en ligne 7", vbExclamation
     End If
