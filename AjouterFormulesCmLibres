@@ -1,0 +1,71 @@
+' =====================================================
+' FONCTION : Ajouter formules automatiques pour cm libres
+' =====================================================
+
+Sub AjouterFormulesCmLibres(ws As Worksheet)
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim formule As String
+    
+    On Error Resume Next
+    
+    ' Trouver la dernière ligne avec des données
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Ajouter un titre en W6
+    ws.Range("W6").Value = "CM LIBRES"
+    ws.Range("W6").Font.Bold = True
+    ws.Range("W6").HorizontalAlignment = xlCenter
+    
+    ' Ajouter les formules pour chaque ligne à partir de la ligne 7
+    For i = 7 To derniereLigne
+        If ws.Cells(i, 8).Value <> "" Then ' Si il y a un code caisson
+            ' Formule pour calculer si c'est la dernière ligne du caisson
+            ' et afficher les cm libres seulement sur cette ligne
+            formule = "=IF(AND(H" & i & "<>"""",LEFT(H" & i & ",2)<>LEFT(H" & (i + 1) & ",2))," & _
+                     "MAX(0,26-SUMIFS(G:G,H:H,""=""&LEFT(H" & i & ",2)&""*"")) & "" cm libres"","""")"
+            
+            ws.Cells(i, 23).Formula = formule ' Colonne W = 23
+        End If
+    Next i
+    
+    ' Ajouter une formule pour colorer W6 si il y a des cm libres
+    ' (Sera fait par mise en forme conditionnelle)
+    Call AjouterMiseEnFormeConditionnelleW6(ws)
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
+' FONCTION : Ajouter mise en forme conditionnelle pour W6
+' =====================================================
+
+Sub AjouterMiseEnFormeConditionnelleW6(ws As Worksheet)
+    Dim derniereLigne As Long
+    Dim plageW As Range
+    Dim condition As FormatCondition
+    
+    On Error Resume Next
+    
+    ' Trouver la dernière ligne avec des données
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Définir la plage W7 à la dernière ligne
+    Set plageW = ws.Range("W7:W" & derniereLigne)
+    
+    ' Supprimer les conditions existantes sur W6
+    ws.Range("W6").FormatConditions.Delete
+    
+    ' Ajouter une condition pour colorer W6 en rouge si des cm libres existent
+    Set condition = ws.Range("W6").FormatConditions.Add( _
+        Type:=xlExpression, _
+        Formula1:="=SUMPRODUCT(--(ISNUMBER(FIND(""cm libres"",W7:W" & derniereLigne & "))))>0")
+    
+    ' Appliquer le format (fond rouge, texte blanc)
+    With condition
+        .Interior.Color = RGB(255, 0, 0) ' Rouge
+        .Font.Color = RGB(255, 255, 255) ' Blanc
+    End With
+    
+    On Error GoTo 0
+End Sub
