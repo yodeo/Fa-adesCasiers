@@ -32,7 +32,7 @@ Sub GenererFacadePDI()
     
     Dim wsSource As Worksheet, wsDest As Worksheet
     Dim derniereLigne As Long, i As Long
-    Dim numPDI As String, Observations As String, nomVoie As String
+    Dim numPDI As String, observations As String, nomVoie As String
     Dim largeurPDI As Integer
     Dim ligneActuelle As Long, colonneActuelle As Long
     Dim rngHaut As Range, rngBas As Range, rngCaisson As Range
@@ -151,7 +151,7 @@ Sub GenererFacadePDI()
         ' Lire les données de la ligne actuelle depuis la feuille source
         numPDI = CStr(wsSource.Cells(i, 1).Text)
         nomVoie = CStr(wsSource.Cells(i, 2).Text)
-        Observations = CStr(wsSource.Cells(i, 4).Text)
+        observations = CStr(wsSource.Cells(i, 4).Text)
         valeurLargeur = wsSource.Cells(i, 7).Value
         largeurPDI = ConvertirEnEntier(valeurLargeur, 0)
         
@@ -170,7 +170,7 @@ Sub GenererFacadePDI()
             
             ' Initialiser l'accumulation pour ce bloc
             numAccumule = numPDI
-            obsAccumulees = Observations
+            obsAccumulees = observations
             voieAccumulee = nomVoie
             largeurBloc = largeurPDI
             
@@ -306,7 +306,9 @@ Sub GenererFacadePDI()
                 End If
             Next k
             
-            ' Créer la cellule du haut (N° + Observations) - AVEC FORMATAGE DIFFÉRENCIÉ ET HACHURES
+               
+                '******************************************************************************************************************
+                ' Créer la cellule du haut (N° + Observations) - AVEC FORMATAGE DIFFÉRENCIÉ ET TRIANGLE CONDITIONNEL
             Set rngHaut = wsDest.Range(wsDest.Cells(ligneActuelle, colonneActuelle), _
                                         wsDest.Cells(ligneActuelle, colonneActuelle + largeurBloc - 1))
             rngHaut.Merge
@@ -314,24 +316,44 @@ Sub GenererFacadePDI()
             With rngHaut
                 .NumberFormat = "@"
                 
-                ' Construire le texte avec symbole si nécessaire (SANS cercle blanc)
+                ' Construire le texte avec symbole si nécessaire - NOUVELLE LOGIQUE CONDITIONNELLE
                 Dim texteComplet As String
                 Dim symbole As String
                 symbole = ""
                 
-                ' Ajouter un symbole pour Bat P ou Bat C SEULEMENT
-                If typePDI = "Bat P" Then
-                    symbole = ChrW(&H25B2) & " " ' Triangle Unicode
-                ElseIf typePDI = "Bat C" Then
-                    symbole = ChrW(&H25B2) & " " ' Triangle Unicode
+                ' NOUVELLE CONDITION : Vérifier si TOUS les PDI du bloc sont batterie/rattachés
+                Dim afficherTriangle As Boolean
+                afficherTriangle = False
+                
+                ' Vérifier d'abord s'il y a au moins un PDI batterie dans le bloc
+                Dim aUnePDIBatterie As Boolean
+                aUnePDIBatterie = False
+                
+                For k = ligneSourceActuelle To j - 1
+                    Dim typeVerif As String
+                    typeVerif = UCase(Trim(CStr(wsSource.Cells(k, 6).Text)))
+                    If typeVerif = "BAT C" Or typeVerif = "BAT P" Then
+                        aUnePDIBatterie = True
+                        Exit For
+                    End If
+                Next k
+                
+                ' Si on a au moins un PDI batterie, vérifier que TOUS sont batterie/rattachés
+                If aUnePDIBatterie Then
+                    afficherTriangle = TousLesPDISontBatterieOuRattaches(wsSource, ligneSourceActuelle, j - 1)
+                End If
+                
+                ' Ajouter le triangle SEULEMENT si la condition est remplie
+                If afficherTriangle Then
+                    symbole = ChrW(&H25B2) & " " ' Triangle Unicode + espace
                 End If
                 
                 ' Construction du texte avec formatage différencié et saut de ligne
                 If obsAccumulees <> "" Then
-                    ' Format : [Symbole] Numéro + SAUT DE LIGNE + Observations
+                    ' Format : [Symbole conditionnel] Numéro + SAUT DE LIGNE + Observations
                     texteComplet = symbole & numAccumule & vbCrLf & obsAccumulees
                 Else
-                    ' Format : [Symbole] Numéro seul
+                    ' Format : [Symbole conditionnel] Numéro seul
                     texteComplet = symbole & numAccumule
                 End If
                 
@@ -344,35 +366,15 @@ Sub GenererFacadePDI()
                 .Borders.LineStyle = xlContinuous
                 .Borders.Weight = xlThin
                 
-                ' NOUVEAU : Appliquer les hachures pour les cases multivoies
-                If estMultiVoies Then
-                    ' Appliquer le motif de hachures pour multivoies
-                    .Interior.Pattern = xlPatternLightDown
-                    .Interior.PatternColor = RGB(100, 100, 100)  ' Couleur des hachures (gris foncé)
-                    ' Priorité : rouge si dépasse > hachures multivoies > jaune si colonne V = "B" > pas de couleur
-                    If fondRouge Then
-                        .Interior.Color = RGB(255, 0, 0) ' Rouge (priorité 1)
-                        .Font.Color = RGB(255, 255, 255) ' Texte blanc sur fond rouge
-                    ElseIf valeurColV = "B" Then
-                        .Interior.Color = RGB(255, 255, 0) ' Jaune (priorité 2)
-                        .Font.Color = RGB(0, 0, 0) ' Texte noir sur fond jaune
-                    Else
-                        .Interior.Color = RGB(255, 255, 255) ' Fond blanc avec hachures
-                        .Font.Color = RGB(0, 0, 0) ' Texte noir
-                    End If
+                ' Priorité : rouge si dépasse > jaune si colonne V = "B" > pas de couleur
+                If fondRouge Then
+                    .Interior.Color = RGB(255, 0, 0) ' Rouge (priorité 1)
+                    .Font.Color = RGB(255, 255, 255) ' Texte blanc sur fond rouge
+                ElseIf valeurColV = "B" Then
+                    .Interior.Color = RGB(255, 255, 0) ' Jaune (priorité 2)
+                    .Font.Color = RGB(0, 0, 0) ' Texte noir sur fond jaune
                 Else
-                    ' Pas de hachures pour les voies simples
-                    .Interior.Pattern = xlNone
-                    ' Priorité : rouge si dépasse > jaune si colonne V = "B" > pas de couleur
-                    If fondRouge Then
-                        .Interior.Color = RGB(255, 0, 0) ' Rouge (priorité 1)
-                        .Font.Color = RGB(255, 255, 255) ' Texte blanc sur fond rouge
-                    ElseIf valeurColV = "B" Then
-                        .Interior.Color = RGB(255, 255, 0) ' Jaune (priorité 2)
-                        .Font.Color = RGB(0, 0, 0) ' Texte noir sur fond jaune
-                    Else
-                        .Interior.pattern = xlNone ' Pas de couleur
-                    End If
+                    .Interior.Pattern = xlNone ' Pas de couleur
                 End If
             End With
             
@@ -485,6 +487,8 @@ Sub GenererFacadePDI()
         End If
     End If
     
+    Call BasculerHachuresMultivoies
+    
     ' METTRE À JOUR LA COLONNE H DE LA FEUILLE SOURCE AVEC LES CODES CALCULÉS ET COLORER LES LIGNES HORS CAPACITÉ
     Call MettreAJourColonneHAvecCouleur(wsSource, dictMiseAJourCodes, dictLignesHorsCapacite)
     
@@ -559,7 +563,7 @@ Sub AppliquerHachuresMultivoies()
     
     Application.ScreenUpdating = False
     
-    lastRow = ws.UsedRange.Rows.Count
+    lastRow = ws.usedRange.Rows.Count
     lastCol = 26 ' Colonnes A à Z
     compteurHachures = 0
     
@@ -617,7 +621,7 @@ Sub SupprimerHachuresMultivoies()
     
     Application.ScreenUpdating = False
     
-    lastRow = ws.UsedRange.Rows.Count
+    lastRow = ws.usedRange.Rows.Count
     lastCol = 26 ' Colonnes A à Z
     compteurSupprimees = 0
     
@@ -662,7 +666,7 @@ Sub BasculerHachuresMultivoies()
     
     ' Vérifier s'il y a déjà des hachures
     aDesHachures = False
-    For Each cellule In ws.UsedRange
+    For Each cellule In ws.usedRange
         If cellule.Interior.Pattern = xlPatternLightDown Then
             aDesHachures = True
             Exit For
@@ -677,73 +681,7 @@ Sub BasculerHachuresMultivoies()
     End If
 End Sub
 
-' =====================================================
-' MODIFICATION DES BOUTONS POUR INCLURE LES HACHURES
-' =====================================================
-Sub AjouterBoutonsSeulement(wsFacade As Worksheet)
-    Dim btn As Object
-    Dim positionX As Double
-    Dim espacement As Double
-    Dim largeurBouton As Double
-    Dim hauteurBouton As Double
-    
-    ' Supprimer les boutons existants s'ils existent
-    Dim shp As Shape
-    For Each shp In wsFacade.Shapes
-        If shp.Type = msoFormControl Then shp.Delete
-    Next shp
-    
-    ' Configuration de la disposition verticale en colonne AC
-    positionX = wsFacade.Columns("AC").Left + 2
-    largeurBouton = wsFacade.Columns("AC").Width + 80
-    hauteurBouton = 25
-    espacement = 20
-    
-    ' BOUTON 1 : Optimiser Affichage
-    Set btn = wsFacade.Buttons.Add(positionX, 10, largeurBouton, hauteurBouton)
-    With btn
-        .Characters.Text = "1. Supprimer contenu voies uniques"
-        .OnAction = "OptimiserAffichageFromButton"
-        .Font.Bold = True
-        .Font.Size = 9
-    End With
-    
-    ' BOUTON 2 : Insérer Images
-    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 2), largeurBouton, hauteurBouton)
-    With btn
-        .Characters.Text = "2. Insérer Images voies uniques"
-        .OnAction = "InsererImagesFromButton"
-        .Font.Bold = True
-        .Font.Size = 9
-    End With
-    
-    ' BOUTON 3 : Simplifier Bornes
-    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 4), largeurBouton, hauteurBouton)
-    With btn
-        .Characters.Text = "3. Simplifier Bornes"
-        .OnAction = "SimplifierBornesFromButton"
-        .Font.Bold = True
-        .Font.Size = 9
-    End With
-    
-    ' NOUVEAU BOUTON 4 : Basculer Hachures Multivoies
-    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 6), largeurBouton, hauteurBouton)
-    With btn
-        .Characters.Text = "4. Hachures Multivoies ON/OFF"
-        .OnAction = "BasculerHachuresMultivoies"
-        .Font.Bold = True
-        .Font.Size = 9
-    End With
-    
-    ' BOUTON 5 : Ajuster Polices
-    Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 8), largeurBouton, hauteurBouton)
-    With btn
-        .Characters.Text = "5. Ajuster taille polices"
-        .OnAction = "AjusterPolicesFromButton"
-        .Font.Bold = True
-        .Font.Size = 9
-    End With
-End Sub
+
 
 ' =====================================================
 ' FONCTION UTILITAIRE : Identifier automatiquement les cases multivoies
@@ -805,7 +743,7 @@ Sub DiagnostiquerCasesMultivoiesHachures()
         Exit Sub
     End If
     
-    lastRow = ws.UsedRange.Rows.Count
+    lastRow = ws.usedRange.Rows.Count
     lastCol = 26
     compteurMultivoies = 0
     compteurAvecHachures = 0
@@ -834,12 +772,12 @@ Sub DiagnostiquerCasesMultivoiesHachures()
     rapport = rapport & "Cases avec hachures : " & compteurAvecHachures & vbCrLf & vbCrLf
     
     If compteurMultivoies = compteurAvecHachures Then
-        rapport = rapport & "✅ Toutes les cases multivoies sont hachurées !"
+        rapport = rapport & "? Toutes les cases multivoies sont hachurées !"
     ElseIf compteurAvecHachures = 0 Then
-        rapport = rapport & "⚠️ Aucune case n'est hachurée." & vbCrLf
+        rapport = rapport & "?? Aucune case n'est hachurée." & vbCrLf
         rapport = rapport & "Utilisez le bouton 'Hachures Multivoies ON/OFF' pour les afficher."
     Else
-        rapport = rapport & "⚠️ " & (compteurMultivoies - compteurAvecHachures) & " cases multivoies ne sont pas hachurées." & vbCrLf
+        rapport = rapport & "?? " & (compteurMultivoies - compteurAvecHachures) & " cases multivoies ne sont pas hachurées." & vbCrLf
         rapport = rapport & "Utilisez le bouton 'Hachures Multivoies ON/OFF' pour corriger."
     End If
     
@@ -861,7 +799,7 @@ Sub FusionnerVoiesAdjacentes(ws As Worksheet)
     Dim avaitHachures As Boolean  ' NOUVEAU : pour préserver les hachures
     
     ' Trouver les limites de la feuille utilisée
-    derniereLigne = ws.UsedRange.Rows.Count
+    derniereLigne = ws.usedRange.Rows.Count
     derniereColonne = 26 ' S'arrêter à la colonne Z
     
     ' Parcourir toutes les lignes de noms de voies (lignes 2, 4, 6, etc.)
@@ -1100,7 +1038,7 @@ Sub AjouterMenuContextuelFacade(Target As Range, ws As Worksheet)
     Set menuContextuel = Application.CommandBars("Cell")
     
     ' Option principale : Navigation vers source
-    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
+    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, Before:=1)
     With nouvelleOption
         .Caption = "?? Naviguer vers ligne Source"
         .OnAction = "NaviguerDepuisFacadeVersSource"
@@ -1109,7 +1047,7 @@ Sub AjouterMenuContextuelFacade(Target As Range, ws As Worksheet)
     End With
     
     ' Séparateur
-    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=2)
+    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, Before:=2)
     With nouvelleOption
         .Caption = "-"
         .BeginGroup = True
@@ -1118,7 +1056,7 @@ Sub AjouterMenuContextuelFacade(Target As Range, ws As Worksheet)
     
     ' Options d'optimisation selon le contenu de la cellule
     If Not IsEmpty(Target.Value) Then
-        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
+        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, Before:=3)
         With nouvelleOption
             .Caption = "?? Optimiser cette zone"
             .OnAction = "OptimiserZoneSelectionnee"
@@ -1128,7 +1066,7 @@ Sub AjouterMenuContextuelFacade(Target As Range, ws As Worksheet)
     
     ' Option pour cellules vides
     If IsEmpty(Target.Value) Then
-        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
+        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, Before:=3)
         With nouvelleOption
             .Caption = "??? Insérer image ici"
             .OnAction = "InsererImageCellule"
@@ -1154,7 +1092,7 @@ Sub AjouterMenuContextuelSource(Target As Range, ws As Worksheet)
     Set menuContextuel = Application.CommandBars("Cell")
     
     ' Option principale : Navigation vers façade
-    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=1)
+    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, Before:=1)
     With nouvelleOption
         .Caption = "?? Naviguer vers case Façade"
         .OnAction = "NaviguerDepuisSourceVersFacade"
@@ -1163,7 +1101,7 @@ Sub AjouterMenuContextuelSource(Target As Range, ws As Worksheet)
     End With
     
     ' Option : Régénérer façade
-    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=2)
+    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, Before:=2)
     With nouvelleOption
         .Caption = "?? Régénérer la façade"
         .OnAction = "GenererFacadePDI"
@@ -1965,7 +1903,7 @@ Sub AjouterBoutonsSeulement(wsFacade As Worksheet)
     Set btn = wsFacade.Buttons.Add(positionX, 10 + (espacement * 4), largeurBouton, hauteurBouton)
     With btn
         .Characters.Text = "3. Simplifier Bornes"
-        .OnAction = "SimplifierBornesFromButton"
+        .OnAction = "SimplificationBornesNumPDI"
         .Font.Bold = True
         .Font.Size = 9
     End With
@@ -2023,7 +1961,7 @@ Sub SimplifierBornesFromButton()
               vbQuestion + vbYesNo, "Simplifier Bornes") = vbYes Then
         
         ' Exécuter la macro de simplification des bornes
-        Call SimplificationBornesNumPDI
+        Call SimplificationBornesNumPDIMultivoies
     End If
 End Sub
 
@@ -2127,7 +2065,7 @@ Sub MettreAJourColonneHAvecCouleur(wsSource As Worksheet, dictCodes As Object, d
         Else
             ' Réinitialiser le formatage pour les cases normales
             With wsSource.Cells(ligne, 8)
-                .Interior.pattern = xlNone ' Pas de couleur de fond
+                .Interior.Pattern = xlNone ' Pas de couleur de fond
                 .Font.Color = RGB(0, 0, 0) ' Texte noir
                 .Font.Bold = False
             End With
@@ -2227,7 +2165,7 @@ Sub AjouterCodeCaisson(ws As Worksheet, ligne As Long, code As String)
             .Interior.Color = RGB(255, 0, 0) ' Fond rouge
             .Font.Color = RGB(255, 255, 255) ' Texte blanc
         Else
-            .Interior.pattern = xlNone ' Pas de couleur
+            .Interior.Pattern = xlNone ' Pas de couleur
             .Font.Color = RGB(0, 0, 0) ' Texte noir
         End If
     End With
@@ -2246,172 +2184,7 @@ Function ConvertirEnEntier(valeur As Variant, valeurParDefaut As Integer) As Int
     On Error GoTo 0
 End Function
 
-' =====================================================
-' SUB : Fusionner les cellules adjacentes avec même nom de voie
-' =====================================================
-Sub FusionnerVoiesAdjacentes(ws As Worksheet)
-    Dim ligneVoie As Long
-    Dim col As Long, colDebut As Long
-    Dim nomVoieActuel As String, nomVoieSuivant As String
-    Dim rngFusion As Range
-    Dim derniereLigne As Long
-    Dim derniereColonne As Long
-    Dim couleurIndex As Long
-    Dim couleurTexte As Long
-    
-    ' Trouver les limites de la feuille utilisée
-    derniereLigne = ws.UsedRange.Rows.Count
-    derniereColonne = 26 ' S'arrêter à la colonne Z
-    
-    ' Parcourir toutes les lignes de noms de voies (lignes 2, 4, 6, etc.)
-    For ligneVoie = 2 To derniereLigne Step 2
-        col = 1
-        
-        ' Parcourir les colonnes de cette ligne
-        Do While col <= derniereColonne
-            ' Ignorer les cellules vides
-            If ws.Cells(ligneVoie, col).Value = "" Then
-                col = col + 1
-            Else
-                ' Récupérer le nom de voie actuel (sans slash pour comparaison)
-                nomVoieActuel = Trim(ws.Cells(ligneVoie, col).Value)
-                
-                ' Extraire le nom de voie sans le cercle blanc pour la comparaison
-                Dim nomVoieComparaison As String
-                If Left(nomVoieActuel, 1) = ChrW(&H25CB) Then
-                    ' Enlever le cercle blanc et l'espace qui suit pour la comparaison
-                    nomVoieComparaison = Trim(Mid(nomVoieActuel, 3))
-                Else
-                    nomVoieComparaison = nomVoieActuel
-                End If
-                
-                ' Si c'est une voie multiple, ne pas fusionner
-                If InStr(nomVoieComparaison, " / ") > 0 Then
-                    ' Passer à la cellule suivante sans fusionner
-                    If ws.Cells(ligneVoie, col).MergeCells Then
-                        col = ws.Cells(ligneVoie, col).MergeArea.Column + _
-                              ws.Cells(ligneVoie, col).MergeArea.Columns.Count
-                    Else
-                        col = col + 1
-                    End If
-                Else
-                    ' Procéder à la fusion normale pour les voies simples
-                    colDebut = col
-                    
-                    ' Mémoriser la couleur et vérifier si c'est rouge (hors capacité)
-                    Dim estRouge As Boolean
-                    estRouge = False
-                    If ws.Cells(ligneVoie, col).Interior.Color = RGB(255, 0, 0) Then
-                        estRouge = True
-                        couleurIndex = xlNone ' On utilisera le rouge directement
-                        couleurTexte = RGB(255, 255, 255)
-                    ElseIf ws.Cells(ligneVoie, col).Interior.ColorIndex <> xlNone Then
-                        couleurIndex = ws.Cells(ligneVoie, col).Interior.ColorIndex
-                        couleurTexte = ws.Cells(ligneVoie, col).Font.Color
-                    Else
-                        couleurIndex = xlNone
-                    End If
-                    
-                    ' Trouver la fin de la cellule fusionnée actuelle
-                    If ws.Cells(ligneVoie, col).MergeCells Then
-                        col = ws.Cells(ligneVoie, col).MergeArea.Column + _
-                              ws.Cells(ligneVoie, col).MergeArea.Columns.Count - 1
-                    End If
-                    
-                    ' Vérifier les cellules suivantes pour le même nom de voie
-                    Do While col < derniereColonne
-                        ' Vérifier la cellule suivante
-                        If ws.Cells(ligneVoie, col + 1).Value = "" Then
-                            Exit Do
-                        End If
-                        
-                        nomVoieSuivant = Trim(ws.Cells(ligneVoie, col + 1).Value)
-                        
-                        ' Extraire le nom de voie sans le cercle blanc pour la comparaison
-                        Dim nomVoieSuivantComparaison As String
-                        If Left(nomVoieSuivant, 1) = ChrW(&H25CB) Then
-                            ' Enlever le cercle blanc et l'espace qui suit pour la comparaison
-                            nomVoieSuivantComparaison = Trim(Mid(nomVoieSuivant, 3))
-                        Else
-                            nomVoieSuivantComparaison = nomVoieSuivant
-                        End If
-                        
-                        ' Ne pas fusionner si la cellule suivante contient des voies multiples
-                        If InStr(nomVoieSuivantComparaison, " / ") > 0 Then
-                            Exit Do
-                        End If
-                        
-                        ' Si c'est le même nom de voie (en ignorant le cercle blanc), étendre la fusion
-                        If nomVoieComparaison = nomVoieSuivantComparaison And nomVoieComparaison <> "" Then
-                            ' Trouver la fin de la cellule suivante
-                            If ws.Cells(ligneVoie, col + 1).MergeCells Then
-                                col = ws.Cells(ligneVoie, col + 1).MergeArea.Column + _
-                                      ws.Cells(ligneVoie, col + 1).MergeArea.Columns.Count - 1
-                            Else
-                                col = col + 1
-                            End If
-                        Else
-                            Exit Do
-                        End If
-                    Loop
-                    
-                    ' Si on a trouvé plusieurs cellules adjacentes avec le même nom
-                    If col > colDebut Then
-                        ' Défusionner d'abord toutes les cellules concernées
-                        For i = colDebut To col
-                            If ws.Cells(ligneVoie, i).MergeCells Then
-                                ws.Cells(ligneVoie, i).MergeArea.UnMerge
-                            End If
-                        Next i
-                        
-                        ' Refusionner l'ensemble
-                        Set rngFusion = ws.Range(ws.Cells(ligneVoie, colDebut), ws.Cells(ligneVoie, col))
-                        rngFusion.Merge
-                        
-                        ' Réappliquer le formatage avec le nom abrégé et le cercle blanc si nécessaire
-                        Dim texteVoieFusionne As String
-                        ' Vérifier si le texte original contenait un cercle blanc
-                        If InStr(nomVoieActuel, ChrW(&H25CB)) > 0 Then
-                            texteVoieFusionne = ChrW(&H25CB) & " " & AbregerTypeVoie(nomVoieComparaison)
-                        Else
-                            texteVoieFusionne = AbregerTypeVoie(nomVoieComparaison)
-                        End If
-                        
-                        With rngFusion
-                            .NumberFormat = "@" ' Format texte
-                            .Value = texteVoieFusionne
-                            .HorizontalAlignment = xlCenter
-                            .VerticalAlignment = xlCenter
-                            .Font.Bold = True
-                            .WrapText = True
-                            .Borders.LineStyle = xlContinuous
-                            .Borders.Weight = xlThin ' Bordures simples pour la fusion
-                            
-                            ' Souligner si c'était une voie multiple
-                            If InStr(nomVoieActuel, ChrW(&H25CB)) > 0 Then
-                                .Font.Underline = xlUnderlineStyleSingle
-                            End If
-                            
-                            ' Appliquer la couleur appropriée
-                            If estRouge Then
-                                .Interior.Color = RGB(255, 0, 0) ' Rouge pour hors capacité
-                                .Font.Color = RGB(255, 255, 255) ' Texte blanc
-                            ElseIf couleurIndex <> xlNone Then
-                                .Interior.ColorIndex = couleurIndex
-                                .Font.Color = couleurTexte
-                            End If
-                        End With
-                        
-                        ' APPLIQUER LA TAILLE DE POLICE OPTIMISÉE POUR LES VOIES FUSIONNÉES
-                        Call AjusterTaillePoliceVoiesSelonLargeur(rngFusion, col - colDebut + 1)
-                    End If
-                    
-                    col = col + 1
-                End If
-            End If
-        Loop
-    Next ligneVoie
-End Sub
+
 
 ' =====================================================
 ' GESTION DES COULEURS ÉTENDUES
@@ -2721,7 +2494,7 @@ Sub AfficherDiagnosticCouleurs()
     rapport = "DIAGNOSTIC DES COULEURS ATTRIBUÉES" & vbCrLf & vbCrLf
     
     ' Parcourir les cellules de voies (lignes paires)
-    For Each cellule In ws.UsedRange
+    For Each cellule In ws.usedRange
         If cellule.Row Mod 2 = 0 And Not IsEmpty(cellule.Value) Then ' Lignes paires (voies)
             nomVoie = Trim(CStr(cellule.Value))
             
@@ -2761,7 +2534,7 @@ Sub AjusterParametresImpression()
         .FitToPagesTall = False
         .CenterHorizontally = True
         .CenterVertically = False
-        .PrintArea = "A1:AA" & ws.UsedRange.Rows.Count
+        .PrintArea = "A1:AA" & ws.usedRange.Rows.Count
         .LeftMargin = Application.InchesToPoints(0.25)
         .RightMargin = Application.InchesToPoints(0.25)
         .TopMargin = Application.InchesToPoints(0.25)
@@ -2836,4 +2609,60 @@ Sub VerifierStructureDonnees()
     
     MsgBox msg, vbInformation, "Structure des données"
 End Sub
+
+' =====================================================
+' FONCTION UTILITAIRE : Vérifier si tous les PDI d'un bloc sont batterie/rattachés
+' =====================================================
+Function TousLesPDISontBatterieOuRattaches(wsSource As Worksheet, ligneDebutBloc As Long, ligneFin As Long) As Boolean
+    Dim i As Long
+    Dim typePDI As String
+    
+    ' Parcourir toutes les lignes du bloc (ligne principale + lignes accumulées)
+    For i = ligneDebutBloc To ligneFin
+        typePDI = UCase(Trim(CStr(wsSource.Cells(i, 6).Text))) ' Colonne F = 6
+        
+        ' Vérifier si le type PDI est autorisé
+        If Not EstPDIBatterieOuRattache(typePDI) Then
+            TousLesPDISontBatterieOuRattaches = False
+            Exit Function
+        End If
+    Next i
+    
+    ' Si on arrive ici, tous les PDI du bloc sont autorisés
+    TousLesPDISontBatterieOuRattaches = True
+End Function
+
+' =====================================================
+' FONCTION UTILITAIRE : Vérifier si un PDI est batterie ou rattaché
+' =====================================================
+Function EstPDIBatterieOuRattache(typePDI As String) As Boolean
+    Dim typeClean As String
+    
+    ' Nettoyer le type (enlever espaces en trop, mettre en majuscules)
+    typeClean = UCase(Trim(typePDI))
+    
+    ' Nettoyer les espaces multiples
+    Do While InStr(typeClean, "  ") > 0
+        typeClean = Replace(typeClean, "  ", " ")
+    Loop
+    
+    ' Vérifier si c'est un type autorisé
+    Select Case typeClean
+        Case "BAT C", "BAT P", "RATTACHÉ C", "RATTACHE C", "RATTACHÉ P", "RATTACHE P"
+            EstPDIBatterieOuRattache = True
+        Case Else
+            EstPDIBatterieOuRattache = False
+    End Select
+End Function
+
+' =====================================================
+' MODIFICATION DE LA MACRO PRINCIPALE - PARTIE CONCERNÉE
+' À remplacer dans la macro GenererFacadePDI() dans le document main
+' =====================================================
+
+' Dans la macro GenererFacadePDI(), remplacer cette section :
+' (Rechercher la partie qui commence par "' Construire le texte avec symbole si nécessaire")
+
+            
+
 
