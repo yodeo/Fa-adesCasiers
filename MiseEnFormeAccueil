@@ -145,3 +145,39 @@ Sub TestCmLibres()
         MsgBox "Cette feuille n'est pas reconnue comme feuille source", vbExclamation
     End If
 End Sub
+
+' =====================================================
+' FONCTION DE TEST SIMPLIFIÉE SANS PROTECTION
+' =====================================================
+
+Sub TestCmLibresSimple()
+    Dim ws As Worksheet
+    Dim i As Long
+    Dim formule As String
+    
+    Set ws = ActiveSheet
+    
+    ' Déprotéger complètement
+    ws.Unprotect
+    
+    MsgBox "Test simple sur " & ws.Name & " - Feuille déprotégée", vbInformation
+    
+    ' Tester sur une ligne spécifique
+    i = 7
+    If ws.Cells(i, 8).Value <> "" Then
+        formule = "=SI(H" & i & "<>"""";" & _
+                 "(26-SOMME.SI.ENS(G:G;H:H;""=""&GAUCHE(H" & i & ";2)&""*"")) & "" cm libres"";"""")"
+        
+        MsgBox "Test ligne " & i & ":" & vbCrLf & _
+               "Code: " & ws.Cells(i, 8).Value & vbCrLf & _
+               "Avant formule: " & ws.Cells(i, 23).Value, vbInformation
+        
+        ws.Cells(i, 23).Formula = formule
+        
+        MsgBox "Après formule:" & vbCrLf & _
+               "Formule: " & ws.Cells(i, 23).Formula & vbCrLf & _
+               "Valeur: " & ws.Cells(i, 23).Value, vbInformation
+    Else
+        MsgBox "Pas de code caisson en ligne 7", vbExclamation
+    End If
+End Sub
