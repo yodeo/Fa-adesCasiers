@@ -187,7 +187,7 @@ Sub GenererFacadePDI()
             Set dictVoies = CreateObject("Scripting.Dictionary")
             
             ' Ajouter le premier numéro à sa voie
-            If Not dictVoies.exists(voieAccumulee) Then
+            If Not dictVoies.Exists(voieAccumulee) Then
                 dictVoies.Add voieAccumulee, Array()
             End If
             Dim tempArray As Variant
@@ -209,7 +209,7 @@ Sub GenererFacadePDI()
                     
                     ' Ajouter le numéro à sa voie correspondante
                     If voieSuivante <> "" Then
-                        If Not dictVoies.exists(voieSuivante) Then
+                        If Not dictVoies.Exists(voieSuivante) Then
                             dictVoies.Add voieSuivante, Array()
                             estMultiVoies = True
                         End If
@@ -447,7 +447,7 @@ Sub GenererFacadePDI()
             ' Construire le texte de la voie avec cercle blanc si multi-voies
             Dim texteVoie As String
             If estMultiVoies Then
-                texteVoie = ChrW(&H25CB) & " " & voieAbregee ' Cercle blanc + nom de voie
+                texteVoie = voieAbregee ' Cercle blanc + nom de voie
             Else
                 texteVoie = voieAbregee ' Nom de voie seul
             End If
@@ -2718,4 +2718,5 @@ End Function
 ' (Rechercher la partie qui commence par "' Construire le texte avec symbole si nécessaire")
 
             
+
 
