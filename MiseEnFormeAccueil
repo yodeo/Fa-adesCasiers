@@ -75,6 +75,9 @@ Sub ColorerCellulesH6EtW6(ws As Worksheet)
     Dim rougeDetecteH As Boolean, rougeDetecteW As Boolean, rougeDetecteHorsCasier As Boolean
     Dim nombreColonnes As Integer, nombreCaissonsMax As Integer
     
+    ' DEBUG : Indiquer que la fonction est appelée
+    Application.StatusBar = "ColorerCellulesH6EtW6 appelée sur " & ws.Name
+    
     On Error Resume Next
     
     ' Trouver la dernière ligne avec des données
@@ -149,9 +152,11 @@ Sub ColorerCellulesH6EtW6(ws As Worksheet)
         If rougeDetecteW Then
             .Interior.Color = RGB(255, 0, 0) ' Rouge
             .Font.Color = RGB(255, 255, 255) ' Texte blanc
+            Application.StatusBar = "W6 coloré en ROUGE (cm libres détectés)"
         Else
             .Interior.Color = RGB(0, 255, 0) ' Vert
             .Font.Color = RGB(0, 0, 0) ' Texte noir
+            Application.StatusBar = "W6 coloré en VERT (pas de cm libres)"
         End If
     End With
     
@@ -181,6 +186,211 @@ Sub ColorerCellulesH6EtW6(ws As Worksheet)
     Next i
     
     On Error GoTo 0
+End Sub
+
+' =====================================================
+' FONCTION SIMPLIFIÉE ET ROBUSTE POUR LA COLORATION
+' =====================================================
+
+Sub ColorerCellulesH6EtW6_Robuste(ws As Worksheet)
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim nombreColonnes As Integer
+    Dim rougeDetecteW As Boolean
+    Dim rougeDetecteH As Boolean
+    Dim compteurDebug As Integer
+    
+    On Error GoTo ErreurColoration
+    
+    ' Désactiver les événements pour éviter les boucles
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    
+    ' Trouver la dernière ligne avec des données
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Calculer le nombre de caissons max et l'afficher en A2
+    nombreColonnes = Val(ws.Range("C1").Value)
+    If nombreColonnes <= 0 Then nombreColonnes = 4
+    ws.Range("A2").Value = "Nb caissons max: " & (nombreColonnes * 4)
+    ws.Range("A2").Font.Bold = True
+    
+    ' === ANALYSE COLONNE W ===
+    rougeDetecteW = False
+    compteurDebug = 0
+    
+    For i = 7 To derniereLigne
+        Dim valeurW As String
+        valeurW = Trim(CStr(ws.Cells(i, 23).Value))
+        
+        If valeurW <> "" And InStr(valeurW, "cm libres") > 0 Then
+            Dim valeurNumerique As Double
+            valeurNumerique = Val(valeurW)
+            
+            If valeurNumerique > 0 Then
+                rougeDetecteW = True
+                compteurDebug = compteurDebug + 1
+            End If
+        End If
+    Next i
+    
+    ' === COLORATION W6 ===
+    With ws.Range("W6")
+        If rougeDetecteW Then
+            .Interior.Color = RGB(255, 0, 0) ' Rouge
+            .Font.Color = RGB(255, 255, 255) ' Texte blanc
+        Else
+            .Interior.Color = RGB(0, 255, 0) ' Vert
+            .Font.Color = RGB(0, 0, 0) ' Texte noir
+        End If
+    End With
+    
+    ' === ANALYSE CASES MODULE ===
+    rougeDetecteH = False
+    
+    For i = 7 To derniereLigne
+        Dim codeModule As String
+        codeModule = Trim(CStr(ws.Cells(i, 8).Value))
+        
+        If codeModule <> "" And Len(codeModule) >= 2 Then
+            Dim numeroModule As String
+            numeroModule = Left(codeModule, 1)
+            
+            If IsNumeric(numeroModule) Then
+                If Val(numeroModule) > nombreColonnes Then
+                    ' PDI hors casier
+                    rougeDetecteH = True
+                    ws.Cells(i, 8).Interior.Color = RGB(255, 0, 0)
+                    ws.Cells(i, 8).Font.Color = RGB(255, 255, 255)
+                End If
+            End If
+        End If
+    Next i
+    
+    ' === COLORATION H6 ===
+    With ws.Range("H6")
+        If rougeDetecteH Then
+            .Interior.Color = RGB(255, 0, 0) ' Rouge
+            .Font.Color = RGB(255, 255, 255) ' Texte blanc
+        Else
+            .Interior.Color = RGB(0, 255, 0) ' Vert
+            .Font.Color = RGB(0, 0, 0) ' Texte noir
+        End If
+    End With
+    
+    ' Message de debug
+    Application.StatusBar = "Coloration terminée - W6:" & IIf(rougeDetecteW, "ROUGE", "VERT") & " H6:" & IIf(rougeDetecteH, "ROUGE", "VERT") & " (Debug:" & compteurDebug & ")"
+    
+    ' Réactiver les événements
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+    
+    Exit Sub
+    
+ErreurColoration:
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+    MsgBox "Erreur dans ColorerCellulesH6EtW6_Robuste: " & Err.Description, vbExclamation
+End Sub
+
+' =====================================================
+' FONCTION DE DEBUG POUR ANALYSER W6 ET CASES MODULE
+' =====================================================
+
+Sub DebugColorationW6()
+    Dim ws As Worksheet
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim debugInfo As String
+    Dim rougeDetecteW As Boolean
+    Dim compteurRouge As Integer, compteurVert As Integer, compteurVide As Integer
+    
+    Set ws = ActiveSheet
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    debugInfo = "=== DEBUG COLORATION W6 ===" & vbCrLf
+    debugInfo = debugInfo & "Feuille: " & ws.Name & vbCrLf
+    debugInfo = debugInfo & "Dernière ligne: " & derniereLigne & vbCrLf & vbCrLf
+    
+    ' Analyser toutes les valeurs de la colonne W
+    rougeDetecteW = False
+    compteurRouge = 0
+    compteurVert = 0
+    compteurVide = 0
+    
+    For i = 7 To derniereLigne
+        Dim valeurW As String
+        Dim couleurW As Long
+        valeurW = Trim(CStr(ws.Cells(i, 23).Value))
+        couleurW = ws.Cells(i, 23).Interior.Color
+        
+        debugInfo = debugInfo & "W" & i & ": [" & valeurW & "] - Couleur: " & couleurW
+        
+        If valeurW = "" Then
+            compteurVide = compteurVide + 1
+            debugInfo = debugInfo & " (VIDE)"
+        ElseIf InStr(valeurW, "cm libres") > 0 Then
+            If valeurW = "0 cm libres" Then
+                compteurVert = compteurVert + 1
+                debugInfo = debugInfo & " (0 CM - OK)"
+            Else
+                Dim valeurNumerique As Double
+                valeurNumerique = Val(valeurW)
+                If valeurNumerique > 0 Then
+                    rougeDetecteW = True
+                    compteurRouge = compteurRouge + 1
+                    debugInfo = debugInfo & " (CM LIBRES POSITIFS - ROUGE)"
+                Else
+                    debugInfo = debugInfo & " (CM LIBRES ZÉRO)"
+                End If
+            End If
+        Else
+            debugInfo = debugInfo & " (AUTRE)"
+        End If
+        
+        debugInfo = debugInfo & vbCrLf
+    Next i
+    
+    debugInfo = debugInfo & vbCrLf & "=== RÉSUMÉ ===" & vbCrLf
+    debugInfo = debugInfo & "Cellules vides: " & compteurVide & vbCrLf
+    debugInfo = debugInfo & "Cellules 0 cm libres: " & compteurVert & vbCrLf
+    debugInfo = debugInfo & "Cellules cm libres positifs: " & compteurRouge & vbCrLf
+    debugInfo = debugInfo & "Rouge détecté: " & rougeDetecteW & vbCrLf
+    
+    ' Vérifier la couleur actuelle de W6
+    debugInfo = debugInfo & "Couleur actuelle W6: " & ws.Range("W6").Interior.Color & vbCrLf
+    
+    ' Analyser les cases module
+    Dim nombreColonnes As Integer
+    nombreColonnes = Val(ws.Range("C1").Value)
+    If nombreColonnes <= 0 Then nombreColonnes = 4
+    
+    debugInfo = debugInfo & vbCrLf & "=== CASES MODULE ===" & vbCrLf
+    debugInfo = debugInfo & "Nombre colonnes (C1): " & nombreColonnes & vbCrLf
+    debugInfo = debugInfo & "Nombre caissons max: " & (nombreColonnes * 4) & vbCrLf
+    
+    For i = 7 To derniereLigne
+        Dim codeModule As String
+        codeModule = Trim(CStr(ws.Cells(i, 8).Value))
+        
+        If codeModule <> "" And Len(codeModule) >= 2 Then
+            Dim numeroModule As String
+            numeroModule = Left(codeModule, 1)
+            
+            If IsNumeric(numeroModule) Then
+                debugInfo = debugInfo & "H" & i & ": [" & codeModule & "] - Numéro: " & numeroModule
+                If Val(numeroModule) > nombreColonnes Then
+                    debugInfo = debugInfo & " - HORS CASIER !"
+                Else
+                    debugInfo = debugInfo & " - OK"
+                End If
+                debugInfo = debugInfo & vbCrLf
+            End If
+        End If
+    Next i
+    
+    ' Afficher le debug
+    MsgBox debugInfo, vbInformation, "Debug Coloration"
 End Sub
 
 ' =====================================================
