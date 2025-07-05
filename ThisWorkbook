@@ -37,18 +37,32 @@ End Sub
 ' =====================================================
 
 Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
-    ' Mise à jour temps réel des espaces libres en colonne W
-    On Error Resume Next
+    ' Mise à jour temps réel complète : codes caisson, espaces libres, couleurs
+    On Error GoTo ErreurDebug
     
-    ' Vérifier si la modification concerne la colonne G (largeurs)
-    If Not Intersect(Target, Sh.Range("G:G")) Is Nothing Then
+    ' DEBUG : Vérifier si les événements sont activés
+    If Not Application.EnableEvents Then Exit Sub
+    
+    ' Vérifier si la modification concerne la colonne G (largeurs) ou A-F (données)
+    If Not Intersect(Target, Sh.Range("A:G")) Is Nothing Then
         ' Vérifier si on est sur une feuille source (pas une façade)
         If EstFeuilleSource(Sh) Then
-            Call MettreAJourEspacesLibres(Sh, Target)
+            ' DEBUG : Afficher message de confirmation
+            Application.StatusBar = "Mise à jour codes caisson en cours..."
+            
+            ' Recalculer tout en temps réel - APPEL À LA NOUVELLE FONCTION
+            Call MiseAJourTempsReelComplete(Sh)
+            
+            Application.StatusBar = "Codes caisson mis à jour !"
+            Application.OnTime Now + TimeValue("00:00:02"), "EffacerStatusBar"
         End If
     End If
     
-    On Error GoTo 0
+    Exit Sub
+    
+ErreurDebug:
+    MsgBox "Erreur dans Workbook_SheetChange: " & Err.Description, vbExclamation
+    Application.EnableEvents = True
 End Sub
 
 ' =====================================================
@@ -809,3 +823,72 @@ Sub AjouterMiseEnFormeConditionnelleCaissons(ws As Worksheet)
     
     On Error GoTo 0
 End Sub
+
+' =====================================================
+' FONCTION DE MISE À JOUR TEMPS RÉEL COMPLÈTE (RECRÉÉE)
+' =====================================================
+
+Sub MiseAJourTempsReelComplete(ws As Worksheet)
+    On Error Resume Next
+    
+    ' Désactiver temporairement les événements pour éviter la récursion
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    
+    ' 1. Régénérer automatiquement les codes caisson
+    Call GenererCodesCarsonAutomatique(ws)
+    
+    ' 2. Ajouter/mettre à jour les formules pour les cm libres
+    Call AjouterFormulesTempsReel(ws)
+    
+    ' 3. Mettre à jour les mises en forme conditionnelles
+    Call AjouterMiseEnFormeConditionnelleCaissons(ws)
+    Call AjouterMiseEnFormeConditionnelleW6(ws)
+    
+    ' Réactiver les événements et l'affichage
+    Application.EnableEvents = True
+    Application.ScreenUpdating = True
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
+' FONCTION : Ajouter formules automatiques pour cm libres (version temps réel)
+' =====================================================
+
+Sub AjouterFormulesTempsReel(ws As Worksheet)
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim formule As String
+    
+    On Error Resume Next
+    
+    ' Trouver la dernière ligne avec des données
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Ajouter un titre en W6 si il n'existe pas
+    If ws.Range("W6").Value = "" Then
+        ws.Range("W6").Value = "CM LIBRES"
+        ws.Range("W6").Font.Bold = True
+        ws.Range("W6").HorizontalAlignment = xlCenter
+    End If
+    
+    ' Ajouter les formules pour chaque ligne à partir de la ligne 7
+    For i = 7 To derniereLigne
+        If ws.Cells(i, 8).Value <> "" Then ' Si il y a un code caisson
+            ' Formule pour calculer si c'est la dernière ligne du caisson
+            ' et afficher les cm libres seulement sur cette ligne
+            formule = "=IF(AND(H" & i & "<>"""",LEFT(H" & i & ",2)<>LEFT(H" & (i + 1) & ",2))," & _
+                     "MAX(0,26-SUMIFS(G:G,H:H,""=""&LEFT(H" & i & ",2)&""*"")) & "" cm libres"","""")"
+            
+            ws.Cells(i, 23).Formula = formule ' Colonne W = 23
+        Else
+            ' Effacer la formule si pas de code caisson
+            ws.Cells(i, 23).ClearContents
+        End If
+    Next i
+    
+    On Error GoTo 0
+End Sub
+
+
