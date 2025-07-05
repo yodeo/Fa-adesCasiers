@@ -181,6 +181,21 @@ Sub GenererFacadePDI()
             ' Regarder les lignes suivantes pour accumulation
             Dim j As Long
             j = i + 1
+            
+            ' Collections pour regrouper par voie
+            Dim dictVoies As Object
+            Set dictVoies = CreateObject("Scripting.Dictionary")
+            
+            ' Ajouter le premier numéro à sa voie
+            If Not dictVoies.exists(voieAccumulee) Then
+                dictVoies.Add voieAccumulee, Array()
+            End If
+            Dim tempArray As Variant
+            tempArray = dictVoies(voieAccumulee)
+            ReDim Preserve tempArray(UBound(tempArray) + 1)
+            tempArray(UBound(tempArray)) = numPDI
+            dictVoies(voieAccumulee) = tempArray
+            
             Do While j <= derniereLigne
                 Dim largeurSuivante As Integer
                 largeurSuivante = ConvertirEnEntier(wsSource.Cells(j, 7).Value, 0)
@@ -192,18 +207,16 @@ Sub GenererFacadePDI()
                     voieSuivante = CStr(wsSource.Cells(j, 2).Text)
                     obsSuivante = CStr(wsSource.Cells(j, 4).Text)
                     
-                    ' Déterminer le séparateur pour les numéros
-                    If voieSuivante <> voieAccumulee And voieSuivante <> "" Then
-                        ' Voie différente : slash
-                        numAccumule = numAccumule & " / " & numSuivant
-                        estMultiVoies = True
-                        ' Ajouter la voie si différente
-                        If InStr(voieAccumulee, voieSuivante) = 0 Then
-                            voieAccumulee = voieAccumulee & " / " & voieSuivante
+                    ' Ajouter le numéro à sa voie correspondante
+                    If voieSuivante <> "" Then
+                        If Not dictVoies.exists(voieSuivante) Then
+                            dictVoies.Add voieSuivante, Array()
+                            estMultiVoies = True
                         End If
-                    Else
-                        ' Même voie : tiret
-                        numAccumule = numAccumule & "-" & numSuivant
+                        tempArray = dictVoies(voieSuivante)
+                        ReDim Preserve tempArray(UBound(tempArray) + 1)
+                        tempArray(UBound(tempArray)) = numSuivant
+                        dictVoies(voieSuivante) = tempArray
                     End If
                     
                     ' Accumuler les observations
@@ -231,6 +244,47 @@ Sub GenererFacadePDI()
                     Exit Do
                 End If
             Loop
+            
+            ' Construire numAccumule et voieAccumulee à partir du dictionnaire
+            numAccumule = ""
+            voieAccumulee = ""
+            Dim voiesArray As Variant
+            voiesArray = dictVoies.Keys
+            
+            Dim k As Long
+            For k = 0 To UBound(voiesArray)
+                Dim voieActuelle As String
+                voieActuelle = voiesArray(k)
+                
+                ' Construire la chaîne des numéros pour cette voie
+                Dim numerosVoie As Variant
+                numerosVoie = dictVoies(voieActuelle)
+                
+                Dim chaineNumeros As String
+                chaineNumeros = ""
+                Dim n As Long
+                For n = 0 To UBound(numerosVoie)
+                    If chaineNumeros = "" Then
+                        chaineNumeros = numerosVoie(n)
+                    Else
+                        chaineNumeros = chaineNumeros & "-" & numerosVoie(n)
+                    End If
+                Next n
+                
+                ' Ajouter à numAccumule
+                If numAccumule = "" Then
+                    numAccumule = chaineNumeros
+                Else
+                    numAccumule = numAccumule & " / " & chaineNumeros
+                End If
+                
+                ' Ajouter à voieAccumulee
+                If voieAccumulee = "" Then
+                    voieAccumulee = voieActuelle
+                Else
+                    voieAccumulee = voieAccumulee & " / " & voieActuelle
+                End If
+            Next k
             
             ' Mettre à jour i pour sauter les lignes accumulées
             i = j - 1
@@ -2664,5 +2718,4 @@ End Function
 ' (Rechercher la partie qui commence par "' Construire le texte avec symbole si nécessaire")
 
             
-
 
