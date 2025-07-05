@@ -568,7 +568,7 @@ Sub ExtraireNumerosAvecExtensionsAmelioree(valeur As String, ByRef numsP As Coll
     ' Expression régulière pour capturer numéros avec extensions
     Dim reg As Object
     Set reg = CreateObject("VBScript.RegExp")
-    reg.Pattern = "(\d+)\s*([a-zA-Z]|bis|ter|quater)?"
+    reg.Pattern = "(\d+)\s*(bis|ter|quater|[a-zA-Z])?"
     reg.Global = True
     reg.IgnoreCase = True
     
@@ -1016,11 +1016,11 @@ Function FormaterPlage(debut As Long, fin As Long, groupes As Object) As String
         ' Une seule valeur - prendre la plus haute extension disponible
         FormaterPlage = ObtenirMeilleureRepresentation(debut, groupes)
     Else
-        ' Plage - meilleure représentation pour début et fin
+        ' Plage - plus petite extension pour début, plus grande pour fin
         Dim debutTexte As String
         Dim finTexte As String
         
-        debutTexte = ObtenirMeilleureRepresentation(debut, groupes) ' Meilleure extension pour le début
+        debutTexte = ObtenirPlusPetiteRepresentation(debut, groupes) ' Plus petite extension pour le début
         finTexte = ObtenirMeilleureRepresentation(fin, groupes) ' Plus haute extension pour la fin
         
         FormaterPlage = debutTexte & " à " & finTexte
@@ -1084,6 +1084,65 @@ Function ObtenirMeilleureRepresentation(numeroBase As Long, groupes As Object) A
         ObtenirMeilleureRepresentation = numeroBaseStr
     Else
         ObtenirMeilleureRepresentation = numeroBaseStr & meilleureExtension
+    End If
+End Function
+
+' =====================================================
+' FUNCTION : Obtenir la plus petite représentation d'un numéro (pour début de plage)
+' =====================================================
+Function ObtenirPlusPetiteRepresentation(numeroBase As Long, groupes As Object) As String
+    Dim numeroBaseStr As String
+    numeroBaseStr = CStr(numeroBase)
+    
+    If Not groupes.Exists(numeroBaseStr) Then
+        ' Le groupe exact n'existe pas, chercher dans tous les groupes
+        Dim cleRecherchee As Variant
+        Dim groupeTrouve As Collection
+        Set groupeTrouve = Nothing
+        
+        For Each cleRecherchee In groupes.Keys
+            If CLng(cleRecherchee) = numeroBase Then
+                Set groupeTrouve = groupes(cleRecherchee)
+                Exit For
+            End If
+        Next
+        
+        If groupeTrouve Is Nothing Then
+            ' Aucun groupe trouvé, retourner le numéro de base seul
+            ObtenirPlusPetiteRepresentation = numeroBaseStr
+            Exit Function
+        End If
+        
+        ' Utiliser le groupe trouvé
+        Dim groupe As Collection
+        Set groupe = groupeTrouve
+    Else
+        Dim groupe As Collection
+        Set groupe = groupes(numeroBaseStr)
+    End If
+    
+    ' Trouver l'extension la plus PETITE dans ce groupe (priorité au sans extension)
+    Dim petiteExtension As String
+    Dim petitOrdre As Integer
+    petiteExtension = ""
+    petitOrdre = 999 ' Commencer très haut pour trouver le minimum
+    
+    Dim numeroObj As Object
+    For Each numeroObj In groupe
+        Dim ordreActuel As Integer
+        ordreActuel = numeroObj("ordreExtension")
+        
+        If ordreActuel < petitOrdre Then
+            petitOrdre = ordreActuel
+            petiteExtension = numeroObj("extension")
+        End If
+    Next
+    
+    ' Construire la représentation
+    If petiteExtension = "" Then
+        ObtenirPlusPetiteRepresentation = numeroBaseStr
+    Else
+        ObtenirPlusPetiteRepresentation = numeroBaseStr & petiteExtension
     End If
 End Function
 
