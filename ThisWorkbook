@@ -492,12 +492,14 @@ End Sub
 Sub MettreAJourEspacesLibres(ws As Worksheet, Target As Range)
     Dim ligne As Long
     Dim codeCaisson As String
+    Dim prefixeCaisson As String
     Dim sommeLargeursCaisson As Double
     Dim espaceLibre As Double
     Dim maxCapacite As Double
     Dim celluleW As Range
     Dim derniereLigne As Long
     Dim i As Long
+    Dim derniereLigneCaisson As Long
     
     On Error Resume Next
     
@@ -512,30 +514,47 @@ Sub MettreAJourEspacesLibres(ws As Worksheet, Target As Range)
             ' Lire le code caisson en colonne H
             codeCaisson = Trim(CStr(ws.Cells(ligne, 8).Value))
             
-            If codeCaisson <> "" Then
-                ' Calculer la somme des largeurs pour ce caisson
+            If codeCaisson <> "" And Len(codeCaisson) >= 2 Then
+                ' Extraire les 2 premiers caractères pour identifier le caisson
+                prefixeCaisson = Left(codeCaisson, 2)
+                
+                ' Calculer la somme des largeurs pour ce caisson (basé sur le préfixe)
                 sommeLargeursCaisson = 0
+                derniereLigneCaisson = 0
+                
                 For i = 7 To derniereLigne
-                    If Trim(CStr(ws.Cells(i, 8).Value)) = codeCaisson Then
+                    Dim codeActuel As String
+                    codeActuel = Trim(CStr(ws.Cells(i, 8).Value))
+                    
+                    If Len(codeActuel) >= 2 And Left(codeActuel, 2) = prefixeCaisson Then
                         sommeLargeursCaisson = sommeLargeursCaisson + Val(ws.Cells(i, 7).Value)
+                        derniereLigneCaisson = i ' Garder la trace de la dernière ligne
                     End If
                 Next i
                 
                 ' Calculer l'espace libre du caisson
                 espaceLibre = maxCapacite - sommeLargeursCaisson
                 
-                ' Mettre à jour la colonne W pour toutes les lignes de ce caisson
+                ' Effacer toutes les valeurs existantes pour ce caisson
                 For i = 7 To derniereLigne
-                    If Trim(CStr(ws.Cells(i, 8).Value)) = codeCaisson Then
-                        Set celluleW = ws.Cells(i, 23) ' Colonne W = 23
-                        
-                        If espaceLibre > 0 Then
-                            celluleW.Value = espaceLibre & " cm libres"
-                        Else
-                            celluleW.Value = ""
-                        End If
+                    Dim codeVerif As String
+                    codeVerif = Trim(CStr(ws.Cells(i, 8).Value))
+                    
+                    If Len(codeVerif) >= 2 And Left(codeVerif, 2) = prefixeCaisson Then
+                        ws.Cells(i, 23).Value = "" ' Effacer la valeur
                     End If
                 Next i
+                
+                ' Afficher les cm libres uniquement sur la dernière ligne du caisson
+                If derniereLigneCaisson > 0 Then
+                    Set celluleW = ws.Cells(derniereLigneCaisson, 23) ' Colonne W = 23
+                    
+                    If espaceLibre > 0 Then
+                        celluleW.Value = espaceLibre & " cm libres"
+                    Else
+                        celluleW.Value = ""
+                    End If
+                End If
             End If
         End If
     Next ligne
