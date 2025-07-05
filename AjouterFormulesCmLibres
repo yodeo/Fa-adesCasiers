@@ -17,6 +17,9 @@ Sub AjouterFormulesCmLibres(ws As Worksheet)
     ws.Range("W6").Font.Bold = True
     ws.Range("W6").HorizontalAlignment = xlCenter
     
+    ' Générer automatiquement les codes caisson en colonne H
+    Call GenererCodesCarsonAutomatique(ws)
+    
     ' Ajouter les formules pour chaque ligne à partir de la ligne 7
     For i = 7 To derniereLigne
         If ws.Cells(i, 8).Value <> "" Then ' Si il y a un code caisson
@@ -29,9 +32,9 @@ Sub AjouterFormulesCmLibres(ws As Worksheet)
         End If
     Next i
     
-    ' Ajouter une formule pour colorer W6 si il y a des cm libres
-    ' (Sera fait par mise en forme conditionnelle)
+    ' Ajouter mise en forme conditionnelle pour W6 et caissons incomplets
     Call AjouterMiseEnFormeConditionnelleW6(ws)
+    Call AjouterMiseEnFormeConditionnelleCaissons(ws)
     
     On Error GoTo 0
 End Sub
@@ -60,6 +63,101 @@ Sub AjouterMiseEnFormeConditionnelleW6(ws As Worksheet)
     Set condition = ws.Range("W6").FormatConditions.Add( _
         Type:=xlExpression, _
         Formula1:="=SUMPRODUCT(--(ISNUMBER(FIND(""cm libres"",W7:W" & derniereLigne & "))))>0")
+    
+    ' Appliquer le format (fond rouge, texte blanc)
+    With condition
+        .Interior.Color = RGB(255, 0, 0) ' Rouge
+        .Font.Color = RGB(255, 255, 255) ' Blanc
+    End With
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
+' FONCTION : Générer automatiquement les codes caisson
+' =====================================================
+
+Sub GenererCodesCarsonAutomatique(ws As Worksheet)
+    Dim derniereLigne As Long
+    Dim i As Long
+    Dim maxParCaisson As Integer
+    Dim largeurCumulee As Double
+    Dim numeroCaisson As Integer
+    Dim lettreCaisson As String
+    Dim codeCaisson As String
+    Dim numeroPosition As Integer
+    
+    On Error Resume Next
+    
+    ' Récupérer la valeur max par caisson depuis C1
+    maxParCaisson = Val(ws.Range("C1").Value)
+    If maxParCaisson <= 0 Then maxParCaisson = 4
+    
+    ' Trouver la dernière ligne avec des données
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Initialiser les variables
+    numeroCaisson = 1
+    lettreCaisson = "A"
+    largeurCumulee = 0
+    numeroPosition = 1
+    
+    ' Parcourir toutes les lignes à partir de la ligne 7
+    For i = 7 To derniereLigne
+        If ws.Cells(i, 7).Value <> "" Then ' Si il y a une largeur
+            Dim largeurActuelle As Double
+            largeurActuelle = Val(ws.Cells(i, 7).Value)
+            
+            ' Vérifier si on dépasse la capacité du caisson
+            If largeurCumulee + largeurActuelle > 26 Then
+                ' Passer au caisson suivant
+                If numeroCaisson < maxParCaisson Then
+                    numeroCaisson = numeroCaisson + 1
+                Else
+                    numeroCaisson = 1
+                    lettreCaisson = Chr(Asc(lettreCaisson) + 1)
+                End If
+                largeurCumulee = 0
+                numeroPosition = 1
+            End If
+            
+            ' Générer le code caisson
+            codeCaisson = numeroCaisson & lettreCaisson & " " & Format(numeroPosition, "00")
+            ws.Cells(i, 8).Value = codeCaisson
+            
+            ' Mettre à jour les variables
+            largeurCumulee = largeurCumulee + largeurActuelle
+            numeroPosition = numeroPosition + 1
+        End If
+    Next i
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
+' FONCTION : Mise en forme conditionnelle pour caissons incomplets
+' =====================================================
+
+Sub AjouterMiseEnFormeConditionnelleCaissons(ws As Worksheet)
+    Dim derniereLigne As Long
+    Dim plageH As Range
+    Dim condition As FormatCondition
+    
+    On Error Resume Next
+    
+    ' Trouver la dernière ligne avec des données
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Définir la plage H7 à la dernière ligne
+    Set plageH = ws.Range("H7:H" & derniereLigne)
+    
+    ' Supprimer les conditions existantes sur la plage H
+    plageH.FormatConditions.Delete
+    
+    ' Ajouter une condition pour colorer en rouge les caissons incomplets
+    Set condition = plageH.FormatConditions.Add( _
+        Type:=xlExpression, _
+        Formula1:="=AND(H7<>"""",SUMIFS($G:$G,$H:$H,""=""&LEFT(H7,2)&""*"")<>26)")
     
     ' Appliquer le format (fond rouge, texte blanc)
     With condition
