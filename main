@@ -591,6 +591,9 @@ Sub GenererFacadePDI()
            "Les cases multivoies sont hachurées pour faciliter l'identification.", _
            vbInformation, "Génération terminée"
     
+    ' Colorer l'onglet de la façade en jaune
+    wsDest.Tab.Color = RGB(255, 255, 0) ' Jaune
+    
     wsDest.Activate
     
 End Sub
@@ -2718,5 +2721,4 @@ End Function
 ' (Rechercher la partie qui commence par "' Construire le texte avec symbole si nécessaire")
 
             
-
 
