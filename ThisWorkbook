@@ -43,6 +43,19 @@ Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
     ' DEBUG : Vérifier si les événements sont activés
     If Not Application.EnableEvents Then Exit Sub
     
+    ' Vérifier d'abord la protection des largeurs pour PDI rattachés
+    If Not Intersect(Target, Sh.Range("G:G")) Is Nothing Then
+        If EstFeuilleSource(Sh) Then
+            If Not ValiderModificationLargeur(Sh, Target) Then
+                ' Annuler la modification si elle n'est pas autorisée
+                Application.EnableEvents = False
+                Application.Undo
+                Application.EnableEvents = True
+                Exit Sub
+            End If
+        End If
+    End If
+    
     ' Vérifier si la modification concerne la colonne G (largeurs) ou A-F (données)
     If Not Intersect(Target, Sh.Range("A:G")) Is Nothing Then
         ' Vérifier si on est sur une feuille source (pas une façade)
@@ -64,6 +77,53 @@ ErreurDebug:
     MsgBox "Erreur dans Workbook_SheetChange: " & Err.Description, vbExclamation
     Application.EnableEvents = True
 End Sub
+
+' =====================================================
+' PROTECTION DES LARGEURS POUR PDI RATTACHÉS
+' =====================================================
+
+Function ValiderModificationLargeur(ws As Worksheet, Target As Range) As Boolean
+    Dim cellule As Range
+    Dim ligne As Long
+    Dim nouvelleValeur As Variant
+    Dim nomPDI As String
+    Dim typePDI As String
+    
+    On Error Resume Next
+    
+    ' Par défaut, autoriser la modification
+    ValiderModificationLargeur = True
+    
+    ' Vérifier chaque cellule modifiée
+    For Each cellule In Target
+        ligne = cellule.Row
+        
+        ' Vérifier seulement les lignes de données (7+)
+        If ligne >= 7 Then
+            nouvelleValeur = cellule.Value
+            nomPDI = Trim(CStr(ws.Cells(ligne, 1).Value)) ' Colonne A
+            typePDI = Trim(CStr(ws.Cells(ligne, 6).Value)) ' Colonne F
+            
+            ' Vérifier si c'est un PDI rattaché (colonne F = "rattaché C" ou "rattaché P")
+            If UCase(typePDI) = "RATTACHÉ C" Or UCase(typePDI) = "RATTACHÉ P" Then
+                ' C'est un PDI rattaché - vérifier la valeur
+                If nouvelleValeur <> 0 And nouvelleValeur <> "" Then
+                    ' Afficher message d'information
+                    MsgBox "⚠️ Modification interdite !" & vbCrLf & vbCrLf & _
+                           "Le PDI """ & nomPDI & """ est un PDI rattaché (" & typePDI & ")." & vbCrLf & _
+                           "Les PDI rattachés doivent avoir une largeur de 0." & vbCrLf & vbCrLf & _
+                           "La modification a été annulée.", _
+                           vbExclamation, "Protection PDI Rattachés"
+                    
+                    ValiderModificationLargeur = False
+                    Exit Function
+                End If
+            End If
+        End If
+    Next cellule
+    
+    On Error GoTo 0
+End Function
 
 ' =====================================================
 ' GESTIONNAIRE UNIVERSEL DU MENU CONTEXTUEL
@@ -419,6 +479,9 @@ Function NaviguerVersPositionFacade(wsFacade As Worksheet, codePosition As Strin
     wsFacade.Activate
     wsFacade.Cells(ligneFacade, colonneFacade).Select
     
+    ' Faire clignoter la cellule pendant 3 secondes
+    Call FaireClignoterCellule(wsFacade, ligneFacade, colonneFacade)
+    
     NaviguerVersPositionFacade = True
     Exit Function
     
@@ -432,6 +495,50 @@ End Function
 
 Sub EffacerStatusBar()
     Application.StatusBar = False
+End Sub
+
+' =====================================================
+' FONCTION : Faire clignoter une cellule pendant 3 secondes
+' =====================================================
+
+Sub FaireClignoterCellule(ws As Worksheet, ligne As Long, colonne As Long)
+    Dim cellule As Range
+    Dim couleurOriginale As Long
+    Dim policeCouleurOriginale As Long
+    Dim i As Integer
+    
+    On Error Resume Next
+    
+    ' Définir la cellule cible
+    Set cellule = ws.Cells(ligne, colonne)
+    
+    ' Sauvegarder les couleurs originales
+    couleurOriginale = cellule.Interior.Color
+    policeCouleurOriginale = cellule.Font.Color
+    
+    ' Gérer les cellules fusionnées
+    If cellule.MergeCells Then
+        Set cellule = cellule.MergeArea
+    End If
+    
+    ' Clignoter 6 fois (3 secondes à 0.5 seconde par cycle)
+    For i = 1 To 6
+        ' Phase 1: Jaune vif
+        cellule.Interior.Color = RGB(255, 255, 0) ' Jaune
+        cellule.Font.Color = RGB(255, 0, 0) ' Rouge
+        Application.Wait Now + TimeValue("00:00:00.25") ' 0.25 seconde
+        
+        ' Phase 2: Couleur originale
+        cellule.Interior.Color = couleurOriginale
+        cellule.Font.Color = policeCouleurOriginale
+        Application.Wait Now + TimeValue("00:00:00.25") ' 0.25 seconde
+    Next i
+    
+    ' S'assurer que les couleurs originales sont restaurées
+    cellule.Interior.Color = couleurOriginale
+    cellule.Font.Color = policeCouleurOriginale
+    
+    On Error GoTo 0
 End Sub
 
 ' Version améliorée de la suppression du menu contextuel
@@ -864,8 +971,7 @@ End Sub
 Sub MiseAJourTempsReelComplete(ws As Worksheet)
     On Error Resume Next
     
-    ' DEBUG : Confirmer l'appel de la fonction
-    MsgBox "DEBUG: MiseAJourTempsReelComplete appelée pour la feuille: " & ws.Name, vbInformation
+    ' Fonction appelée pour mise à jour complète temps réel
     
     ' Désactiver temporairement les événements pour éviter la récursion
     Application.EnableEvents = False
@@ -915,7 +1021,7 @@ Sub CalculerCmLibresDirectement(ws As Worksheet)
     feuilleEtaitProtegee = ws.ProtectContents
     If feuilleEtaitProtegee Then
         ws.Unprotect
-        MsgBox "DEBUG: Feuille déprotégée temporairement", vbInformation
+        ' Feuille déprotégée temporairement
     End If
     
     ' Créer un dictionnaire pour stocker les totaux par caisson
@@ -925,11 +1031,7 @@ Sub CalculerCmLibresDirectement(ws As Worksheet)
     derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     nbValeursAjoutees = 0
     
-    ' DEBUG : Afficher des informations sur la fonction
-    MsgBox "Debug CalculerCmLibresDirectement:" & vbCrLf & _
-           "Feuille: " & ws.Name & vbCrLf & _
-           "Dernière ligne: " & derniereLigne & vbCrLf & _
-           "Était protégée: " & feuilleEtaitProtegee, vbInformation
+    ' Calculer les cm libres directement sans formules
     
     ' Ajouter un titre en W6 si il n'existe pas
     If ws.Range("W6").Value = "" Then
@@ -976,29 +1078,17 @@ Sub CalculerCmLibresDirectement(ws As Worksheet)
                 
                 nbValeursAjoutees = nbValeursAjoutees + 1
                 
-                ' DEBUG : Afficher quelques exemples
-                If nbValeursAjoutees <= 3 Then
-                    MsgBox "DEBUG Valeur ligne " & i & ":" & vbCrLf & _
-                           "Code caisson: " & codeCaisson & vbCrLf & _
-                           "Préfixe: " & prefixeCaisson & vbCrLf & _
-                           "Total caisson: " & dictCaissons(prefixeCaisson) & vbCrLf & _
-                           "Espace libre: " & espaceLibre & vbCrLf & _
-                           "Valeur insérée: " & ws.Cells(i, 23).Value, vbInformation
-                End If
+                ' Valeurs calculées et insérées directement
             End If
         End If
     Next i
     
-    ' DEBUG : Afficher le résumé
-    MsgBox "DEBUG Résumé CalculerCmLibresDirectement:" & vbCrLf & _
-           "Valeurs ajoutées: " & nbValeursAjoutees & vbCrLf & _
-           "Caissons traités: " & dictCaissons.Count & vbCrLf & _
-           "Sur " & (derniereLigne - 6) & " lignes analysées", vbInformation
+    ' Calcul terminé
     
     ' Reprotéger la feuille si elle était protégée au départ
     ' MAIS on ne le fait pas ici car ProtegerColonneW le fera après
     If feuilleEtaitProtegee Then
-        MsgBox "DEBUG: Feuille laissée déprotégée pour ProtegerColonneW", vbInformation
+        ' Feuille laissée déprotégée pour ProtegerColonneW
     End If
     
     On Error GoTo 0
@@ -1020,8 +1110,7 @@ End Sub
 Sub ProtegerColonneW(ws As Worksheet)
     On Error Resume Next
     
-    ' DEBUG : Confirmer l'appel de la fonction
-    MsgBox "DEBUG ProtegerColonneW: Protection de la feuille " & ws.Name, vbInformation
+    ' Protection de la colonne W contre modification utilisateur
     
     ' Déprotéger temporairement pour pouvoir modifier les propriétés
     ws.Unprotect
