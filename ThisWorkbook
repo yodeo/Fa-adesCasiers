@@ -878,7 +878,10 @@ Sub MiseAJourTempsReelComplete(ws As Worksheet)
     Call AjouterMiseEnFormeConditionnelleCaissons(ws)
     Call AjouterMiseEnFormeConditionnelleW6(ws)
     
-    ' 4. Protéger la colonne W contre modification utilisateur
+    ' 4. Colorer H6 et W6 selon les valeurs rouges
+    Call ColorerCellulesH6EtW6(ws)
+    
+    ' 5. Protéger la colonne W contre modification utilisateur
     Call ProtegerColonneW(ws)
     
     ' Réactiver les événements et l'affichage
@@ -970,6 +973,5 @@ Sub ProtegerColonneW(ws As Worksheet)
     
     On Error GoTo 0
 End Sub
-
 
 
