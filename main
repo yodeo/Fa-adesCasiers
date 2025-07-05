@@ -2039,7 +2039,7 @@ Sub AjusterPolicesFromButton()
               vbQuestion + vbYesNo, "Ajuster Polices") = vbYes Then
         
         ' Exécuter la macro d'ajustement des polices
-        Call AjusterTaillePolice
+        'Call AjusterTaillePolice
     End If
 End Sub
 
@@ -2721,4 +2721,5 @@ End Function
 ' (Rechercher la partie qui commence par "' Construire le texte avec symbole si nécessaire")
 
             
+
 
