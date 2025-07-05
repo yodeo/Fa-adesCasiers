@@ -1035,12 +1035,32 @@ Function ObtenirMeilleureRepresentation(numeroBase As Long, groupes As Object) A
     numeroBaseStr = CStr(numeroBase)
     
     If Not groupes.Exists(numeroBaseStr) Then
-        ObtenirMeilleureRepresentation = numeroBaseStr
-        Exit Function
+        ' Le groupe exact n'existe pas, chercher dans tous les groupes
+        ' pour voir s'il y a un numéro avec extension correspondant
+        Dim cleRecherchee As Variant
+        Dim groupeTrouve As Collection
+        Set groupeTrouve = Nothing
+        
+        For Each cleRecherchee In groupes.Keys
+            If CLng(cleRecherchee) = numeroBase Then
+                Set groupeTrouve = groupes(cleRecherchee)
+                Exit For
+            End If
+        Next
+        
+        If groupeTrouve Is Nothing Then
+            ' Aucun groupe trouvé, retourner le numéro de base seul
+            ObtenirMeilleureRepresentation = numeroBaseStr
+            Exit Function
+        End If
+        
+        ' Utiliser le groupe trouvé
+        Dim groupe As Collection
+        Set groupe = groupeTrouve
+    Else
+        Dim groupe As Collection
+        Set groupe = groupes(numeroBaseStr)
     End If
-    
-    Dim groupe As Collection
-    Set groupe = groupes(numeroBaseStr)
     
     ' Trouver l'extension la plus élevée dans ce groupe
     Dim meilleureExtension As String
