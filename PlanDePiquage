@@ -379,49 +379,39 @@ Sub AjusterDimensions(ByRef FeuilleDest As String)
     ws.Columns("A:A").ColumnWidth = 3
     ws.Columns("B:P").ColumnWidth = 8.5
     
-    ' OPTIMISATION MAJEURE: Formatage par groupes de lignes
+    ' VERSION SÉCURISÉE: Formatage ligne par ligne (plus sûr)
+    ' Note: Bien que moins optimal, cette approche évite les erreurs de plages complexes
     Dim i As Long
-    Dim row1Ranges As String, row2Ranges As String, row3Ranges As String, row4Ranges As String
     
-    ' Construire les plages de lignes à formater
     For i = 1 To lastRow Step 4
-        If i > 1 Then
-            row1Ranges = row1Ranges & ","
-            row2Ranges = row2Ranges & ","
-            row3Ranges = row3Ranges & ","
-            row4Ranges = row4Ranges & ","
+        ' Formater la première ligne de chaque groupe de 4
+        If i <= lastRow Then
+            With ws.Rows(i)
+                .RowHeight = 18
+                .Font.Size = 14
+                .Font.Bold = True
+            End With
         End If
         
-        row1Ranges = row1Ranges & i & ":" & i
-        If i + 1 <= lastRow Then row2Ranges = row2Ranges & (i + 1) & ":" & (i + 1)
-        If i + 2 <= lastRow Then row3Ranges = row3Ranges & (i + 2) & ":" & (i + 2)
-        If i + 3 <= lastRow Then row4Ranges = row4Ranges & (i + 3) & ":" & (i + 3)
+        ' Formater la deuxième ligne
+        If i + 1 <= lastRow Then
+            With ws.Rows(i + 1)
+                .RowHeight = 33
+                .Font.Size = 8
+                .Font.Bold = False
+            End With
+        End If
+        
+        ' Formater la troisième ligne
+        If i + 2 <= lastRow Then
+            ws.Rows(i + 2).RowHeight = 33
+        End If
+        
+        ' Formater la quatrième ligne
+        If i + 3 <= lastRow Then
+            ws.Rows(i + 3).RowHeight = 10
+        End If
     Next i
-    
-    ' Appliquer le formatage par lots (ÉNORME gain de performance)
-    If row1Ranges <> "" Then
-        With ws.Range(row1Ranges).Rows
-            .RowHeight = 18
-            .Font.Size = 14
-            .Font.Bold = True
-        End With
-    End If
-    
-    If row2Ranges <> "" Then
-        With ws.Range(row2Ranges).Rows
-            .RowHeight = 33
-            .Font.Size = 8
-            .Font.Bold = False
-        End With
-    End If
-    
-    If row3Ranges <> "" Then
-        ws.Range(row3Ranges).RowHeight = 33
-    End If
-    
-    If row4Ranges <> "" Then
-        ws.Range(row4Ranges).RowHeight = 10
-    End If
     
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
@@ -481,29 +471,19 @@ Sub ConfigurerMiseEnPage(ByRef FeuilleDest As String)
 End Sub
 
 Sub AdjustFontSize(ByRef FeuilleDest As String)
-    ' VERSION OPTIMISÉE avec plages ciblées
+    ' VERSION SÉCURISÉE avec formatage ligne par ligne
     Dim ws As Worksheet
-    Dim endRow As Long, targetRange As Range
+    Dim endRow As Long, i As Long
     
     Set ws = Worksheets(FeuilleDest)
     endRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
     
-    ' OPTIMISATION: Appliquer la taille de police à toute la plage d'un coup
-    ' Cibler les lignes impaires (3, 7, 11, etc.)
-    Dim rangeAddress As String
-    Dim i As Long
-    
+    ' Appliquer la taille de police ligne par ligne pour éviter les erreurs de plage
     For i = 3 To endRow Step 4
-        If rangeAddress <> "" Then rangeAddress = rangeAddress & ","
-        rangeAddress = rangeAddress & i & ":" & i
-    Next i
-    
-    If rangeAddress <> "" Then
-        Set targetRange = ws.Range(rangeAddress)
-        If Not targetRange Is Nothing Then
-            targetRange.Font.Size = 6
+        If i <= endRow Then
+            ws.Rows(i).Font.Size = 6
         End If
-    End If
+    Next i
 End Sub
 
 Sub AjouterIndicateursContinuite(ByRef FeuilleDest As String)
