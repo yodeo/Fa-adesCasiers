@@ -129,12 +129,12 @@ Sub PlanDePiquage()
     Application.DisplayAlerts = True
 
     ' Appels aux autres macros de mise en forme
-    Call FusionnerCellulesMemeLigne
-    Call AjusterDimensions
-    Call CentrerCellules
-    Call FusionnerCellulesCase
-    Call ConfigurerMiseEnPage
-    Call AdjustFontSize
+    Call FusionnerCellulesMemeLigne(nomFeuilleDestination)
+    Call AjusterDimensions(nomFeuilleDestination)
+    Call CentrerCellules(nomFeuilleDestination)
+    Call FusionnerCellulesCase(nomFeuilleDestination)
+    Call ConfigurerMiseEnPage(nomFeuilleDestination)
+    Call AdjustFontSize(nomFeuilleDestination)
 
     MsgBox "Création du cahier de tournée terminée!"
 
@@ -142,7 +142,7 @@ End Sub
 
 
 
-Sub FusionnerCellulesMemeLigne()
+Sub FusionnerCellulesMemeLigne(ByRef FeuilleDest As String)
     Dim ws As Worksheet
     Dim lastRow As Long
     Dim lastCol As Long
@@ -156,7 +156,8 @@ Sub FusionnerCellulesMemeLigne()
     Application.DisplayAlerts = False
 
     ' Définir la feuille de travail cible
-    Set ws = ThisWorkbook.Sheets("PPQ")
+    Set ws = Worksheets(FeuilleDest)
+
 
     ' Trouver la dernière ligne et la dernière colonne des données
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
@@ -207,7 +208,7 @@ Sub FusionnerCellulesMemeLigne()
     Application.DisplayAlerts = True
 End Sub
 
-Sub FusionnerCellulesCase()
+Sub FusionnerCellulesCase(ByRef FeuilleDest As String)
     Dim ws As Worksheet
     Dim lastRow As Long
     Dim i As Long
@@ -217,7 +218,8 @@ Sub FusionnerCellulesCase()
     Application.DisplayAlerts = False
     
     ' Définir la feuille de travail cible
-    Set ws = ThisWorkbook.Sheets("PPQ")
+    Set ws = Worksheets(FeuilleDest)
+
     
     ' Trouver la dernière ligne des données
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
@@ -240,7 +242,7 @@ Sub FusionnerCellulesCase()
     Application.DisplayAlerts = True
 End Sub
 
-Sub AjouterIndicateursContinuite()
+Sub AjouterIndicateursContinuite(ByRef FeuilleDest As String)
     Dim ws As Worksheet
     Dim lastRow As Long
     Dim i As Long
@@ -248,7 +250,8 @@ Sub AjouterIndicateursContinuite()
     Dim isFirstEmpty As Boolean
     
     ' Définir la feuille de travail cible
-    Set ws = ThisWorkbook.Sheets("PPQ")
+    Set ws = Worksheets(FeuilleDest)
+
     
     ' Trouver la dernière ligne des données
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
@@ -350,7 +353,7 @@ Sub FusionnerMemeValeur(ws As Worksheet, valueToFind As String, lastRow As Long)
         Next i
     End If
 End Sub
-Sub AjusterDimensions()
+Sub AjusterDimensions(ByRef FeuilleDest As String)
     Dim i As Long
     Dim ws As Worksheet
     Dim lastRow As Long
@@ -360,7 +363,8 @@ Sub AjusterDimensions()
     Application.Calculation = xlCalculationManual
 
     ' Définir la feuille de travail cible
-    Set ws = ThisWorkbook.Sheets("PPQ")
+    Set ws = Worksheets(FeuilleDest)
+
 
     ' Trouver la dernière ligne utilisée
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
@@ -401,7 +405,7 @@ Sub AjusterDimensions()
 End Sub
 
 
-Sub CentrerCellules()
+Sub CentrerCellules(ByRef FeuilleDest As String)
     Dim ws As Worksheet
     Dim usedRange As Range
     Dim maxCol As Long
@@ -409,7 +413,7 @@ Sub CentrerCellules()
     maxCol = 16 ' Ajusté car on a maintenant une colonne de plus
 
     ' Définir la feuille de travail cible
-    Set ws = ThisWorkbook.Sheets("PPQ")
+    Set ws = Worksheets(FeuilleDest)
 
     ' Définir la plage utilisée dans la feuille de travail (de B à P)
     Set usedRange = ws.Range(ws.Cells(1, 2), ws.Cells(ws.Cells(ws.Rows.Count, "B").End(xlUp).Row, maxCol))
@@ -422,7 +426,7 @@ Sub CentrerCellules()
     End With
 End Sub
 
-Sub ConfigurerMiseEnPage()
+Sub ConfigurerMiseEnPage(ByRef FeuilleDest As String)
     Dim ws As Worksheet
     Dim lastRow As Long
     Dim i As Long
@@ -430,7 +434,7 @@ Sub ConfigurerMiseEnPage()
     Application.ScreenUpdating = False ' Désactiver les mises à jour de l'écran pour accélérer l'exécution
 
     ' Définir la feuille de travail cible
-    Set ws = ThisWorkbook.Sheets("PPQ")
+    Set ws = Worksheets(FeuilleDest)
     
     ' Trouver la dernière ligne des données
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
@@ -464,4 +468,31 @@ Sub ConfigurerMiseEnPage()
     Next ws
 
     Application.ScreenUpdating = True ' Réactiver les mises à jour de l'écran
+End Sub
+
+Sub AdjustFontSize(ByRef FeuilleDest As String)
+    Dim ws As Worksheet
+    Dim cell As Range
+    Dim startRow As Long
+    Dim endRow As Long
+    Dim col As Long
+
+    Set ws = Worksheets(FeuilleDest)
+    startRow = 3
+    endRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
+
+    For col = 2 To 54 ' Colonnes B à BB
+        For i = startRow To endRow Step 4
+            If i Mod 2 <> 0 Then ' Lignes impaires
+                Set cell = ws.Cells(i, col)
+                If Not cell.MergeCells Then
+                    If cell.WrapText Then
+                        cell.Font.Size = 6
+                    Else
+                        cell.Font.Size = 6
+                    End If
+                End If
+            End If
+        Next i
+    Next col
 End Sub
