@@ -238,6 +238,12 @@ Function EstFeuilleSource(ws As Worksheet) As Boolean
     ' Vérifier si c'est une feuille source en cherchant des indicateurs
     On Error Resume Next
     
+    ' Exclure explicitement les feuilles façade
+    If InStr(ws.Name, "Fac") > 0 Then
+        EstFeuilleSource = False
+        Exit Function
+    End If
+    
     ' Vérifier s'il y a des données en colonne A à partir de la ligne 7
     If ws.Cells(7, 1).Value <> "" Then
         ' Vérifier s'il y a une valeur en C1 (max par caisson)
