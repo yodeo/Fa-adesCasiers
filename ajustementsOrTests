@@ -1,121 +1,265 @@
 ' =====================================================
-' SUB : Simplification des bornes de numéros PDI - VERSION ULTRA-SIMPLIFIÉE
+' FUNCTION : Générer le texte avec bornes ultra-simplifiées - VERSION MULTI-VOIES
 ' =====================================================
-Sub SimplificationBornesNumPDI()
-    Dim ws As Worksheet
-    Dim wsFacade As Worksheet
-    Dim lastRow As Long
-    Dim lastCol As Long
-    Dim dataParCellule As Object
-    Dim i As Long, j As Long
-    Dim nbModifiees As Long
+Function GenererTexteBornesUltraSimplifiees(collPairs As Collection, collImpairs As Collection, _
+                                           autresP As Object, autresI As Object, texteOriginal As String, voieComplete As String) As String
     
-    ' Vérifier qu'on est sur la bonne feuille
-    Set ws = ActiveSheet
-    Set wsFacade = ws
+    Dim res As String
+    res = ""
     
-    ' Trouver les limites de la feuille
-    lastRow = wsFacade.Cells(wsFacade.Rows.Count, 1).End(xlUp).Row
-    lastCol = 26 ' Colonnes A à Z
+    ' Détecter et conserver le début du texte original (symboles)
+    Dim debutTexte As String
+    debutTexte = ExtraireDebutSymbole(texteOriginal)
     
-    ' Dictionnaire pour indexer les données par cellule et voie
-    Set dataParCellule = CreateObject("Scripting.Dictionary")
+    ' Détecter si c'est une case multi-voies
+    Dim estMultiVoies As Boolean
+    estMultiVoies = (InStr(voieComplete, ChrW(&H25CB)) > 0) Or (InStr(voieComplete, " / ") > 0)
     
-    Application.ScreenUpdating = False
+    If estMultiVoies Then
+        ' TRAITEMENT SPÉCIAL POUR MULTI-VOIES : Séparer par voies puis par parité
+        res = TraiterCaseMultiVoiesParVoieEtParite(collPairs, collImpairs, autresP, autresI, texteOriginal, voieComplete)
+    Else
+        ' TRAITEMENT NORMAL : Par parité seulement
+        ' Traiter les numéros pairs
+        If collPairs.Count > 0 Then
+            Dim resPairs As String
+            resPairs = GenererBornesUltraSimplifiees(collPairs, autresP)
+            If resPairs <> "" Then res = resPairs
+        End If
+        
+        ' Traiter les numéros impairs
+        If collImpairs.Count > 0 Then
+            Dim resImpairs As String
+            resImpairs = GenererBornesUltraSimplifiees(collImpairs, autresI)
+            If resImpairs <> "" Then
+                If res <> "" Then
+                    res = res & " / " & resImpairs
+                Else
+                    res = resImpairs
+                End If
+            End If
+        End If
+    End If
     
-    ' === PASSAGE 1 : INDEXER TOUS LES NUMÉROS PAR CELLULE ET VOIE ===
-    Call IndexerTousLesNumerosFacadeAmelioree(wsFacade, lastRow, lastCol, dataParCellule)
+    ' Conserver les observations si elles étaient présentes
+    Dim observations As String
+    observations = ExtraireObservations(texteOriginal)
     
-    ' === PASSAGE 2 : TRAITEMENT ET GÉNÉRATION DES BORNES ULTRA-SIMPLIFIÉES ===
-    nbModifiees = 0
+    ' Construire le résultat final
+    If res <> "" Then
+        If observations <> "" Then
+            GenererTexteBornesUltraSimplifiees = debutTexte & res & vbCrLf & observations
+        Else
+            GenererTexteBornesUltraSimplifiees = debutTexte & res
+        End If
+    Else
+        GenererTexteBornesUltraSimplifiees = texteOriginal
+    End If
+End Function
+
+' =====================================================
+' FUNCTION : Traiter case multi-voies par voie puis par parité
+' =====================================================
+Function TraiterCaseMultiVoiesParVoieEtParite(collPairs As Collection, collImpairs As Collection, _
+                                              autresP As Object, autresI As Object, texteOriginal As String, voieComplete As String) As String
     
-    For i = 1 To lastRow Step 2 ' Lignes impaires (numéros PDI)
-        For j = 1 To lastCol
-            Dim celluleNum As Range
-            Set celluleNum = wsFacade.Cells(i, j)
+    ' Extraire les voies du texte de voie
+    Dim voiesArray As Variant
+    Dim voiesTexte As String
+    voiesTexte = voieComplete
+    
+    ' Enlever le cercle blanc si présent
+    If Left(voiesTexte, 1) = ChrW(&H25CB) Then
+        voiesTexte = Trim(Mid(voiesTexte, 3))
+    End If
+    
+    ' Séparer les voies
+    If InStr(voiesTexte, " / ") > 0 Then
+        voiesArray = Split(voiesTexte, " / ")
+    Else
+        ReDim voiesArray(0)
+        voiesArray(0) = voiesTexte
+    End If
+    
+    ' Extraire le texte des numéros sans symbole et observations
+    Dim numerosSeuls As String
+    numerosSeuls = EnleverSymboleDebut(texteOriginal)
+    If InStr(numerosSeuls, vbCrLf) > 0 Then
+        numerosSeuls = Split(numerosSeuls, vbCrLf)(0)
+    End If
+    
+    ' Analyser la structure du texte pour identifier les groupes par voie
+    Dim groupesParVoie As Object
+    Set groupesParVoie = AnalyserNumerosParVoie(numerosSeuls, voiesArray)
+    
+    ' Traiter chaque voie séparément
+    Dim resultatsVoies As Collection
+    Set resultatsVoies = New Collection
+    
+    Dim indexVoie As Integer
+    For indexVoie = 0 To UBound(voiesArray)
+        Dim voieActuelle As String
+        voieActuelle = Trim(voiesArray(indexVoie))
+        
+        If groupesParVoie.Exists(indexVoie) Then
+            Dim numerosVoie As Collection
+            Set numerosVoie = groupesParVoie(indexVoie)
             
-            Dim valeurNum As String
-            valeurNum = Trim(CStr(celluleNum.Value))
+            ' Séparer les pairs et impairs pour cette voie
+            Dim pairsVoie As New Collection
+            Dim impairsVoie As New Collection
             
-            If valeurNum <> "" And Not EstUnSymbole(valeurNum) Then
-                ' Obtenir le libellé de voie correspondant
-                Dim voie As String
-                voie = ObtenirLibelleVoiePDI(wsFacade, i, j)
-                
-                ' Obtenir le libellé de voie complet (avec cercle blanc si multi-voies)
-                Dim voieComplete As String
-                voieComplete = Trim(CStr(wsFacade.Cells(i + 1, j).Value))
-                
-                Dim adresse As String
-                adresse = celluleNum.Address
-                
-                If voie <> "" And dataParCellule.Exists(voie) And dataParCellule(voie).Exists(adresse) Then
-                    ' Récupérer les collections de la cellule actuelle
-                    Dim collPairsCellule As Collection
-                    Dim collImpairsCellule As Collection
-                    Set collPairsCellule = dataParCellule(voie)(adresse)("pairs")
-                    Set collImpairsCellule = dataParCellule(voie)(adresse)("impairs")
-                    
-                    ' Récupérer les numéros utilisés dans d'autres cellules de la même voie
-                    Dim autresP As Object
-                    Dim autresI As Object
-                    Set autresP = CreateObject("Scripting.Dictionary")
-                    Set autresI = CreateObject("Scripting.Dictionary")
-                    
-                    ' Collecter les exclusions
-                    Dim otherAdr As Variant
-                    For Each otherAdr In dataParCellule(voie).Keys
-                        If otherAdr <> adresse Then
-                            Dim numeroObj As Object
-                            For Each numeroObj In dataParCellule(voie)(otherAdr)("pairs")
-                                autresP(numeroObj("numeroBase")) = True
-                            Next
-                            For Each numeroObj In dataParCellule(voie)(otherAdr)("impairs")
-                                autresI(numeroObj("numeroBase")) = True
-                            Next
-                        End If
-                    Next
-                    
-                    ' Générer le nouveau texte avec bornes ultra-simplifiées
-                    Dim nouveauTexte As String
-                    nouveauTexte = GenererTexteBornesUltraSimplifiees(collPairsCellule, collImpairsCellule, _
-                                                                     autresP, autresI, valeurNum, voieComplete)
-                    
-                    If nouveauTexte <> "" And nouveauTexte <> celluleNum.Value Then
-                        ' Conserver le formatage existant
-                        Dim formatOriginal As Variant
-                        Dim couleurFond As Long
-                        Dim couleurTexte As Long
-                        Dim estGras As Boolean
-                        
-                        formatOriginal = celluleNum.NumberFormat
-                        couleurFond = celluleNum.Interior.Color
-                        couleurTexte = celluleNum.Font.Color
-                        estGras = celluleNum.Font.Bold
-                        
-                        ' Mettre à jour la valeur
-                        celluleNum.Value = nouveauTexte
-                        
-                        ' Restaurer le formatage
-                        celluleNum.NumberFormat = formatOriginal
-                        celluleNum.Interior.Color = couleurFond
-                        celluleNum.Font.Color = couleurTexte
-                        celluleNum.Font.Bold = estGras
-                        
-                        ' Réappliquer le formatage différencié
-                        Call AppliquerFormatageDifferencieBornes(celluleNum, nouveauTexte)
-                        
-                        nbModifiees = nbModifiees + 1
+            Dim numeroObj As Object
+            For Each numeroObj In numerosVoie
+                If numeroObj("numeroBase") Mod 2 = 0 Then
+                    pairsVoie.Add numeroObj
+                Else
+                    impairsVoie.Add numeroObj
+                End If
+            Next
+            
+            ' Générer les bornes pour cette voie (pairs et impairs séparés)
+            Dim resultatVoie As String
+            resultatVoie = ""
+            
+            If pairsVoie.Count > 0 Then
+                Dim resPairs As String
+                resPairs = GenererBornesUltraSimplifiees(pairsVoie, autresP)
+                If resPairs <> "" Then resultatVoie = resPairs
+            End If
+            
+            If impairsVoie.Count > 0 Then
+                Dim resImpairs As String
+                resImpairs = GenererBornesUltraSimplifiees(impairsVoie, autresI)
+                If resImpairs <> "" Then
+                    If resultatVoie <> "" Then
+                        resultatVoie = resultatVoie & " / " & resImpairs
+                    Else
+                        resultatVoie = resImpairs
                     End If
                 End If
             End If
-        Next j
+            
+            ' Ajouter les crochets pour cette voie
+            If resultatVoie <> "" Then
+                resultatsVoies.Add "[" & resultatVoie & "]"
+            End If
+        End If
+    Next indexVoie
+    
+    ' Construire le résultat final en joignant les voies
+    Dim resultatFinal As String
+    resultatFinal = ""
+    
+    Dim i As Integer
+    For i = 1 To resultatsVoies.Count
+        If i > 1 Then resultatFinal = resultatFinal & " "
+        resultatFinal = resultatFinal & resultatsVoies(i)
     Next i
     
-    Application.ScreenUpdating = True
+    TraiterCaseMultiVoiesParVoieEtParite = resultatFinal
+End Function
+
+' =====================================================
+' FUNCTION : Analyser les numéros par voie dans le texte
+' =====================================================
+Function AnalyserNumerosParVoie(numerosTexte As String, voiesArray As Variant) As Object
+    Dim groupes As Object
+    Set groupes = CreateObject("Scripting.Dictionary")
     
-    ' Message de confirmation
-    MsgBox "Simplification ultra des bornes terminée." & vbCrLf & _
-           "Nombre de cellules modifiées : " & nbModifiees, _
-           vbInformation, "Bornes Ultra-Simplifiées"
+    ' Si le texte contient des séparateurs explicites de voies (" et ")
+    If InStr(numerosTexte, " et ") > 0 Then
+        ' Séparer par " et " qui indique un changement de voie
+        Dim partiesVoies As Variant
+        partiesVoies = Split(numerosTexte, " et ")
+        
+        Dim indexVoie As Integer
+        For indexVoie = 0 To UBound(partiesVoies)
+            If indexVoie <= UBound(voiesArray) Then
+                Dim partieVoie As String
+                partieVoie = Trim(partiesVoies(indexVoie))
+                
+                If Not groupes.Exists(indexVoie) Then
+                    groupes.Add indexVoie, New Collection
+                End If
+                
+                ' Extraire tous les numéros de cette partie
+                Call ExtraireNumerosAvecExtensionsAmelioree(partieVoie, New Collection, groupes(indexVoie))
+                
+                ' Si c'est la première voie, elle peut contenir aussi des pairs
+                If indexVoie = 0 Then
+                    Call ExtraireNumerosAvecExtensionsAmelioree(partieVoie, groupes(indexVoie), New Collection)
+                End If
+            End If
+        Next indexVoie
+    Else
+        ' Pas de séparateur explicite : analyser selon la position et le contexte
+        ' Extraire tous les numéros dans l'ordre
+        Dim tousNumeros As New Collection
+        Call ExtraireNumerosAvecExtensionsAmelioree(numerosTexte, tousNumeros, tousNumeros)
+        
+        ' Analyser le pattern pour déterminer quels numéros appartiennent à quelle voie
+        ' Logique : chercher des groupes consécutifs ou des changements de pattern
+        Call RepartirNumerosParVoieIntelligente(tousNumeros, voiesArray, groupes)
+    End If
+    
+    Set AnalyserNumerosParVoie = groupes
+End Function
+
+' =====================================================
+' FUNCTION : Répartir les numéros par voie de manière intelligente
+' =====================================================
+Sub RepartirNumerosParVoieIntelligente(tousNumeros As Collection, voiesArray As Variant, ByRef groupes As Object)
+    ' Créer les groupes pour chaque voie
+    Dim indexVoie As Integer
+    For indexVoie = 0 To UBound(voiesArray)
+        groupes.Add indexVoie, New Collection
+    Next indexVoie
+    
+    ' Si on n'a qu'une voie, tout va dans la première
+    If UBound(voiesArray) = 0 Then
+        Dim numeroObj As Object
+        For Each numeroObj In tousNumeros
+            groupes(0).Add numeroObj
+        Next
+        Exit Sub
+    End If
+    
+    ' Logique intelligente : analyser les ruptures dans la séquence
+    Dim numerosBaseArray() As Long
+    ReDim numerosBaseArray(tousNumeros.Count - 1)
+    
+    Dim i As Integer
+    i = 0
+    For Each numeroObj In tousNumeros
+        numerosBaseArray(i) = numeroObj("numeroBase")
+        i = i + 1
+    Next
+    
+    ' Détecter les ruptures dans la séquence pour séparer les voies
+    Dim ruptureDetectee As Boolean
+    Dim indexRupture As Integer
+    indexRupture = -1
+    
+    ' Chercher une rupture significative dans la séquence
+    For i = 1 To UBound(numerosBaseArray)
+        If numerosBaseArray(i) < numerosBaseArray(i - 1) Then
+            ' Rupture détectée : le numéro actuel est plus petit que le précédent
+            indexRupture = i
+            Exit For
+        End If
+    Next i
+    
+    ' Répartir selon la rupture détectée
+    i = 1
+    For Each numeroObj In tousNumeros
+        If indexRupture > 0 And i > indexRupture Then
+            ' Après la rupture : deuxième voie
+            groupes(1).Add numeroObj
+        Else
+            ' Avant la rupture : première voie
+            groupes(0).Add numeroObj
+        End If
+        i = i + 1
+    Next
 End Sub
