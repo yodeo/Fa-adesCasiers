@@ -25,7 +25,7 @@ Public TriangleRouge As Boolean
 Public IndicateurCommentaires As Long
 Public DeuxiemeTour As Boolean
 Public PoliceMaigre As Boolean
-Public observations As Boolean
+Public Observations As Boolean
 Public PoliceGrande As Integer
 Public MontrerTypage As Boolean
 Public Jeu
@@ -34,7 +34,7 @@ Public NbCoupuresCasier As Long
 Public ListeUDBprio()
 
 Sub NewImportBDC()
-Dim MonBDC, Tournee As String, Tournee2 As String, Derligne, ligne, ShBDC, PRE, MAJbdc, shOld As Worksheet, RngOld As Range, i, MP, BAL, RS, Sais
+Dim MonBDC, Tournee As String, Tournee2 As String, derLigne, Ligne, ShBDC, PRE, MAJbdc, shOld As Worksheet, RngOld As Range, i, MP, BAL, RS, Sais
 Dim DerLigneOld, MA, finito As Label, nextiteration As Label
 Dim TotPRE, TotPOT, TotSTOP
 JeanneMas = True
@@ -57,8 +57,8 @@ For k = LBound(MyBDC) To UBound(MyBDC)
 '**********************************************************************************************************
     If ShBDC.Name = "Liste PDI" And ShBDC.Cells(1, 55) = "ID" Then
         
-        Derligne = ShBDC.Range("D" & Rows.Count).End(xlUp).Row
-        Tournee = ShBDC.Range("A" & Derligne + 4)
+        derLigne = ShBDC.Range("D" & Rows.Count).End(xlUp).Row
+        Tournee = ShBDC.Range("A" & derLigne + 4)
             If Tournee = "" Then
                 MsgBox "BDC sans indication de tournée, la tournée sera 0000"
                 Tournee = "0000"
@@ -101,7 +101,7 @@ For k = LBound(MyBDC) To UBound(MyBDC)
             shTournee.Name = Tournee
                 For i = ThisWorkbook.Sheets.Count To 2 Step -1 'ça mange pas de pain de trier les feuilles
                     If IsNumeric(ThisWorkbook.Sheets(i).Name) And shTournee.Name < ThisWorkbook.Sheets(i).Name Then
-                        shTournee.Move Before:=ThisWorkbook.Sheets(i)
+                        shTournee.Move before:=ThisWorkbook.Sheets(i)
                     End If
                 Next i
     
@@ -110,7 +110,7 @@ For k = LBound(MyBDC) To UBound(MyBDC)
             shTournee.Range("A" & 1 + nbLigneReserv & ":V" & 1 + nbLigneReserv) = Array("NUM ext", "VOIE", "VILLE", _
                 "OBSERVATIONS", "PRE", "TYPE PDI", "LARGEUR", "CASE MODULE", "ID PDI", "Accès", "Loc", _
                    "PQ", "STOP", "Pot", "PartLoc", "MP", "PRE", "RS/Sais", "CodeUDB", "CP", "Libre", "DP")
-            Tablo = ShBDC.Range("A4:BG" & Derligne)
+            Tablo = ShBDC.Range("A4:BG" & derLigne)
                 '********************************************************************
                 
                 Call DetourParIP
@@ -118,90 +118,90 @@ For k = LBound(MyBDC) To UBound(MyBDC)
                 'Call DetourParTypage
                 
                 '********************************************************************
-            For ligne = 2 To UBound(Tablo)
-                shTournee.Cells(ligne + nbLigneReserv, 1) = Tablo(ligne, Cnumero) & IIf(Tablo(ligne, Cext) = "", "", " " & Tablo(ligne, Cext)) 'numero + ext
-                shTournee.Cells(ligne + nbLigneReserv, 2) = Tablo(ligne, Cvoie) 'voie
-                shTournee.Cells(ligne + nbLigneReserv, 3) = Tablo(ligne, Cville) 'ville
-                shTournee.Cells(ligne + nbLigneReserv, 4) = Tablo(ligne, Cobs) 'obs
-                shTournee.Cells(ligne + nbLigneReserv, 9) = Tablo(ligne, Cid) & "@" & Tablo(ligne, Ccea) 'id pdi & CEA
-                shTournee.Cells(ligne + nbLigneReserv, 19) = Tablo(ligne, Cudb) 'code UDB
-                shTournee.Cells(ligne + nbLigneReserv, 20) = Tablo(ligne, Ccp) 'CP stocké dans col présence plaque de rue
+            For Ligne = 2 To UBound(Tablo)
+                shTournee.Cells(Ligne + nbLigneReserv, 1) = Tablo(Ligne, Cnumero) & IIf(Tablo(Ligne, Cext) = "", "", " " & Tablo(Ligne, Cext)) 'numero + ext
+                shTournee.Cells(Ligne + nbLigneReserv, 2) = Tablo(Ligne, Cvoie) 'voie
+                shTournee.Cells(Ligne + nbLigneReserv, 3) = Tablo(Ligne, Cville) 'ville
+                shTournee.Cells(Ligne + nbLigneReserv, 4) = Tablo(Ligne, Cobs) 'obs
+                shTournee.Cells(Ligne + nbLigneReserv, 9) = Tablo(Ligne, Cid) & "@" & Tablo(Ligne, Ccea) 'id pdi & CEA
+                shTournee.Cells(Ligne + nbLigneReserv, 19) = Tablo(Ligne, Cudb) 'code UDB
+                shTournee.Cells(Ligne + nbLigneReserv, 20) = Tablo(Ligne, Ccp) 'CP stocké dans col présence plaque de rue
                 'col 21 en réserve
-                shTournee.Cells(ligne + nbLigneReserv, 22) = Tablo(ligne, Ctypage) 'Couleur A/B
-                If Tablo(ligne, Ctypage) = "B" Then shTournee.Cells(ligne + nbLigneReserv, 22).HorizontalAlignment = xlRight
-                If Tablo(ligne, CpresseSem) > 0 Then 'correction 29/3/2023
-                    shTournee.Cells(ligne + nbLigneReserv, 6) = "Presse Q"
-                    shTournee.Cells(ligne + nbLigneReserv, 12) = "X"
+                shTournee.Cells(Ligne + nbLigneReserv, 22) = Tablo(Ligne, Ctypage) 'Couleur A/B
+                If Tablo(Ligne, Ctypage) = "B" Then shTournee.Cells(Ligne + nbLigneReserv, 22).HorizontalAlignment = xlRight
+                If Tablo(Ligne, CpresseSem) > 0 Then 'correction 29/3/2023
+                    shTournee.Cells(Ligne + nbLigneReserv, 6) = "Presse Q"
+                    shTournee.Cells(Ligne + nbLigneReserv, 12) = "X"
                 End If
                 ' corriger le calcul des PRE
-                PRE = Tablo(ligne, CpreTot) - Tablo(ligne, CpreND) - Tablo(ligne, CpreProSaisBAL) - Tablo(ligne, CpreProSaisMP) _
-                        - Tablo(ligne, CprePartRSMP) - Tablo(ligne, CprePartRSBAL) - Tablo(ligne, CprePartSaisMP) - Tablo(ligne, CprePartSaisBAL) 'PRE Permanents
-                If PRE <> 1 Then shTournee.Cells(ligne + nbLigneReserv, 5) = PRE 'PRE
+                PRE = Tablo(Ligne, CpreTot) - Tablo(Ligne, CpreND) - Tablo(Ligne, CpreProSaisBAL) - Tablo(Ligne, CpreProSaisMP) _
+                        - Tablo(Ligne, CprePartRSMP) - Tablo(Ligne, CprePartRSBAL) - Tablo(Ligne, CprePartSaisMP) - Tablo(Ligne, CprePartSaisBAL) 'PRE Permanents
+                If PRE <> 1 Then shTournee.Cells(Ligne + nbLigneReserv, 5) = PRE 'PRE
                 If PRE > 0 Then
-                    shTournee.Cells(ligne + nbLigneReserv, 7) = 2 + Int(PRE / 12)  'ecartement
-                    If 2 + Int(PRE / 12) > 26 Then shTournee.Cells(ligne + nbLigneReserv, 7) = 26
+                    shTournee.Cells(Ligne + nbLigneReserv, 7) = 2 + Int(PRE / 12)  'ecartement
+                    If 2 + Int(PRE / 12) > 26 Then shTournee.Cells(Ligne + nbLigneReserv, 7) = 26
                 Else
-                    shTournee.Cells(ligne + nbLigneReserv, 7) = 1 'ecartement RS Saiso
-                    shTournee.Cells(ligne + nbLigneReserv, 6) = "RS/Saisonnier"
+                    shTournee.Cells(Ligne + nbLigneReserv, 7) = 1 'ecartement RS Saiso
+                    shTournee.Cells(Ligne + nbLigneReserv, 6) = "RS/Saisonnier"
                 End If
-                Sais = Tablo(ligne, CprePartSaisBAL) + Tablo(ligne, CprePartSaisMP) + Tablo(ligne, CpreProSaisBAL) + Tablo(ligne, CpreProSaisMP)
-                RS = Tablo(ligne, CprePartRSBAL) + Tablo(ligne, CprePartRSMP)
-                If RS > 0 Then shTournee.Cells(ligne + nbLigneReserv, 18) = RS & " RS"
-                If Sais > 0 Then shTournee.Cells(ligne + nbLigneReserv, 18) = shTournee.Cells(ligne + nbLigneReserv, 18) & RS & " Sais"
-                shTournee.Cells(ligne + nbLigneReserv, 17) = Tablo(ligne, CpreTot) ' PRE PPQ
-                If Tablo(ligne, CnaturePDI) Like "*PDI de rattachement*" Then
-                    If Tablo(ligne, CnaturePDI) Like "*priv*" Then
-                        shTournee.Cells(ligne + nbLigneReserv, 6) = "Bat P"
-                        shTournee.Cells(ligne + nbLigneReserv, 6).Interior.Color = 12632256 'gris clair
+                Sais = Tablo(Ligne, CprePartSaisBAL) + Tablo(Ligne, CprePartSaisMP) + Tablo(Ligne, CpreProSaisBAL) + Tablo(Ligne, CpreProSaisMP)
+                RS = Tablo(Ligne, CprePartRSBAL) + Tablo(Ligne, CprePartRSMP)
+                If RS > 0 Then shTournee.Cells(Ligne + nbLigneReserv, 18) = RS & " RS"
+                If Sais > 0 Then shTournee.Cells(Ligne + nbLigneReserv, 18) = shTournee.Cells(Ligne + nbLigneReserv, 18) & RS & " Sais"
+                shTournee.Cells(Ligne + nbLigneReserv, 17) = Tablo(Ligne, CpreTot) ' PRE PPQ
+                If Tablo(Ligne, CnaturePDI) Like "*PDI de rattachement*" Then
+                    If Tablo(Ligne, CnaturePDI) Like "*priv*" Then
+                        shTournee.Cells(Ligne + nbLigneReserv, 6) = "Bat P"
+                        shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 12632256 'gris clair
                     Else
-                        shTournee.Cells(ligne + nbLigneReserv, 6) = "Bat C"
-                        shTournee.Cells(ligne + nbLigneReserv, 6).Interior.Color = 12632256 'gris clair
+                        shTournee.Cells(Ligne + nbLigneReserv, 6) = "Bat C"
+                        shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 12632256 'gris clair
                     End If
                 Else
-                    If Tablo(ligne, CnaturePDI) Like "*PDI rattach*" Then
-                        If Tablo(ligne, CnaturePDI) Like "*priv*" Then
-                            shTournee.Cells(ligne + nbLigneReserv, 6) = "rattaché P"
-                            shTournee.Cells(ligne + nbLigneReserv, 6).Interior.Color = 15395562 'gris très clair
-                            shTournee.Cells(ligne + nbLigneReserv, 7) = 0 'rattachés regroupés d'office
+                    If Tablo(Ligne, CnaturePDI) Like "*PDI rattach*" Then
+                        If Tablo(Ligne, CnaturePDI) Like "*priv*" Then
+                            shTournee.Cells(Ligne + nbLigneReserv, 6) = "rattaché P"
+                            shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 15395562 'gris très clair
+                            shTournee.Cells(Ligne + nbLigneReserv, 7) = 0 'rattachés regroupés d'office
                         Else
-                            shTournee.Cells(ligne + nbLigneReserv, 6) = "rattaché C"
-                            shTournee.Cells(ligne + nbLigneReserv, 6).Interior.Color = 15395562 'gris très clair
+                            shTournee.Cells(Ligne + nbLigneReserv, 6) = "rattaché C"
+                            shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 15395562 'gris très clair
                             'soit
-                            shTournee.Cells(ligne + nbLigneReserv, 7) = 0 'rattachés regroupés d'office
+                            shTournee.Cells(Ligne + nbLigneReserv, 7) = 0 'rattachés regroupés d'office
                         End If
                     End If
                 End If
-                If Tablo(ligne, CtypeAcces) <> "Entrée libre" Then shTournee.Cells(ligne + nbLigneReserv, 10) = Tablo(ligne, CtypeAcces)
-                If Tablo(ligne, ClocalisationBAL) <> "Limite Voirie" Then shTournee.Cells(ligne + nbLigneReserv, 11) = Tablo(ligne, CdistanceAP) & " m"
-                If Tablo(ligne, Cstop) <> 0 Then shTournee.Cells(ligne + nbLigneReserv, 13) = Tablo(ligne, Cstop) & " STOP" 'stop p
-                If Tablo(ligne, Cpot) <> 0 Then shTournee.Cells(ligne + nbLigneReserv, 14) = Tablo(ligne, Cpot) & " POT" 'potentiel
-                TotPOT = TotPOT + Tablo(ligne, Cpot)
-                TotSTOP = TotSTOP + Tablo(ligne, Cstop)
-                shTournee.Cells(ligne + nbLigneReserv, 15) = Tablo(ligne, CpartLoc)  'part loc
-                MP = Tablo(ligne, CprePartMP) + Tablo(ligne, CprePartSaisMP) + Tablo(ligne, CprePartRSMP) + Tablo(ligne, CpreProMP) + Tablo(ligne, CpreProSaisMP) 'remise MP
-                BAL = Tablo(ligne, CprePartBAL) + Tablo(ligne, CprePartSaisBAL) + Tablo(ligne, CprePartRSBAL) + Tablo(ligne, CpreProBAL) + Tablo(ligne, CpreProSaisBAL) 'remise BAL
-                If BAL > 0 Then shTournee.Cells(ligne + nbLigneReserv, 16) = BAL & " BAL" 'remise BAL
+                If Tablo(Ligne, CtypeAcces) <> "Entrée libre" Then shTournee.Cells(Ligne + nbLigneReserv, 10) = Tablo(Ligne, CtypeAcces)
+                If Tablo(Ligne, ClocalisationBAL) <> "Limite Voirie" Then shTournee.Cells(Ligne + nbLigneReserv, 11) = Tablo(Ligne, CdistanceAP) & " m"
+                If Tablo(Ligne, Cstop) <> 0 Then shTournee.Cells(Ligne + nbLigneReserv, 13) = Tablo(Ligne, Cstop) & " STOP" 'stop p
+                If Tablo(Ligne, Cpot) <> 0 Then shTournee.Cells(Ligne + nbLigneReserv, 14) = Tablo(Ligne, Cpot) & " POT" 'potentiel
+                TotPOT = TotPOT + Tablo(Ligne, Cpot)
+                TotSTOP = TotSTOP + Tablo(Ligne, Cstop)
+                shTournee.Cells(Ligne + nbLigneReserv, 15) = Tablo(Ligne, CpartLoc)  'part loc
+                MP = Tablo(Ligne, CprePartMP) + Tablo(Ligne, CprePartSaisMP) + Tablo(Ligne, CprePartRSMP) + Tablo(Ligne, CpreProMP) + Tablo(Ligne, CpreProSaisMP) 'remise MP
+                BAL = Tablo(Ligne, CprePartBAL) + Tablo(Ligne, CprePartSaisBAL) + Tablo(Ligne, CprePartRSBAL) + Tablo(Ligne, CpreProBAL) + Tablo(Ligne, CpreProSaisBAL) 'remise BAL
+                If BAL > 0 Then shTournee.Cells(Ligne + nbLigneReserv, 16) = BAL & " BAL" 'remise BAL
                 If MP > 0 Then
-                    shTournee.Cells(ligne + nbLigneReserv, 16) = shTournee.Cells(ligne + nbLigneReserv, 16) & vbLf & MP & " MP" 'remise MP
-                    If Left(shTournee.Cells(ligne + nbLigneReserv, 16), 1) = vbLf Then shTournee.Cells(ligne + nbLigneReserv, 16) = Replace(shTournee.Cells(ligne + nbLigneReserv, 16), vbLf, "")
+                    shTournee.Cells(Ligne + nbLigneReserv, 16) = shTournee.Cells(Ligne + nbLigneReserv, 16) & vbLf & MP & " MP" 'remise MP
+                    If Left(shTournee.Cells(Ligne + nbLigneReserv, 16), 1) = vbLf Then shTournee.Cells(Ligne + nbLigneReserv, 16) = Replace(shTournee.Cells(Ligne + nbLigneReserv, 16), vbLf, "")
                 End If
     
-            Next ligne
+            Next Ligne
             
             ThisWorkbook.Windows(1).SplitRow = nbLigneReserv + 1
             ThisWorkbook.Windows(1).FreezePanes = True
             If MAJbdc = vbYes Then
-                Derligne = shTournee.Range("B" & Rows.Count).End(xlUp).Row
+                derLigne = shTournee.Range("B" & Rows.Count).End(xlUp).Row
                 DerLigneOld = shOld.Range("B" & Rows.Count).End(xlUp).Row
                 
-                For ligne = nbLigneReserv + 2 To Derligne
-                    Set RngOld = shOld.Range("I" & nbLigneReserv + 2 & ":I" & DerLigneOld).Find(shTournee.Cells(ligne, 9), LookIn:=xlFormulas, LookAt:=xlWhole)
+                For Ligne = nbLigneReserv + 2 To derLigne
+                    Set RngOld = shOld.Range("I" & nbLigneReserv + 2 & ":I" & DerLigneOld).Find(shTournee.Cells(Ligne, 9), LookIn:=xlFormulas, LookAt:=xlWhole)
                     If Not RngOld Is Nothing Then
-                     shTournee.Cells(ligne, 7) = shOld.Cells(RngOld.Row, 7)
-                     shTournee.Cells(ligne, 2).Interior.Color = shOld.Cells(RngOld.Row, 2).Interior.Color
-                     shTournee.Cells(ligne, 2).Font.Color = shOld.Cells(RngOld.Row, 2).Font.Color
+                     shTournee.Cells(Ligne, 7) = shOld.Cells(RngOld.Row, 7)
+                     shTournee.Cells(Ligne, 2).Interior.Color = shOld.Cells(RngOld.Row, 2).Interior.Color
+                     shTournee.Cells(Ligne, 2).Font.Color = shOld.Cells(RngOld.Row, 2).Font.Color
                     End If
-                Next ligne
+                Next Ligne
                     Application.DisplayAlerts = False
                     shOld.Delete
                     Application.DisplayAlerts = True
@@ -275,7 +275,7 @@ finito:
     Call InitModules(NbColonnes, Mur)
     Call InscritModule(shTournee)
     Application.EnableEvents = True
-    Call TestModuleOK(shTournee)
+    'Call TestModuleOK(shTournee)
     Application.EnableEvents = False
     shTournee.Tab.Color = 6299648 'bleu foncé
     
@@ -283,8 +283,6 @@ nextiteration:
 Next k
 fin:
 Application.EnableEvents = True
-
-'Call MettreEnFormeAccueil
 
 End Sub
 
@@ -300,6 +298,9 @@ ThisWorkbook.Sheets("Typage").Cells.Clear
 Application.DisplayAlerts = True
 
 End Sub
+
+
+
 
 
 
