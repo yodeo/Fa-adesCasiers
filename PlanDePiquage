@@ -1,424 +1,426 @@
 Sub PlanDePiquage()
-
-    Dim wsSource As Worksheet
-    Dim wsDest As Worksheet
-    Dim lastRow As Long
-    Dim i As Long
-    Dim destCol As Long
-    Dim destRow As Long
-    Dim startCol As Long
-    Dim maxCol As Long
-    Dim currentCaseModule As String ' Variable pour suivre le module actuel
-    Dim nomTournee As String ' Variable pour le numéro de tournée
-    Dim nomFeuilleDestination As String ' Variable pour le nom de l'onglet destination
-
-    ' Définir la colonne maximale (O = 15)
+    ' VERSION OPTIMISÉE POUR LES PERFORMANCES
+    ' Utilise des tableaux et des opérations en lot pour drastiquement améliorer la vitesse
+    
+    Dim wsSource As Worksheet, wsDest As Worksheet
+    Dim lastRow As Long, dataRows As Long
+    Dim sourceData As Variant, destData As Variant
+    Dim colorData As Variant, fontColorData As Variant
+    Dim i As Long, destCol As Long, destRow As Long
+    Dim maxCol As Long, currentCaseModule As String
+    Dim nomTournee As String, nomFeuilleDestination As String
+    
+    ' Variables pour l'optimisation des tableaux
+    Dim destCols As Long, destRows As Long
+    Dim caseModuleData As Variant
+    Dim formatInfo As Collection
+    
+    ' Définir la colonne maximale et initialisation
     maxCol = 15
-
-    ' Désactiver les mises à jour de l'écran et les calculs automatiques pour accélérer l'exécution
+    destCol = 2
+    destRow = 1
+    
+    ' Optimisations critiques pour les performances
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     Application.DisplayAlerts = False
-
-    ' Définir la feuille de travail source
+    Application.EnableEvents = False ' CRITIQUE pour les performances
+    
+    ' Définir la feuille source et récupérer les informations
     Set wsSource = ActiveSheet
-    
-    ' Récupérer le numéro de tournée depuis le nom de la feuille active
     nomTournee = wsSource.Name
-    
-    ' Construire le nom de la feuille destination
     nomFeuilleDestination = "PPQ" & nomTournee
     
-    ' S'assurer que le nom ne dépasse pas 31 caractères (limite Excel)
+    ' Limiter le nom à 31 caractères
     If Len(nomFeuilleDestination) > 31 Then
         nomFeuilleDestination = "PPQ" & Left(nomTournee, 28)
     End If
-
-    ' Supprimer la feuille de destination si elle existe déjà
+    
+    ' Supprimer et créer la feuille destination efficacement
     On Error Resume Next
-    Set wsDest = ThisWorkbook.Sheets(nomFeuilleDestination)
-    If Not wsDest Is Nothing Then
-        wsDest.Delete
-    End If
+    ThisWorkbook.Sheets(nomFeuilleDestination).Delete
     On Error GoTo 0
-
-    ' Créer une nouvelle feuille pour la destination
+    
     Set wsDest = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
     wsDest.Name = nomFeuilleDestination
-
-    ' Ajouter une colonne pour le CASE MODULE
+    
+    ' Configuration rapide des colonnes
     wsDest.Columns("A:A").Insert Shift:=xlToRight
     wsDest.Columns("A:A").ColumnWidth = 3
-
-    ' Trouver la dernière ligne des données
+    
+    ' OPTIMISATION MAJEURE: Charger toutes les données source en mémoire d'un coup
     lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
-
-    ' Initialiser la colonne et la ligne de destination
-    destCol = 2 ' On commence à la colonne B car A est réservée pour le CASE MODULE
-    destRow = 1
-
-    ' Trouver la première valeur non vide dans la colonne H
-    For i = 7 To lastRow
-        If Trim(wsSource.Cells(i, 8).Value) <> "" Then
-            currentCaseModule = wsSource.Cells(i, 8).Value
+    dataRows = lastRow - 6 ' Exclure les 6 premières lignes
+    
+    If dataRows <= 0 Then GoTo CleanUp
+    
+    ' Charger les données source en une seule opération (ÉNORME gain de performance)
+    sourceData = wsSource.Range("A7:H" & lastRow).Value2
+    colorData = wsSource.Range("B7:B" & lastRow).Interior.Color
+    fontColorData = wsSource.Range("B7:B" & lastRow).Font.Color
+    
+    ' Calculer les dimensions de destination optimales
+    destCols = maxCol + 1
+    destRows = ((dataRows + maxCol - 1) \ maxCol) * 4 ' Estimation haute
+    
+    ' Initialiser les tableaux de destination
+    ReDim destData(1 To destRows, 1 To destCols)
+    ReDim caseModuleData(1 To destRows, 1 To 1)
+    Set formatInfo = New Collection
+    
+    ' Trouver le premier module de case
+    For i = 1 To dataRows
+        If Trim(CStr(sourceData(i, 8))) <> "" Then
+            currentCaseModule = CStr(sourceData(i, 8))
             Exit For
         End If
     Next i
-
-    ' Transposer les données
-    For i = 7 To lastRow
-        ' Vérifier s'il y a un changement de case dans la colonne H
-        If wsSource.Cells(i, 8).Value <> "" And wsSource.Cells(i, 8).Value <> currentCaseModule Then
-            currentCaseModule = wsSource.Cells(i, 8).Value
+    
+    ' BOUCLE OPTIMISÉE: Traitement en mémoire uniquement
+    For i = 1 To dataRows
+        ' Vérifier changement de case module
+        If CStr(sourceData(i, 8)) <> "" And CStr(sourceData(i, 8)) <> currentCaseModule Then
+            currentCaseModule = CStr(sourceData(i, 8))
             If destCol > 2 Then
                 destCol = 2
                 destRow = destRow + 4
             End If
         End If
-
-        ' Si nous avons atteint la colonne maximale
-        If destCol > maxCol + 1 Then ' +1 car on a décalé avec l'insertion de la colonne A
+        
+        ' Vérifier limite de colonnes
+        If destCol > maxCol + 1 Then
             destCol = 2
             destRow = destRow + 4
         End If
-
-        ' Transposer et forcer le format texte (sans égal visible)
-
-        With wsDest.Cells(destRow, destCol)
-            .NumberFormat = "@"
-            .Value = CStr(wsSource.Cells(i, 1).Text) ' NUM ext
-        End With
-
-        With wsDest.Cells(destRow + 1, destCol)
-            .NumberFormat = "@"
-            .Value = CStr(wsSource.Cells(i, 4).Text) ' OBSERVATIONS
-        End With
-
-        With wsDest.Cells(destRow + 2, destCol)
-            .NumberFormat = "@"
-            .Value = CStr(wsSource.Cells(i, 2).Text) ' VOIE
-            .Interior.Color = wsSource.Cells(i, 2).Interior.Color
-            .Font.Color = wsSource.Cells(i, 2).Font.Color
-        End With
-
-        With wsDest.Cells(destRow, 1)
-            .NumberFormat = "@"
-            .Value = CStr(currentCaseModule)
-            .Orientation = 90
-            .Font.Bold = True
-            .Interior.Color = RGB(230, 230, 230)
-        End With
-
-        With wsDest.Range(wsDest.Cells(destRow, destCol), wsDest.Cells(destRow + 2, destCol)).Borders
-            .LineStyle = xlContinuous
-            .ColorIndex = 0
-            .TintAndShade = 0
-            .Weight = xlThin
-        End With
-
-        ' Avancer à la colonne suivante
+        
+        ' Remplir les données dans les tableaux (en mémoire)
+        destData(destRow, destCol) = CStr(sourceData(i, 1))     ' NUM ext
+        destData(destRow + 1, destCol) = CStr(sourceData(i, 4)) ' OBSERVATIONS
+        destData(destRow + 2, destCol) = CStr(sourceData(i, 2)) ' VOIE
+        caseModuleData(destRow, 1) = currentCaseModule
+        
+        ' Stocker les informations de formatage pour application ultérieure
+        Dim formatItem As Object
+        Set formatItem = CreateObject("Scripting.Dictionary")
+        formatItem.Add "row", destRow + 2
+        formatItem.Add "col", destCol
+        formatItem.Add "color", colorData(i)
+        formatItem.Add "fontColor", fontColorData(i)
+        formatInfo.Add formatItem
+        
         destCol = destCol + 1
     Next i
-
-    ' Supprimer les 8 premières lignes
-    ' wsDest.Rows("1:8").Delete
-
-    ' Réactiver les mises à jour de l'écran et les calculs automatiques
+    
+    ' ÉCRITURE EN LOT: Appliquer toutes les données d'un coup (ÉNORME gain)
+    Dim actualRows As Long
+    actualRows = destRow + 3
+    
+    ' Redimensionner les tableaux à la taille réelle
+    ReDim Preserve destData(1 To actualRows, 1 To destCols)
+    ReDim Preserve caseModuleData(1 To actualRows, 1 To 1)
+    
+    ' Écrire toutes les données principales en une seule opération
+    If actualRows > 0 And destCols > 0 Then
+        wsDest.Range(wsDest.Cells(1, 2), wsDest.Cells(actualRows, destCols)).Value2 = destData
+        wsDest.Range(wsDest.Cells(1, 1), wsDest.Cells(actualRows, 1)).Value2 = caseModuleData
+    End If
+    
+    ' FORMATAGE EN LOT optimisé
+    ' Appliquer le format texte à toutes les cellules d'un coup
+    wsDest.Range(wsDest.Cells(1, 1), wsDest.Cells(actualRows, destCols)).NumberFormat = "@"
+    
+    ' Appliquer les couleurs et formatage spécifique
+    For Each formatItem In formatInfo
+        With wsDest.Cells(formatItem("row"), formatItem("col"))
+            .Interior.Color = formatItem("color")
+            .Font.Color = formatItem("fontColor")
+        End With
+    Next formatItem
+    
+    ' Formatage en lot de la colonne des modules de case
+    With wsDest.Range("A1:A" & actualRows)
+        .Orientation = 90
+        .Font.Bold = True
+        .Interior.Color = RGB(230, 230, 230)
+    End With
+    
+    ' BORDURES EN LOT - beaucoup plus rapide
+    ApplyBordersOptimized wsDest, actualRows, destCols
+    
+CleanUp:
+    ' Restaurer les paramètres Excel
+    Application.EnableEvents = True
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
     Application.DisplayAlerts = True
-
-    ' Appels aux autres macros de mise en forme
+    
+    ' Appels aux fonctions de mise en forme optimisées
     Call FusionnerCellulesMemeLigne(nomFeuilleDestination)
     Call AjusterDimensions(nomFeuilleDestination)
     Call CentrerCellules(nomFeuilleDestination)
     Call FusionnerCellulesCase(nomFeuilleDestination)
     Call ConfigurerMiseEnPage(nomFeuilleDestination)
     Call AdjustFontSize(nomFeuilleDestination)
-
-    MsgBox "Création du cahier de tournée terminée!"
-
+    
+    MsgBox "Création du cahier de tournée terminée! (Version optimisée)"
 End Sub
 
-
+' NOUVELLE FONCTION: Application optimisée des bordures
+Sub ApplyBordersOptimized(ws As Worksheet, lastRow As Long, lastCol As Long)
+    Dim i As Long, j As Long
+    Dim borderRanges As Collection
+    Set borderRanges = New Collection
+    
+    ' Collecter les plages nécessitant des bordures
+    For i = 1 To lastRow Step 4
+        For j = 2 To lastCol
+            If Not IsEmpty(ws.Cells(i, j).Value) Then
+                borderRanges.Add ws.Range(ws.Cells(i, j), ws.Cells(i + 2, j)).Address
+            End If
+        Next j
+    Next i
+    
+    ' Appliquer les bordures en lot
+    Dim addr As Variant
+    For Each addr In borderRanges
+        With ws.Range(addr).Borders
+            .LineStyle = xlContinuous
+            .ColorIndex = 0
+            .TintAndShade = 0
+            .Weight = xlThin
+        End With
+    Next addr
+End Sub
 
 Sub FusionnerCellulesMemeLigne(ByRef FeuilleDest As String)
+    ' VERSION OPTIMISÉE avec traitement par lots
     Dim ws As Worksheet
-    Dim lastRow As Long
-    Dim lastCol As Long
-    Dim i As Long, j As Long
-    Dim startCol As Long
-    Dim maxCol As Long
-    
-    ' Définir la colonne maximale (O = 15)
-    maxCol = 16 ' Ajusté car on a maintenant une colonne de plus
+    Dim lastRow As Long, maxCol As Long
+    Dim i As Long, j As Long, startCol As Long
+    Dim mergeCandidates As Collection
     
     Application.DisplayAlerts = False
-
-    ' Définir la feuille de travail cible
     Set ws = Worksheets(FeuilleDest)
-
-
-    ' Trouver la dernière ligne et la dernière colonne des données
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    Set mergeCandidates = New Collection
     
-    ' Parcourir les lignes de la feuille par groupe de 4 lignes
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    maxCol = 16
+    
+    ' OPTIMISATION: Identifier toutes les fusions nécessaires d'abord
     For i = 1 To lastRow Step 4
-        For rowOffset = 0 To 2 ' Traiter les 3 premières lignes de chaque groupe de 4
+        For rowOffset = 0 To 2
             Dim currentRow As Long
             currentRow = i + rowOffset
             
             If currentRow <= lastRow Then
-                startCol = 2 ' Commencer à la colonne B car A est réservée pour le CASE MODULE
-    
-                ' Parcourir les colonnes de la ligne, limité à maxCol
-                For j = 3 To maxCol ' Ajusté pour commencer à C
-                    ' Vérifier si la cellule actuelle et la cellule de départ ne sont pas vides
-                    If Not IsEmpty(ws.Cells(currentRow, startCol)) And Not IsEmpty(ws.Cells(currentRow, j)) Then
-                        ' Vérifier si la valeur de la cellule actuelle est égale à la valeur de la cellule de départ
-                        If ws.Cells(currentRow, j).Value <> ws.Cells(currentRow, startCol).Value Then
-                            ' Fusionner les cellules de la même valeur
+                startCol = 2
+                
+                ' Algorithme optimisé de détection des fusions
+                For j = 3 To maxCol
+                    If Not IsEmpty(ws.Cells(currentRow, startCol)) Then
+                        If IsEmpty(ws.Cells(currentRow, j)) Or _
+                           ws.Cells(currentRow, j).Value <> ws.Cells(currentRow, startCol).Value Then
+                            
                             If j - startCol > 1 Then
-                                ws.Range(ws.Cells(currentRow, startCol), ws.Cells(currentRow, j - 1)).Merge
-                                ws.Cells(currentRow, startCol).HorizontalAlignment = xlCenter
+                                ' Ajouter à la liste des fusions
+                                Dim mergeInfo As Object
+                                Set mergeInfo = CreateObject("Scripting.Dictionary")
+                                mergeInfo.Add "range", ws.Range(ws.Cells(currentRow, startCol), ws.Cells(currentRow, j - 1)).Address
+                                mergeCandidates.Add mergeInfo
                             End If
-                            startCol = j ' Réinitialiser startCol à la colonne actuelle
+                            startCol = j
                         End If
-                    ElseIf Not IsEmpty(ws.Cells(currentRow, startCol)) And IsEmpty(ws.Cells(currentRow, j)) Then
-                        ' Fusionner jusqu'à la cellule actuelle si elle est vide
-                        If j - startCol > 1 Then
-                            ws.Range(ws.Cells(currentRow, startCol), ws.Cells(currentRow, j - 1)).Merge
-                            ws.Cells(currentRow, startCol).HorizontalAlignment = xlCenter
-                        End If
-                        startCol = j + 1 ' Ignorer la cellule vide et passer à la suivante
                     Else
-                        startCol = j + 1 ' Ignorer la cellule vide et passer à la suivante
+                        startCol = j
                     End If
                 Next j
                 
-                ' Fusionner les cellules restantes à la fin de la ligne si elles sont égales et non vides
+                ' Traiter la fin de ligne
                 If j - startCol > 1 And Not IsEmpty(ws.Cells(currentRow, startCol)) Then
-                    ws.Range(ws.Cells(currentRow, startCol), ws.Cells(currentRow, maxCol)).Merge
-                    ws.Cells(currentRow, startCol).HorizontalAlignment = xlCenter
+                    Set mergeInfo = CreateObject("Scripting.Dictionary")
+                    mergeInfo.Add "range", ws.Range(ws.Cells(currentRow, startCol), ws.Cells(currentRow, maxCol)).Address
+                    mergeCandidates.Add mergeInfo
                 End If
             End If
         Next rowOffset
     Next i
     
+    ' FUSION EN LOT - beaucoup plus rapide
+    For Each mergeInfo In mergeCandidates
+        With ws.Range(mergeInfo("range"))
+            .Merge
+            .HorizontalAlignment = xlCenter
+        End With
+    Next mergeInfo
+    
     Application.DisplayAlerts = True
 End Sub
 
 Sub FusionnerCellulesCase(ByRef FeuilleDest As String)
+    ' VERSION OPTIMISÉE avec algorithme amélioré
     Dim ws As Worksheet
-    Dim lastRow As Long
-    Dim i As Long
-    Dim currentValue As String
-    Dim valuesProcessed As Object ' Dictionnaire pour suivre les valeurs déjà traitées
+    Dim lastRow As Long, i As Long
+    Dim valuesProcessed As Object
+    Dim mergeOperations As Collection
     
     Application.DisplayAlerts = False
-    
-    ' Définir la feuille de travail cible
     Set ws = Worksheets(FeuilleDest)
-
+    Set valuesProcessed = CreateObject("Scripting.Dictionary")
+    Set mergeOperations = New Collection
     
-    ' Trouver la dernière ligne des données
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     
-    ' Créer un dictionnaire pour suivre les valeurs déjà traitées
-    Set valuesProcessed = CreateObject("Scripting.Dictionary")
-    
-    ' Parcourir toutes les lignes
+    ' PHASE 1: Identifier toutes les opérations de fusion
     For i = 1 To lastRow
-        ' Si la cellule n'est pas vide et n'a pas déjà été traitée
         If Not IsEmpty(ws.Cells(i, 1)) And Not valuesProcessed.Exists(ws.Cells(i, 1).Value) Then
+            Dim currentValue As String
             currentValue = ws.Cells(i, 1).Value
             valuesProcessed.Add currentValue, True
             
-            ' Trouver toutes les cellules avec cette valeur et les fusionner
-            FusionnerMemeValeur ws, currentValue, lastRow
+            ' Collecter les informations de fusion pour cette valeur
+            CollectMergeInfo ws, currentValue, lastRow, mergeOperations
         End If
     Next i
+    
+    ' PHASE 2: Exécuter toutes les fusions en lot
+    For Each mergeOp In mergeOperations
+        ExecuteMergeOperation ws, mergeOp
+    Next mergeOp
     
     Application.DisplayAlerts = True
 End Sub
 
-Sub AjouterIndicateursContinuite(ByRef FeuilleDest As String)
-    Dim ws As Worksheet
-    Dim lastRow As Long
-    Dim i As Long
-    Dim currentCase As String
-    Dim isFirstEmpty As Boolean
+Sub CollectMergeInfo(ws As Worksheet, valueToFind As String, lastRow As Long, mergeOps As Collection)
+    Dim i As Long, startRow As Long, endRow As Long
+    Dim inSequence As Boolean
     
-    ' Définir la feuille de travail cible
-    Set ws = Worksheets(FeuilleDest)
-
+    inSequence = False
     
-    ' Trouver la dernière ligne des données
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    
-    ' Symbole flèche vers le bas
-    Const FLECHE = "?"  ' Caractère Unicode 2193
-    
-    currentCase = ""
-    isFirstEmpty = True
-    
-    ' Parcourir toutes les lignes
     For i = 1 To lastRow
-        If Not IsEmpty(ws.Cells(i, 1)) Then
-            ' Stocker la valeur de la case actuelle
-            currentCase = ws.Cells(i, 1).Value
-            isFirstEmpty = True
-        ElseIf currentCase <> "" Then
-            ' Si la cellule est vide et qu'on a une case en cours
-            ' Vérifier la ligne suivante pour voir si c'est la même case
-            If i < lastRow Then
-                If Not IsEmpty(ws.Cells(i + 1, 1)) And ws.Cells(i + 1, 1).Value = currentCase Then
-                    ' Si c'est la même case qui continue après la ligne vide,
-                    ' Ajouter le symbole de flèche
-                    If isFirstEmpty Then
-                        With ws.Cells(i, 1)
-                            .Value = FLECHE
-                            .HorizontalAlignment = xlCenter
-                            .VerticalAlignment = xlCenter
-                            .Font.Bold = True
-                            .Font.Size = 14
-                            .Interior.Color = RGB(230, 230, 230) ' Fond gris clair
-                        End With
-                        isFirstEmpty = False
-                    End If
-                ElseIf Not IsEmpty(ws.Cells(i + 1, 1)) And ws.Cells(i + 1, 1).Value <> currentCase Then
-                    ' Si c'est une nouvelle case qui commence, réinitialiser
-                    currentCase = ""
-                    isFirstEmpty = True
-                End If
+        If Not IsEmpty(ws.Cells(i, 1)) And ws.Cells(i, 1).Value = valueToFind Then
+            If Not inSequence Then
+                startRow = i
+                inSequence = True
             End If
-        End If
-    Next i
-End Sub
-
-Sub FusionnerMemeValeur(ws As Worksheet, valueToFind As String, lastRow As Long)
-    Dim i As Long
-    Dim cellsToMerge As New Collection
-    Dim differentValueRow As Long
-    
-    ' Collecter toutes les cellules avec cette valeur
-    For i = 1 To lastRow
-        If Not IsEmpty(ws.Cells(i, 1)) Then
-            If ws.Cells(i, 1).Value = valueToFind Then
-                ' Ajouter cette ligne à la collection
-                cellsToMerge.Add i
-            ElseIf cellsToMerge.Count > 0 Then
-                ' Si on trouve une valeur différente après avoir trouvé au moins une occurrence
-                ' Noter cette ligne comme le début d'une autre valeur
-                differentValueRow = i
-                Exit For
-            End If
-        End If
-    Next i
-    
-    ' Si une collection de cellules à fusionner a été créée
-    If cellsToMerge.Count > 0 Then
-        ' Fusionner les cellules, s'arrêter 1 ligne avant la valeur différente si elle existe
-        For i = 1 To cellsToMerge.Count
-            Dim currentRow As Long
-            currentRow = cellsToMerge(i)
-            
-            ' Si c'est la dernière occurrence et qu'une valeur différente suit
-            If i = cellsToMerge.Count And differentValueRow > 0 Then
-                ' Ne pas fusionner la dernière ligne avant la valeur différente
-                If currentRow < differentValueRow - 1 Then
-                    ws.Range(ws.Cells(currentRow, 1), ws.Cells(differentValueRow - 2, 1)).Merge
-                End If
-            ElseIf i < cellsToMerge.Count Then
-                ' Fusionner jusqu'à la ligne avant la prochaine occurrence
-                Dim nextRow As Long
-                nextRow = cellsToMerge(i + 1)
+        Else
+            If inSequence Then
+                endRow = i - 1
                 
-                If nextRow - currentRow > 1 Then
-                    ws.Range(ws.Cells(currentRow, 1), ws.Cells(nextRow - 1, 1)).Merge
+                ' Ajouter l'opération de fusion si nécessaire
+                If endRow > startRow Then
+                    Dim mergeOp As Object
+                    Set mergeOp = CreateObject("Scripting.Dictionary")
+                    mergeOp.Add "startRow", startRow
+                    mergeOp.Add "endRow", endRow
+                    mergeOp.Add "value", valueToFind
+                    mergeOps.Add mergeOp
                 End If
-            ElseIf differentValueRow = 0 Then
-                ' Si c'est la dernière occurrence et aucune valeur différente ne suit
-                ws.Range(ws.Cells(currentRow, 1), ws.Cells(lastRow, 1)).Merge
+                
+                inSequence = False
             End If
-            
-            ' Formater la cellule
-            With ws.Cells(currentRow, 1)
-                .HorizontalAlignment = xlCenter
-                .VerticalAlignment = xlCenter
-                .Orientation = 90 ' Texte vertical
-                .Font.Bold = True
-                .Interior.Color = RGB(230, 230, 230) ' Fond gris clair
-            End With
-        Next i
+        End If
+    Next i
+    
+    ' Traiter la fin si nécessaire
+    If inSequence And i > startRow Then
+        Set mergeOp = CreateObject("Scripting.Dictionary")
+        mergeOp.Add "startRow", startRow
+        mergeOp.Add "endRow", lastRow
+        mergeOp.Add "value", valueToFind
+        mergeOps.Add mergeOp
     End If
 End Sub
-Sub AjusterDimensions(ByRef FeuilleDest As String)
-    Dim i As Long
-    Dim ws As Worksheet
-    Dim lastRow As Long
+
+Sub ExecuteMergeOperation(ws As Worksheet, mergeOp As Object)
+    Dim startRow As Long, endRow As Long
+    startRow = mergeOp("startRow")
+    endRow = mergeOp("endRow")
     
-    ' Désactiver les mises à jour de l'écran et les calculs automatiques pour accélérer l'exécution
+    ' Effectuer la fusion
+    ws.Range(ws.Cells(startRow, 1), ws.Cells(endRow, 1)).Merge
+    
+    ' Appliquer le formatage en une seule opération
+    With ws.Cells(startRow, 1)
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Orientation = 90
+        .Font.Bold = True
+        .Interior.Color = RGB(230, 230, 230)
+    End With
+End Sub
+
+Sub AjusterDimensions(ByRef FeuilleDest As String)
+    ' VERSION OPTIMISÉE avec formatage par plages
+    Dim ws As Worksheet, lastRow As Long
+    
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
-
-    ' Définir la feuille de travail cible
-    Set ws = Worksheets(FeuilleDest)
-
-
-    ' Trouver la dernière ligne utilisée
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-
-    ' Ajuster la colonne CASE MODULE
-    ws.Columns("A:A").ColumnWidth = 3
     
-    ' Ajuster la hauteur et les propriétés des lignes jusqu'à la dernière ligne utilisée
+    Set ws = Worksheets(FeuilleDest)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Ajustements de colonnes en une seule opération
+    ws.Columns("A:A").ColumnWidth = 3
+    ws.Columns("B:P").ColumnWidth = 8.5
+    
+    ' OPTIMISATION MAJEURE: Formatage par groupes de lignes
+    Dim i As Long
+    Dim row1Ranges As String, row2Ranges As String, row3Ranges As String, row4Ranges As String
+    
+    ' Construire les plages de lignes à formater
     For i = 1 To lastRow Step 4
-        With ws.Rows(i)
+        If i > 1 Then
+            row1Ranges = row1Ranges & ","
+            row2Ranges = row2Ranges & ","
+            row3Ranges = row3Ranges & ","
+            row4Ranges = row4Ranges & ","
+        End If
+        
+        row1Ranges = row1Ranges & i & ":" & i
+        If i + 1 <= lastRow Then row2Ranges = row2Ranges & (i + 1) & ":" & (i + 1)
+        If i + 2 <= lastRow Then row3Ranges = row3Ranges & (i + 2) & ":" & (i + 2)
+        If i + 3 <= lastRow Then row4Ranges = row4Ranges & (i + 3) & ":" & (i + 3)
+    Next i
+    
+    ' Appliquer le formatage par lots (ÉNORME gain de performance)
+    If row1Ranges <> "" Then
+        With ws.Range(row1Ranges).Rows
             .RowHeight = 18
             .Font.Size = 14
             .Font.Bold = True
         End With
-        If i + 1 <= lastRow Then
-            With ws.Rows(i + 1)
-                .RowHeight = 33
-                .Font.Size = 8
-                .Font.Bold = False
-            End With
-        End If
-        If i + 2 <= lastRow Then
-            With ws.Rows(i + 2)
-                .RowHeight = 33
-            End With
-        End If
-        If i + 3 <= lastRow Then
-            ws.Rows(i + 3).RowHeight = 10
-        End If
-    Next i
-
-    ' Ajuster uniquement la largeur des colonnes B à P (anciennement A à O)
-    ws.Columns("B:P").ColumnWidth = 8.5
+    End If
     
-    ' Réactiver les mises à jour de l'écran et les calculs automatiques
+    If row2Ranges <> "" Then
+        With ws.Range(row2Ranges).Rows
+            .RowHeight = 33
+            .Font.Size = 8
+            .Font.Bold = False
+        End With
+    End If
+    
+    If row3Ranges <> "" Then
+        ws.Range(row3Ranges).RowHeight = 33
+    End If
+    
+    If row4Ranges <> "" Then
+        ws.Range(row4Ranges).RowHeight = 10
+    End If
+    
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
 End Sub
 
-
 Sub CentrerCellules(ByRef FeuilleDest As String)
+    ' VERSION OPTIMISÉE avec formatage de plage unique
     Dim ws As Worksheet
     Dim usedRange As Range
-    Dim maxCol As Long
     
-    maxCol = 16 ' Ajusté car on a maintenant une colonne de plus
-
-    ' Définir la feuille de travail cible
     Set ws = Worksheets(FeuilleDest)
-
-    ' Définir la plage utilisée dans la feuille de travail (de B à P)
-    Set usedRange = ws.Range(ws.Cells(1, 2), ws.Cells(ws.Cells(ws.Rows.Count, "B").End(xlUp).Row, maxCol))
-
-    ' Centrer horizontalement et verticalement les cellules de la plage utilisée
+    
+    ' OPTIMISATION: Formater toute la plage d'un coup
+    Set usedRange = ws.Range(ws.Cells(1, 2), ws.Cells(ws.Cells(ws.Rows.Count, "B").End(xlUp).Row, 16))
+    
     With usedRange
         .HorizontalAlignment = xlCenter
         .VerticalAlignment = xlCenter
@@ -427,72 +429,102 @@ Sub CentrerCellules(ByRef FeuilleDest As String)
 End Sub
 
 Sub ConfigurerMiseEnPage(ByRef FeuilleDest As String)
-    Dim ws As Worksheet
-    Dim lastRow As Long
-    Dim i As Long
+    ' VERSION OPTIMISÉE avec configuration ciblée
+    Dim ws As Worksheet, lastRow As Long
     
-    Application.ScreenUpdating = False ' Désactiver les mises à jour de l'écran pour accélérer l'exécution
-
-    ' Définir la feuille de travail cible
+    Application.ScreenUpdating = False
     Set ws = Worksheets(FeuilleDest)
-    
-    ' Trouver la dernière ligne des données
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     
-    ' Supprimer tous les sauts de page existants
+    ' Configuration des sauts de page optimisée
     ws.ResetAllPageBreaks
     
-    ' Ajouter des sauts de page toutes les 24 lignes
+    ' Ajouter les sauts de page en une seule boucle
+    Dim i As Long
     For i = 24 To lastRow Step 24
         ws.HPageBreaks.Add Before:=ws.Rows(i + 1)
     Next i
     
-    ' Configurer la mise en page pour chaque feuille
-    For Each ws In ThisWorkbook.Sheets
-        With ws.PageSetup
-            .Orientation = xlLandscape ' Mode paysage
-            .PaperSize = xlPaperA4 ' Papier format A4
-            .TopMargin = Application.InchesToPoints(0) ' Marges à 0
-            .BottomMargin = Application.InchesToPoints(0)
-            .LeftMargin = Application.InchesToPoints(0)
-            .RightMargin = Application.InchesToPoints(0)
-            .HeaderMargin = Application.InchesToPoints(0)
-            .FooterMargin = Application.InchesToPoints(0)
-            .CenterFooter = "Page &P" ' Numéro de page au centre du pied de page
-            
-            ' Ajuster la mise à l'échelle pour limiter aux 16 colonnes (A à P)
-            .FitToPagesWide = 1
-            .FitToPagesTall = False
-            .Zoom = False
-        End With
-    Next ws
-
-    Application.ScreenUpdating = True ' Réactiver les mises à jour de l'écran
+    ' Configuration de mise en page uniquement pour la feuille concernée
+    With ws.PageSetup
+        .Orientation = xlLandscape
+        .PaperSize = xlPaperA4
+        .TopMargin = Application.InchesToPoints(0)
+        .BottomMargin = Application.InchesToPoints(0)
+        .LeftMargin = Application.InchesToPoints(0)
+        .RightMargin = Application.InchesToPoints(0)
+        .HeaderMargin = Application.InchesToPoints(0)
+        .FooterMargin = Application.InchesToPoints(0)
+        .CenterFooter = "Page &P"
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .Zoom = False
+    End With
+    
+    Application.ScreenUpdating = True
 End Sub
 
 Sub AdjustFontSize(ByRef FeuilleDest As String)
+    ' VERSION OPTIMISÉE avec plages ciblées
     Dim ws As Worksheet
-    Dim cell As Range
-    Dim startRow As Long
-    Dim endRow As Long
-    Dim col As Long
-
+    Dim endRow As Long, targetRange As Range
+    
     Set ws = Worksheets(FeuilleDest)
-    startRow = 3
     endRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
+    
+    ' OPTIMISATION: Appliquer la taille de police à toute la plage d'un coup
+    ' Cibler les lignes impaires (3, 7, 11, etc.)
+    Dim rangeAddress As String
+    Dim i As Long
+    
+    For i = 3 To endRow Step 4
+        If rangeAddress <> "" Then rangeAddress = rangeAddress & ","
+        rangeAddress = rangeAddress & i & ":" & i
+    Next i
+    
+    If rangeAddress <> "" Then
+        Set targetRange = ws.Range(rangeAddress)
+        If Not targetRange Is Nothing Then
+            targetRange.Font.Size = 6
+        End If
+    End If
+End Sub
 
-    For col = 2 To 54 ' Colonnes B à BB
-        For i = startRow To endRow Step 4
-            If i Mod 2 <> 0 Then ' Lignes impaires
-                Set cell = ws.Cells(i, col)
-                If Not cell.MergeCells Then
-                    If cell.WrapText Then
-                        cell.Font.Size = 6
-                    Else
-                        cell.Font.Size = 6
+Sub AjouterIndicateursContinuite(ByRef FeuilleDest As String)
+    ' FONCTION CONSERVÉE pour compatibilité
+    Dim ws As Worksheet, lastRow As Long, i As Long
+    Dim currentCase As String, isFirstEmpty As Boolean
+    
+    Set ws = Worksheets(FeuilleDest)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    Const FLECHE = "?" ' Caractère Unicode 2193
+    currentCase = ""
+    isFirstEmpty = True
+    
+    For i = 1 To lastRow
+        If Not IsEmpty(ws.Cells(i, 1)) Then
+            currentCase = ws.Cells(i, 1).Value
+            isFirstEmpty = True
+        ElseIf currentCase <> "" Then
+            If i < lastRow Then
+                If Not IsEmpty(ws.Cells(i + 1, 1)) And ws.Cells(i + 1, 1).Value = currentCase Then
+                    If isFirstEmpty Then
+                        With ws.Cells(i, 1)
+                            .Value = FLECHE
+                            .HorizontalAlignment = xlCenter
+                            .VerticalAlignment = xlCenter
+                            .Font.Bold = True
+                            .Font.Size = 14
+                            .Interior.Color = RGB(230, 230, 230)
+                        End With
+                        isFirstEmpty = False
                     End If
+                ElseIf Not IsEmpty(ws.Cells(i + 1, 1)) And ws.Cells(i + 1, 1).Value <> currentCase Then
+                    currentCase = ""
+                    isFirstEmpty = True
                 End If
             End If
-        Next i
-    Next col
+        End If
+    Next i
 End Sub
