@@ -594,6 +594,9 @@ Sub GenererFacadePDI()
     ' Colorer l'onglet de la façade en jaune
     wsDest.Tab.Color = RGB(255, 255, 0) ' Jaune
     
+    ' Calculer les espaces libres après génération de la façade
+    Call CalculerTousEspacesLibres(wsSource)
+    
     wsDest.Activate
     
 End Sub
@@ -2721,5 +2724,4 @@ End Function
 ' (Rechercher la partie qui commence par "' Construire le texte avec symbole si nécessaire")
 
             
-
 
