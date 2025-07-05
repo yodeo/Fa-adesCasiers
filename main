@@ -544,7 +544,8 @@ Sub GenererFacadePDI()
     Call BasculerHachuresMultivoies
     
     ' METTRE À JOUR LA COLONNE H DE LA FEUILLE SOURCE AVEC LES CODES CALCULÉS ET COLORER LES LIGNES HORS CAPACITÉ
-    Call MettreAJourColonneHAvecCouleur(wsSource, dictMiseAJourCodes, dictLignesHorsCapacite)
+    ' DÉSACTIVÉ : Le système temps réel gère maintenant les codes caisson automatiquement
+    ' Call MettreAJourColonneHAvecCouleur(wsSource, dictMiseAJourCodes, dictLignesHorsCapacite)
     
     ' Fusionner les cellules adjacentes avec le même nom de voie
     Call FusionnerVoiesAdjacentes(wsDest)
@@ -594,8 +595,8 @@ Sub GenererFacadePDI()
     ' Colorer l'onglet de la façade en jaune
     wsDest.Tab.Color = RGB(255, 255, 0) ' Jaune
     
-    ' Calculer les espaces libres après génération de la façade
-    Call CalculerTousEspacesLibres(wsSource)
+    ' Calculer les espaces libres après génération de la façade (version temps réel)
+    Call MiseAJourTempsReelComplete(wsSource)
     
     wsDest.Activate
     
