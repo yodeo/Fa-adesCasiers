@@ -9,6 +9,8 @@ Sub PlanDePiquage()
     Dim startCol As Long
     Dim maxCol As Long
     Dim currentCaseModule As String ' Variable pour suivre le module actuel
+    Dim nomTournee As String ' Variable pour le numéro de tournée
+    Dim nomFeuilleDestination As String ' Variable pour le nom de l'onglet destination
 
     ' Définir la colonne maximale (O = 15)
     maxCol = 15
@@ -20,10 +22,21 @@ Sub PlanDePiquage()
 
     ' Définir la feuille de travail source
     Set wsSource = ActiveSheet
+    
+    ' Récupérer le numéro de tournée depuis le nom de la feuille active
+    nomTournee = wsSource.Name
+    
+    ' Construire le nom de la feuille destination
+    nomFeuilleDestination = "PPQ" & nomTournee
+    
+    ' S'assurer que le nom ne dépasse pas 31 caractères (limite Excel)
+    If Len(nomFeuilleDestination) > 31 Then
+        nomFeuilleDestination = "PPQ" & Left(nomTournee, 28)
+    End If
 
     ' Supprimer la feuille de destination si elle existe déjà
     On Error Resume Next
-    Set wsDest = ThisWorkbook.Sheets("PPQ")
+    Set wsDest = ThisWorkbook.Sheets(nomFeuilleDestination)
     If Not wsDest Is Nothing Then
         wsDest.Delete
     End If
@@ -31,7 +44,7 @@ Sub PlanDePiquage()
 
     ' Créer une nouvelle feuille pour la destination
     Set wsDest = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
-    wsDest.Name = "PPQ"
+    wsDest.Name = nomFeuilleDestination
 
     ' Ajouter une colonne pour le CASE MODULE
     wsDest.Columns("A:A").Insert Shift:=xlToRight
@@ -452,4 +465,3 @@ Sub ConfigurerMiseEnPage()
 
     Application.ScreenUpdating = True ' Réactiver les mises à jour de l'écran
 End Sub
-
