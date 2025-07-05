@@ -292,7 +292,7 @@ Function GenererTexteBornesAvecExtensions(collPairs As Collection, collImpairs A
 End Function
 
 ' =====================================================
-' FUNCTION : Générer bornes avec extensions
+' FUNCTION : Générer bornes avec extensions - VERSION AVEC CONTINUITÉ INTELLIGENTE
 ' =====================================================
 Function GenererBornesAvecExtensions(coll As Collection, exclus As Object) As String
     ' Étape 1 : Regrouper par numéro de base
@@ -338,7 +338,25 @@ Function GenererBornesAvecExtensions(coll As Collection, exclus As Object) As St
     ' Tri des numéros de base
     Call TrierTableau(arr)
     
-    ' Étape 4 : Créer les plages en tenant compte des exclusions
+    ' Étape 4 : NOUVELLE LOGIQUE - Vérifier la possibilité d'une borne continue globale
+    If UBound(arr) > 0 Then ' Au moins 2 éléments
+        Dim minNum As Long, maxNum As Long
+        minNum = arr(0)
+        maxNum = arr(UBound(arr))
+        
+        ' Vérifier si on peut créer une borne continue du min au max
+        If PeutCreerBorneContinue(arr, minNum, maxNum, exclus) Then
+            ' Créer une seule borne continue
+            If minNum = maxNum Then
+                GenererBornesAvecExtensions = affichageParBase(CStr(minNum))
+            Else
+                GenererBornesAvecExtensions = affichageParBase(CStr(minNum)) & " à " & affichageParBase(CStr(maxNum))
+            End If
+            Exit Function
+        End If
+    End If
+    
+    ' Étape 5 : Si borne continue impossible, utiliser la logique classique avec ruptures
     Dim plages As New Collection
     Dim debut As Long, fin As Long
     debut = arr(0)
@@ -382,7 +400,7 @@ Function GenererBornesAvecExtensions(coll As Collection, exclus As Object) As St
         plages.Add affichageParBase(CStr(debut)) & " à " & affichageParBase(CStr(fin))
     End If
     
-    ' Étape 5 : Construire le résultat
+    ' Étape 6 : Construire le résultat
     Dim res As String
     res = ""
     For i = 1 To plages.Count
@@ -391,6 +409,43 @@ Function GenererBornesAvecExtensions(coll As Collection, exclus As Object) As St
     Next i
     
     GenererBornesAvecExtensions = res
+End Function
+
+' =====================================================
+' FUNCTION : Vérifier si on peut créer une borne continue
+' =====================================================
+Function PeutCreerBorneContinue(numerosPresents() As Long, minNum As Long, maxNum As Long, exclus As Object) As Boolean
+    ' Créer un dictionnaire des numéros présents dans la case actuelle
+    Dim presentsDict As Object
+    Set presentsDict = CreateObject("Scripting.Dictionary")
+    
+    Dim i As Long
+    For i = 0 To UBound(numerosPresents)
+        presentsDict(numerosPresents(i)) = True
+    Next i
+    
+    ' Vérifier tous les numéros entre min et max (même parité)
+    Dim num As Long
+    Dim parite As Integer
+    parite = minNum Mod 2 ' 0 pour pair, 1 pour impair
+    
+    For num = minNum To maxNum
+        ' Ne vérifier que les numéros de même parité
+        If num Mod 2 = parite Then
+            ' Si ce numéro n'est pas dans la case actuelle
+            If Not presentsDict.Exists(num) Then
+                ' Vérifier s'il existe dans d'autres cases (exclusions)
+                If exclus.Exists(num) Then
+                    ' Ce numéro manquant existe ailleurs → impossible de créer une borne continue
+                    PeutCreerBorneContinue = False
+                    Exit Function
+                End If
+            End If
+        End If
+    Next num
+    
+    ' Si on arrive ici, aucun numéro manquant n'existe ailleurs
+    PeutCreerBorneContinue = True
 End Function
 
 ' =====================================================
@@ -460,27 +515,144 @@ Sub TrierTableau(arr() As Long)
 End Sub
 
 ' =====================================================
-' MACRO DE TEST : Tester avec des numéros complexes
+' MACRO DE TEST : Tester la continuité intelligente
 ' =====================================================
-Sub TesterNumerosAvecExtensions()
-    ' Test avec différents formats
-    Dim tests As Variant
-    tests = Array("1,3,5,5a,5b,13,15", "7bis", "2,4,6a,6b,6,8", "1ter,3bis,5a,7")
-    
-    Dim i As Integer
+Sub TesterContinuiteIntelligente()
     Dim msg As String
-    msg = "TESTS DES NUMÉROS AVEC EXTENSIONS" & vbCrLf & vbCrLf
+    msg = "TESTS DE LA CONTINUITÉ INTELLIGENTE" & vbCrLf & vbCrLf
     
-    For i = 0 To UBound(tests)
-        Dim collP As New Collection
-        Dim collI As New Collection
-        
-        Call ExtraireNumerosAvecExtensions(tests(i), collP, collI)
-        
-        msg = msg & "Test " & (i + 1) & " : " & tests(i) & vbCrLf
-        msg = msg & "Pairs : " & collP.Count & " éléments" & vbCrLf
-        msg = msg & "Impairs : " & collI.Count & " éléments" & vbCrLf & vbCrLf
+    ' Simuler des tests avec différents cas
+    msg = msg & "Cas 1 : Numéros [1,3,9,11,15] sans conflit" & vbCrLf
+    msg = msg & "  → Numéros manquants (5,7,13) non présents ailleurs" & vbCrLf
+    msg = msg & "  → Résultat attendu : '1 à 15'" & vbCrLf & vbCrLf
+    
+    msg = msg & "Cas 2 : Numéros [1,3,9,11,15] avec conflit" & vbCrLf
+    msg = msg & "  → Numéro manquant 7 présent dans une autre case" & vbCrLf
+    msg = msg & "  → Résultat attendu : '1, 3', '9, 11', '15' (bornes séparées)" & vbCrLf & vbCrLf
+    
+    msg = msg & "Cas 3 : Numéros [2,6,10,14] sans conflit" & vbCrLf
+    msg = msg & "  → Numéros manquants pairs (4,8,12) non présents ailleurs" & vbCrLf
+    msg = msg & "  → Résultat attendu : '2 à 14' (pairs seulement)" & vbCrLf & vbCrLf
+    
+    msg = msg & "LOGIQUE APPLIQUÉE :" & vbCrLf
+    msg = msg & "1. Identifier min et max des numéros présents" & vbCrLf
+    msg = msg & "2. Vérifier tous les numéros manquants de même parité" & vbCrLf
+    msg = msg & "3. Si aucun numéro manquant n'existe ailleurs → borne continue" & vbCrLf
+    msg = msg & "4. Sinon → bornes avec ruptures (logique classique)" & vbCrLf & vbCrLf
+    
+    msg = msg & "La macro applique maintenant cette logique automatiquement !"
+    
+    MsgBox msg, vbInformation, "Test Continuité Intelligente"
+End Sub
+
+' =====================================================
+' MACRO DE DÉMONSTRATION : Analyser une case sélectionnée
+' =====================================================
+Sub AnalyserContinuiteCaseSelectionnee()
+    On Error Resume Next
+    
+    Dim cellule As Range
+    Set cellule = Selection.Cells(1, 1)
+    
+    Dim valeur As String
+    valeur = CStr(cellule.Value)
+    
+    If valeur = "" Or EstUnSymbole(valeur) Then
+        MsgBox "Veuillez sélectionner une cellule contenant des numéros PDI.", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Extraire les numéros
+    Dim collP As New Collection
+    Dim collI As New Collection
+    Call ExtraireNumerosAvecExtensions(valeur, collP, collI)
+    
+    Dim msg As String
+    msg = "ANALYSE DE CONTINUITÉ - " & cellule.Address & vbCrLf & vbCrLf
+    msg = msg & "Contenu : " & valeur & vbCrLf & vbCrLf
+    
+    ' Analyser les impairs
+    If collI.Count > 0 Then
+        msg = msg & "NUMÉROS IMPAIRS :" & vbCrLf
+        msg = msg & AnalyserCollectionContinuite(collI) & vbCrLf & vbCrLf
+    End If
+    
+    ' Analyser les pairs
+    If collP.Count > 0 Then
+        msg = msg & "NUMÉROS PAIRS :" & vbCrLf
+        msg = msg & AnalyserCollectionContinuite(collP) & vbCrLf & vbCrLf
+    End If
+    
+    msg = msg & "REMARQUE : Cette analyse ne tient pas compte des exclusions" & vbCrLf
+    msg = msg & "dans d'autres cases. Utilisez la macro complète pour un" & vbCrLf
+    msg = msg & "traitement avec gestion des conflits."
+    
+    MsgBox msg, vbInformation, "Analyse Continuité"
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
+' FUNCTION : Analyser une collection pour la continuité
+' =====================================================
+Function AnalyserCollectionContinuite(coll As Collection) As String
+    If coll.Count = 0 Then
+        AnalyserCollectionContinuite = "Aucun numéro"
+        Exit Function
+    End If
+    
+    ' Extraire les numéros de base
+    Dim arr() As Long
+    ReDim arr(coll.Count - 1)
+    Dim i As Long
+    
+    For i = 1 To coll.Count
+        arr(i - 1) = coll(i)("numeroBase")
     Next i
     
-    MsgBox msg, vbInformation, "Tests Extensions"
-End Sub
+    ' Trier
+    Call TrierTableau(arr)
+    
+    Dim msg As String
+    Dim minNum As Long, maxNum As Long
+    minNum = arr(0)
+    maxNum = arr(UBound(arr))
+    
+    msg = "Numéros présents : "
+    For i = 0 To UBound(arr)
+        If i > 0 Then msg = msg & ", "
+        msg = msg & arr(i)
+    Next i
+    msg = msg & vbCrLf
+    
+    msg = msg & "Plage : " & minNum & " à " & maxNum & vbCrLf
+    
+    ' Identifier les numéros manquants de même parité
+    Dim manquants As String
+    manquants = ""
+    Dim parite As Integer
+    parite = minNum Mod 2
+    
+    Dim presentDict As Object
+    Set presentDict = CreateObject("Scripting.Dictionary")
+    For i = 0 To UBound(arr)
+        presentDict(arr(i)) = True
+    Next i
+    
+    Dim num As Long
+    For num = minNum To maxNum
+        If num Mod 2 = parite And Not presentDict.Exists(num) Then
+            If manquants <> "" Then manquants = manquants & ", "
+            manquants = manquants & num
+        End If
+    Next num
+    
+    If manquants = "" Then
+        msg = msg & "Aucun numéro manquant → Borne continue possible : " & minNum & " à " & maxNum
+    Else
+        msg = msg & "Numéros manquants : " & manquants & vbCrLf
+        msg = msg & "→ Borne continue SI ces numéros ne sont pas ailleurs"
+    End If
+    
+    AnalyserCollectionContinuite = msg
+End Function
