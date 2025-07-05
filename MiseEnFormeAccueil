@@ -72,20 +72,46 @@ Sub ColorerCellulesH6EtW6(ws As Worksheet)
     Dim plageH As Range, plageW As Range
     Dim derniereLigne As Long
     Dim i As Long
-    Dim rougeDetecteH As Boolean, rougeDetecteW As Boolean
+    Dim rougeDetecteH As Boolean, rougeDetecteW As Boolean, rougeDetecteHorsCasier As Boolean
+    Dim nombreColonnes As Integer, nombreCaissonsMax As Integer
     
     On Error Resume Next
     
     ' Trouver la dernière ligne avec des données
     derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     
-    ' Vérifier s'il y a des valeurs rouges dans la colonne H
+    ' Calculer le nombre de caissons max et l'afficher en A2
+    nombreColonnes = Val(ws.Range("C1").Value)
+    If nombreColonnes <= 0 Then nombreColonnes = 4 ' Valeur par défaut
+    nombreCaissonsMax = nombreColonnes * 4
+    ws.Range("A2").Value = "Nb caissons max: " & nombreCaissonsMax
+    ws.Range("A2").Font.Bold = True
+    
+    ' Vérifier s'il y a des PDI hors casier dans la colonne H
     Set plageH = ws.Range("H7:H" & derniereLigne)
     rougeDetecteH = False
+    rougeDetecteHorsCasier = False
     For i = 7 To derniereLigne
+        Dim codeActuel As String
+        codeActuel = Trim(CStr(ws.Cells(i, 8).Value))
+        
+        ' Vérifier si le code existe et extraire la partie numérique
+        If codeActuel <> "" And Len(codeActuel) >= 2 Then
+            Dim partieNumerique As String
+            partieNumerique = Left(codeActuel, 1) ' Premier caractère = numéro caisson
+            
+            ' Vérifier si le numéro de caisson dépasse le max autorisé
+            If IsNumeric(partieNumerique) Then
+                If Val(partieNumerique) > nombreColonnes Then
+                    rougeDetecteHorsCasier = True
+                    Exit For
+                End If
+            End If
+        End If
+        
+        ' Vérifier la couleur existante pour d'autres erreurs
         If ws.Cells(i, 8).Interior.Color = RGB(255, 0, 0) Then
             rougeDetecteH = True
-            Exit For
         End If
     Next i
     
@@ -97,14 +123,19 @@ Sub ColorerCellulesH6EtW6(ws As Worksheet)
         valeurW = Trim(CStr(ws.Cells(i, 23).Value))
         ' Vérifier si la cellule contient "cm libres" et n'est pas "0 cm libres"
         If InStr(valeurW, "cm libres") > 0 And valeurW <> "0 cm libres" And valeurW <> "" Then
-            rougeDetecteW = True
-            Exit For
+            ' Vérifier si c'est un nombre positif avant "cm libres"
+            Dim valeurNumerique As Double
+            valeurNumerique = Val(valeurW)
+            If valeurNumerique > 0 Then
+                rougeDetecteW = True
+                Exit For
+            End If
         End If
     Next i
     
-    ' Colorer H6 selon la présence de rouge dans la colonne H
+    ' Colorer H6 selon la présence de rouge dans la colonne H ou PDI hors casier
     With ws.Range("H6")
-        If rougeDetecteH Then
+        If rougeDetecteH Or rougeDetecteHorsCasier Then
             .Interior.Color = RGB(255, 0, 0) ' Rouge
             .Font.Color = RGB(255, 255, 255) ' Texte blanc
         Else
@@ -113,7 +144,7 @@ Sub ColorerCellulesH6EtW6(ws As Worksheet)
         End If
     End With
     
-    ' Colorer W6 selon la présence de rouge dans la colonne W
+    ' Colorer W6 selon la présence de cm libres positifs dans la colonne W
     With ws.Range("W6")
         If rougeDetecteW Then
             .Interior.Color = RGB(255, 0, 0) ' Rouge
@@ -123,6 +154,31 @@ Sub ColorerCellulesH6EtW6(ws As Worksheet)
             .Font.Color = RGB(0, 0, 0) ' Texte noir
         End If
     End With
+    
+    ' Colorer les cases module hors casier en rouge
+    For i = 7 To derniereLigne
+        Dim codeModule As String
+        codeModule = Trim(CStr(ws.Cells(i, 8).Value))
+        
+        If codeModule <> "" And Len(codeModule) >= 2 Then
+            Dim numeroModule As String
+            numeroModule = Left(codeModule, 1)
+            
+            If IsNumeric(numeroModule) Then
+                If Val(numeroModule) > nombreColonnes Then
+                    ' PDI hors casier - colorer en rouge
+                    ws.Cells(i, 8).Interior.Color = RGB(255, 0, 0)
+                    ws.Cells(i, 8).Font.Color = RGB(255, 255, 255)
+                Else
+                    ' PDI dans casier - remettre couleur normale si pas d'autre erreur
+                    If ws.Cells(i, 8).Interior.Color = RGB(255, 0, 0) Then
+                        ws.Cells(i, 8).Interior.ColorIndex = xlNone
+                        ws.Cells(i, 8).Font.ColorIndex = xlAutomatic
+                    End If
+                End If
+            End If
+        End If
+    Next i
     
     On Error GoTo 0
 End Sub
