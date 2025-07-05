@@ -57,7 +57,7 @@ Sub OptimiserAffichageFacade()
     
     ' ÉTAPE 1: Stocker les informations de fusion
     ligneMerge = 1
-    For Each cell In ws.UsedRange
+    For Each cell In ws.usedRange
         If cell.MergeCells Then
             If cell.Address = cell.MergeArea.Cells(1, 1).Address Then
                 wsMergeInfo.Cells(ligneMerge, 1).Value = cell.MergeArea.Address
@@ -83,7 +83,7 @@ Sub OptimiserAffichageFacade()
     Set formatDict = CreateObject("Scripting.Dictionary")
     
     ' Stocker les informations sur les libellés de voie fusionnés
-    For Each cell In ws.UsedRange
+    For Each cell In ws.usedRange
         If cell.Row Mod 2 = 0 Then  ' Ligne paire (libellé de voie)
             If cell.MergeCells Then
                 If cell.Address = cell.MergeArea.Cells(1, 1).Address Then
@@ -104,7 +104,7 @@ Sub OptimiserAffichageFacade()
     Next cell
     
     ' Défusionner toutes les cellules
-    ws.UsedRange.UnMerge
+    ws.usedRange.UnMerge
     
     ' Restaurer les valeurs dans les cellules concernées
     Dim addr As Variant
@@ -116,7 +116,7 @@ Sub OptimiserAffichageFacade()
     Next addr
     
     ' ÉTAPE 3: Compter les occurrences de chaque libellé
-    For Each cell In ws.UsedRange
+    For Each cell In ws.usedRange
         If cell.Row Mod 2 = 0 Then  ' Ligne paire (libellé de voie)
             If Not IsEmpty(cell.Value) And cell.Value <> "" Then
                 Dim cleanedValue As String
@@ -141,7 +141,7 @@ Sub OptimiserAffichageFacade()
     Next cell
     
     ' ÉTAPE 4: Identifier les numéros à supprimer pour les libellés uniques
-    For Each cell In ws.UsedRange
+    For Each cell In ws.usedRange
         If cell.Row Mod 2 = 0 Then  ' Ligne paire (libellé de voie)
             If Not IsEmpty(cell.Value) And cell.Value <> "" Then
                 Dim libelle As String
@@ -253,7 +253,7 @@ Function IdentifierCasesMultivoies(ws As Worksheet) As Object
     Set dictMultivoies = CreateObject("Scripting.Dictionary")
     
     ' Analyser chaque cellule individuellement pour détecter les vraies cases multivoies
-    For Each cell In ws.UsedRange
+    For Each cell In ws.usedRange
         If cell.Row Mod 2 = 1 Then ' Lignes impaires (numéros PDI)
             If Not IsEmpty(cell.Value) And cell.Value <> "" Then
                 numeroPDI = Trim(CStr(cell.Value))
@@ -416,7 +416,7 @@ Sub SupprimerHachuresMultivoies(ws As Worksheet)
     compteur = 0
     
     ' Parcourir toutes les cellules et supprimer les hachures
-    For Each cell In ws.UsedRange
+    For Each cell In ws.usedRange
         If cell.Row Mod 2 = 1 Then ' Lignes impaires (numéros PDI)
             If cell.Interior.Pattern = xlPatternLightDown Then
                 ' Remettre le formatage par défaut
@@ -720,3 +720,4 @@ Sub AppelerNomOngletActif()
     Call NomOngletActif
     On Error GoTo 0
 End Sub
+
