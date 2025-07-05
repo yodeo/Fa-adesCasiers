@@ -1,523 +1,311 @@
 Option Explicit
-Enum Unité
-  Point = 0
-  Pixel = 1
-  Pouce = 2
-  Centimètre = 3
-End Enum
+'************************************************************************************************
+'*                                                                                              *
+'*                                                                                              *
+'*                              laurent.lemee@laposte.fr 2021-2023                              *
+'*                                                                                              *
+'*                                                                                              *
+'*                                                                                              *
+'************************************************************************************************
 
-Public Duree As Long  ' temps d'affichage en s
+Public Const nbLigneReserv As Integer = 5 'lignes figées en haut
+Public shTournee As Worksheet
+Public NbColonnes As Integer
+Public Tablo
+Public InfosRegroupee()
+Public CouleursVoies
+Public CouleursPolice
+Public CouleursPDI
+Public Module()
+Public fin As Label
+Public Mur As Boolean
+Public SelectionActive As Range
+Public MiseaJour As Boolean 'si import de MAJ
+Public TriangleRouge As Boolean
+Public IndicateurCommentaires As Long
+Public DeuxiemeTour As Boolean
+Public PoliceMaigre As Boolean
+Public Observations As Boolean
+Public PoliceGrande As Integer
+Public MontrerTypage As Boolean
+Public Jeu
+Public JeanneMas As Boolean
+Public NbCoupuresCasier As Long
+Public ListeUDBprio()
 
-Sub RebouteZeEvents()
-Application.EnableEvents = True
-End Sub
-
-Sub OptiTablo2()
-Call OptiPlus(ActiveSheet, False)
-End Sub
-Sub OptiTablo3()
-ChoixRegroupement.Show
-'Call OptiPlus(ActiveSheet)
-End Sub
-Sub RegroupeVoies()
-RegrVoies.Show
-End Sub
-
-
-Sub Facadise2()
-PoliceMaigre = IIf(ActiveSheet.CheckBoxes("PoliceMaigreHaut").Value = xlOn, True, False)
-PoliceGrande = IIf(ActiveSheet.CheckBoxes("PolicePlusGrande").Value = xlOn, 2, 0)
-MontrerTypage = IIf(ActiveSheet.CheckBoxes("MontrerTypage").Value = xlOn, True, False)
-Observations = IIf(ActiveSheet.CheckBoxes("Obs").Value = xlOn, True, False)
-
-Call Facadise(ActiveSheet)
-End Sub
-Sub AutreAction2()
-Set shTournee = ActiveSheet
-Set SelectionActive = Selection
-AutreAction.Show
-End Sub
-Sub Mon5Col2()
-Mon5Colonnes.Show
-End Sub
-
-
-Sub InitTablo(Feuille)
-On Error GoTo ErreurInitTablo
-With Feuille
-    ' OPTIMISATION : Vérifier la taille avant de charger
-    Dim derLigne As Long
-    derLigne = .Range("B" & Rows.Count).End(xlUp).Row
-    
-    ' SÉCURITÉ : Limiter la taille du tableau
-    If derLigne - nbLigneReserv > 10000 Then
-        Debug.Print "ATTENTION : Tableau très volumineux (" & (derLigne - nbLigneReserv) & " lignes)"
-        ' Limiter à 10000 lignes pour éviter les problèmes de performance
-        derLigne = nbLigneReserv + 10000
-    End If
-    
-    Debug.Print "InitTablo : Chargement de " & (derLigne - nbLigneReserv - 1) & " lignes"
-    Tablo = Range(.Cells(nbLigneReserv + 2, 1), .Cells(derLigne, 22))
-    
-    If .[c1] = "" Then
-        NbColonnes = 5
-    Else
-        NbColonnes = .[c1]
-    End If
-    If .Range("C4") = "VERTICAL" Then Mur = True
-End With
-Exit Sub
-
-ErreurInitTablo:
-    Debug.Print "ERREUR dans InitTablo : " & Err.Description
-    ' Initialiser un tableau minimal en cas d'erreur
-    ReDim Tablo(1 To 1, 1 To 22)
-    NbColonnes = 5
-    Mur = False
-End Sub
-
-Function nbPDI(Feuille As Worksheet)
-nbPDI = UBound(Tablo)
-End Function
-
-Function nbPDIHC2(Feuille)
-Dim i, EspaceOccupe, EspaceDispo, EspaceManquant
-Call InitTablo(Feuille)
-nbPDIHC = 0
-Feuille.Columns("G:G").Interior.Color = xlNone
-EspaceDispo = 26 * 4 * NbColonnes
-EspaceOccupe = 0: EspaceManquant = 0
-For i = 1 To UBound(Tablo)
-    If EspaceOccupe < EspaceDispo Then
-        EspaceOccupe = EspaceOccupe + Tablo(i, 7)
-    Else
-        EspaceManquant = EspaceManquant + Tablo(i, 7)
-        nbPDIHC = nbPDIHC + 1
-        Feuille.Cells(i + 1 + nbLigneReserv, 7).Interior.Color = vbRed
-    End If
-Next i
-End Function
-Function nbPDIHC(Feuille)
-Dim i, EspaceOccupe, EspaceDispo, EspaceManquant
-Call InitTablo(Feuille)
-nbPDIHC = 0
-Feuille.Columns("G:G").Interior.Color = xlNone
-EspaceDispo = 26 * 4 * NbColonnes
-EspaceOccupe = Tablo(1, 7)
-i = 2
-Do
-    EspaceOccupe = EspaceOccupe + Tablo(i, 7)
-    i = i + 1
-Loop While i <= UBound(Tablo) And EspaceOccupe <= EspaceDispo
-i = i - 1
-If EspaceOccupe > EspaceDispo Then
-    Do While i <= UBound(Tablo)
-        nbPDIHC = nbPDIHC + 1
-        Feuille.Cells(i + 1 + nbLigneReserv, 7).Interior.Color = vbRed
-        i = i + 1
-    Loop
-End If
-End Function
-
-Sub PoutteZeCouleur(Feuille)
-Dim Couleurs, MonDico, C, NoCoul, i, Tempo
-If Not (MiseaJour) Then
-    ReDim Couleurs(0)
-    With ThisWorkbook.Sheets("Accueil")
-        i = 0
-        Do While .Cells(i + 2, 16).Interior.Color <> vbWhite
-            ReDim Preserve Couleurs(i)
-            Couleurs(i) = .Cells(i + 2, 16).Interior.Color
-            i = i + 1
-        Loop
-    End With
-    
-    If UBound(Couleurs) < 10 Then 'si pas assez de couleurs, on prends les couleurs par défaut
-        Erase Couleurs
-        Couleurs = Array(16751052, 16764108, 12632256, 16763904, 13434828, 52377, 10092543, 16764057, _
-                8421631, 10053222, 13421619, 13408767, 9868950, 10079487, 16776960, 39423, 8421376, 8421504, _
-                16751001, 6697881, 6723891, 52479, 6697728, 39168, 26367, 6684774, 65280, 16737843, 65535, 16711935, _
-                16711680, 128, 13056, 8388608, 32896, 8388736, 13395456, 3355443, 13209, 10040115, 13107, 255) 'pastel en premier
-    End If
-    Tempo = Couleurs(UBound(Couleurs))
-    For i = UBound(Couleurs) To 1 Step -1
-        Couleurs(i) = Couleurs(i - 1)
-    Next i
-    
-    Couleurs(0) = Tempo
-    Set MonDico = CreateObject("Scripting.Dictionary")
-    
-    For Each C In Range(Feuille.Cells(nbLigneReserv + 2, 2), Feuille.Cells(Feuille.Range("B" & Rows.Count).End(xlUp).Row, 2))
-       MonDico.Item(C.Value) = MonDico.Item(C.Value)
-    Next C
-    
-    For Each C In Range(Feuille.Cells(nbLigneReserv + 2, 2), Feuille.Cells(Feuille.Range("B" & Rows.Count).End(xlUp).Row, 2))
-        If C.Value <> "" Then
-            NoCoul = (Application.Match(C.Value, MonDico.Keys, 0)) Mod UBound(Couleurs)
-              C.Interior.Color = Couleurs(NoCoul)
-              C.offset(0, 3).Interior.Color = C.Interior.Color
-              C.Font.Color = CouleurPoliceAdaptee(C.Interior.Color)
-              C.offset(0, 3).Font.Color = C.Font.Color
-        End If
-    Next C
-Else
-    For Each C In Range(Feuille.Cells(nbLigneReserv + 2, 5), Feuille.Cells(Feuille.Range("B" & Rows.Count).End(xlUp).Row, 5))
-          C.Interior.Color = C.offset(0, -3).Interior.Color
-          C.Font.Color = C.offset(0, -3).Font.Color
-    Next C
-
-End If
-End Sub
-
-Sub InitModules(NbColonnes, Mur)
-Dim col, lettre, Cases, i
-Erase Module
-ReDim Module(26 * 4 * NbColonnes)
-
-If Mur = True Then
-    i = 1
-    For col = 1 To NbColonnes
-        For lettre = 65 To 68 'niveau
-                For Cases = 1 To 26
-                    Module(i) = col & Chr(lettre) & " " & Format(Cases, "00")
-                    i = i + 1
-                Next Cases
-        Next lettre
-    Next col
-Else
-    i = 1
-    For lettre = 65 To 68 'niveau en premier
-        For col = 1 To NbColonnes
-            For Cases = 1 To 26
-                Module(i) = col & Chr(lettre) & " " & Format(Cases, "00")
-                i = i + 1
-            Next Cases
-        Next col
-    Next lettre
-End If
-End Sub
-
-Sub InscritModule(Feuille)
-' DÉSACTIVATION TEMPORAIRE POUR DIAGNOSTIC
-Debug.Print "InscritModule : DÉSACTIVÉ temporairement pour diagnostic"
-Exit Sub
-
-' ANCIEN CODE - Réactiver après diagnostic
-Dim i, Ecart, rng As Range, Cel, LastCase As String, NbJaunes
+Sub NewImportBDC()
+Dim MonBDC, Tournee As String, Tournee2 As String, derLigne, Ligne, ShBDC, PRE, MAJbdc, shOld As Worksheet, RngOld As Range, i, MP, BAL, RS, Sais
+Dim DerLigneOld, MA, finito As Label, nextiteration As Label
+Dim TotPRE, TotPOT, TotSTOP
+JeanneMas = True
+Application.ScreenUpdating = False
 On Error GoTo fin
 Application.EnableEvents = False
 
-' SÉCURITÉ : Vérifier que Tablo est valide
-If Not IsArray(Tablo) Then
-    Debug.Print "ERREUR : Tablo n'est pas initialisé dans InscritModule"
-    GoTo fin
+'****************************************************************************
+Dim MyBDC, k
+MyBDC = Application.GetOpenFilename("Import du ou des BDC  (*.xls*), *.xls*", , "Sélection du (ou des) BDC Géop@d", , True)
+If IsArray(MyBDC) = False Then
+    MsgBox "vous n'avez selectionné aucun fichier..." & vbCr & "Importation annulée !", vbExclamation
+    Exit Sub
 End If
+'pour chaque bdc
+For k = LBound(MyBDC) To UBound(MyBDC)
+    MiseaJour = False
+    Set MonBDC = Workbooks.Open(MyBDC(k), Local:=True)
+    Set ShBDC = MonBDC.Sheets(1)
+'**********************************************************************************************************
+    If ShBDC.Name = "Liste PDI" And ShBDC.Cells(1, 55) = "ID" Then
+        
+        derLigne = ShBDC.Range("D" & Rows.Count).End(xlUp).Row
+        Tournee = ShBDC.Range("A" & derLigne + 4)
+            If Tournee = "" Then
+                MsgBox "BDC sans indication de tournée, la tournée sera 0000"
+                Tournee = "0000"
+            Else
+                Tournee2 = Mid(Tournee, Len(Tournee) - 6, 6)
+                Tournee = Mid(Tournee, Len(Tournee) - 4, 4)
+            End If
+            MAJbdc = 0
 
-For i = 1 To UBound(Tablo): Tablo(i, 8) = "": Next i
-
-' SÉCURITÉ : Vérifier que Module est valide
-If Not IsArray(Module) Or UBound(Module) < 1 Then
-    Debug.Print "ERREUR : Module n'est pas initialisé, appel InitModules"
-    Call InitModules(NbColonnes, Mur)
-End If
-
-Tablo(1, 8) = Module(1)
-
-Set rng = Feuille.Range("H" & nbLigneReserv + 2 & ":H" & (UBound(Tablo) + nbLigneReserv + 1))
-rng.Cells.ClearContents
-Ecart = Tablo(1, 7) + 1
-
-' SÉCURITÉ : Ajouter un debug pour voir la progression
-If UBound(Tablo) > 1000 Then
-    Debug.Print "InscritModule : Traitement de " & UBound(Tablo) & " lignes (peut être lent)"
-End If
-
-For i = 2 To UBound(Tablo)
-    ' SÉCURITÉ : Debug périodique pour gros volumes
-    If i Mod 1000 = 0 Then
-        Debug.Print "InscritModule : Ligne " & i & "/" & UBound(Tablo)
-        DoEvents ' Permet à Excel de respirer
-    End If
-    
-    If Ecart <= UBound(Module) Then
-        If Tablo(i, 7) > 0 Then
-            Tablo(i, 8) = Module(Ecart)
-            LastCase = Module(Ecart)
-            Ecart = Ecart + Tablo(i, 7)
+         If FeuilleExiste(Tournee) Then
+            MAJbdc = MsgBox("Tournée " & Tournee & " déjà présente ! voulez vous :" & vbLf & vbLf _
+                        & "- mettre à jour le casier existant (OUI)" & vbLf & vbLf _
+                        & "- supprimer et remplacer le casier existant (NON)" & vbLf & vbLf _
+                        & "- annuler l'importation (ANNULER)", vbYesNoCancel + vbQuestion, "Attention !")
         End If
+        
+        If MAJbdc = vbCancel Then GoTo finito
+        
+        If MAJbdc = vbYes Then
+            Set shOld = ThisWorkbook.Sheets(Tournee)
+            shOld.Name = "old" & Tournee
+            Application.DisplayAlerts = False
+            On Error Resume Next
+            ThisWorkbook.Sheets("Faç" & Tournee).Delete
+            On Error GoTo 0
+            Application.DisplayAlerts = True
+    
+        End If
+        If MAJbdc = vbNo Then
+            Application.DisplayAlerts = False
+            On Error Resume Next
+            ThisWorkbook.Sheets(Tournee).Delete
+            ThisWorkbook.Sheets("Faç" & Tournee).Delete
+            On Error GoTo 0
+            Application.DisplayAlerts = True
+        End If
+        
+        If Not (FeuilleExiste(Tournee)) Then
+            Set shTournee = ThisWorkbook.Sheets.Add(, ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+            shTournee.Name = Tournee
+                For i = ThisWorkbook.Sheets.Count To 2 Step -1 'ça mange pas de pain de trier les feuilles
+                    If IsNumeric(ThisWorkbook.Sheets(i).Name) And shTournee.Name < ThisWorkbook.Sheets(i).Name Then
+                        shTournee.Move before:=ThisWorkbook.Sheets(i)
+                    End If
+                Next i
+    
+            shTournee.[a1] = Tournee2
+            shTournee.Cells.NumberFormat = "@"
+            shTournee.Range("A" & 1 + nbLigneReserv & ":V" & 1 + nbLigneReserv) = Array("NUM ext", "VOIE", "VILLE", _
+                "OBSERVATIONS", "PRE", "TYPE PDI", "LARGEUR", "CASE MODULE", "ID PDI", "Accès", "Loc", _
+                   "PQ", "STOP", "Pot", "PartLoc", "MP", "PRE", "RS/Sais", "CodeUDB", "CP", "Libre", "DP")
+            Tablo = ShBDC.Range("A4:BG" & derLigne)
+                '********************************************************************
+                
+                Call DetourParIP
+                
+                'Call DetourParTypage
+                
+                '********************************************************************
+            For Ligne = 2 To UBound(Tablo)
+                shTournee.Cells(Ligne + nbLigneReserv, 1) = Tablo(Ligne, Cnumero) & IIf(Tablo(Ligne, Cext) = "", "", " " & Tablo(Ligne, Cext)) 'numero + ext
+                shTournee.Cells(Ligne + nbLigneReserv, 2) = Tablo(Ligne, Cvoie) 'voie
+                shTournee.Cells(Ligne + nbLigneReserv, 3) = Tablo(Ligne, Cville) 'ville
+                shTournee.Cells(Ligne + nbLigneReserv, 4) = Tablo(Ligne, Cobs) 'obs
+                shTournee.Cells(Ligne + nbLigneReserv, 9) = Tablo(Ligne, Cid) & "@" & Tablo(Ligne, Ccea) 'id pdi & CEA
+                shTournee.Cells(Ligne + nbLigneReserv, 19) = Tablo(Ligne, Cudb) 'code UDB
+                shTournee.Cells(Ligne + nbLigneReserv, 20) = Tablo(Ligne, Ccp) 'CP stocké dans col présence plaque de rue
+                'col 21 en réserve
+                shTournee.Cells(Ligne + nbLigneReserv, 22) = Tablo(Ligne, Ctypage) 'Couleur A/B
+                If Tablo(Ligne, Ctypage) = "B" Then shTournee.Cells(Ligne + nbLigneReserv, 22).HorizontalAlignment = xlRight
+                If Tablo(Ligne, CpresseSem) > 0 Then 'correction 29/3/2023
+                    shTournee.Cells(Ligne + nbLigneReserv, 6) = "Presse Q"
+                    shTournee.Cells(Ligne + nbLigneReserv, 12) = "X"
+                End If
+                ' corriger le calcul des PRE
+                PRE = Tablo(Ligne, CpreTot) - Tablo(Ligne, CpreND) - Tablo(Ligne, CpreProSaisBAL) - Tablo(Ligne, CpreProSaisMP) _
+                        - Tablo(Ligne, CprePartRSMP) - Tablo(Ligne, CprePartRSBAL) - Tablo(Ligne, CprePartSaisMP) - Tablo(Ligne, CprePartSaisBAL) 'PRE Permanents
+                If PRE <> 1 Then shTournee.Cells(Ligne + nbLigneReserv, 5) = PRE 'PRE
+                If PRE > 0 Then
+                    shTournee.Cells(Ligne + nbLigneReserv, 7) = 2 + Int(PRE / 12)  'ecartement
+                    If 2 + Int(PRE / 12) > 26 Then shTournee.Cells(Ligne + nbLigneReserv, 7) = 26
+                Else
+                    shTournee.Cells(Ligne + nbLigneReserv, 7) = 1 'ecartement RS Saiso
+                    shTournee.Cells(Ligne + nbLigneReserv, 6) = "RS/Saisonnier"
+                End If
+                Sais = Tablo(Ligne, CprePartSaisBAL) + Tablo(Ligne, CprePartSaisMP) + Tablo(Ligne, CpreProSaisBAL) + Tablo(Ligne, CpreProSaisMP)
+                RS = Tablo(Ligne, CprePartRSBAL) + Tablo(Ligne, CprePartRSMP)
+                If RS > 0 Then shTournee.Cells(Ligne + nbLigneReserv, 18) = RS & " RS"
+                If Sais > 0 Then shTournee.Cells(Ligne + nbLigneReserv, 18) = shTournee.Cells(Ligne + nbLigneReserv, 18) & RS & " Sais"
+                shTournee.Cells(Ligne + nbLigneReserv, 17) = Tablo(Ligne, CpreTot) ' PRE PPQ
+                If Tablo(Ligne, CnaturePDI) Like "*PDI de rattachement*" Then
+                    If Tablo(Ligne, CnaturePDI) Like "*priv*" Then
+                        shTournee.Cells(Ligne + nbLigneReserv, 6) = "Bat P"
+                        shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 12632256 'gris clair
+                    Else
+                        shTournee.Cells(Ligne + nbLigneReserv, 6) = "Bat C"
+                        shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 12632256 'gris clair
+                    End If
+                Else
+                    If Tablo(Ligne, CnaturePDI) Like "*PDI rattach*" Then
+                        If Tablo(Ligne, CnaturePDI) Like "*priv*" Then
+                            shTournee.Cells(Ligne + nbLigneReserv, 6) = "rattaché P"
+                            shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 15395562 'gris très clair
+                            shTournee.Cells(Ligne + nbLigneReserv, 7) = 0 'rattachés regroupés d'office
+                        Else
+                            shTournee.Cells(Ligne + nbLigneReserv, 6) = "rattaché C"
+                            shTournee.Cells(Ligne + nbLigneReserv, 6).Interior.Color = 15395562 'gris très clair
+                            'soit
+                            shTournee.Cells(Ligne + nbLigneReserv, 7) = 0 'rattachés regroupés d'office
+                        End If
+                    End If
+                End If
+                If Tablo(Ligne, CtypeAcces) <> "Entrée libre" Then shTournee.Cells(Ligne + nbLigneReserv, 10) = Tablo(Ligne, CtypeAcces)
+                If Tablo(Ligne, ClocalisationBAL) <> "Limite Voirie" Then shTournee.Cells(Ligne + nbLigneReserv, 11) = Tablo(Ligne, CdistanceAP) & " m"
+                If Tablo(Ligne, Cstop) <> 0 Then shTournee.Cells(Ligne + nbLigneReserv, 13) = Tablo(Ligne, Cstop) & " STOP" 'stop p
+                If Tablo(Ligne, Cpot) <> 0 Then shTournee.Cells(Ligne + nbLigneReserv, 14) = Tablo(Ligne, Cpot) & " POT" 'potentiel
+                TotPOT = TotPOT + Tablo(Ligne, Cpot)
+                TotSTOP = TotSTOP + Tablo(Ligne, Cstop)
+                shTournee.Cells(Ligne + nbLigneReserv, 15) = Tablo(Ligne, CpartLoc)  'part loc
+                MP = Tablo(Ligne, CprePartMP) + Tablo(Ligne, CprePartSaisMP) + Tablo(Ligne, CprePartRSMP) + Tablo(Ligne, CpreProMP) + Tablo(Ligne, CpreProSaisMP) 'remise MP
+                BAL = Tablo(Ligne, CprePartBAL) + Tablo(Ligne, CprePartSaisBAL) + Tablo(Ligne, CprePartRSBAL) + Tablo(Ligne, CpreProBAL) + Tablo(Ligne, CpreProSaisBAL) 'remise BAL
+                If BAL > 0 Then shTournee.Cells(Ligne + nbLigneReserv, 16) = BAL & " BAL" 'remise BAL
+                If MP > 0 Then
+                    shTournee.Cells(Ligne + nbLigneReserv, 16) = shTournee.Cells(Ligne + nbLigneReserv, 16) & vbLf & MP & " MP" 'remise MP
+                    If Left(shTournee.Cells(Ligne + nbLigneReserv, 16), 1) = vbLf Then shTournee.Cells(Ligne + nbLigneReserv, 16) = Replace(shTournee.Cells(Ligne + nbLigneReserv, 16), vbLf, "")
+                End If
+    
+            Next Ligne
+            
+            ThisWorkbook.Windows(1).SplitRow = nbLigneReserv + 1
+            ThisWorkbook.Windows(1).FreezePanes = True
+            If MAJbdc = vbYes Then
+                derLigne = shTournee.Range("B" & Rows.Count).End(xlUp).Row
+                DerLigneOld = shOld.Range("B" & Rows.Count).End(xlUp).Row
+                
+                For Ligne = nbLigneReserv + 2 To derLigne
+                    Set RngOld = shOld.Range("I" & nbLigneReserv + 2 & ":I" & DerLigneOld).Find(shTournee.Cells(Ligne, 9), LookIn:=xlFormulas, LookAt:=xlWhole)
+                    If Not RngOld Is Nothing Then
+                     shTournee.Cells(Ligne, 7) = shOld.Cells(RngOld.Row, 7)
+                     shTournee.Cells(Ligne, 2).Interior.Color = shOld.Cells(RngOld.Row, 2).Interior.Color
+                     shTournee.Cells(Ligne, 2).Font.Color = shOld.Cells(RngOld.Row, 2).Font.Color
+                    End If
+                Next Ligne
+                    Application.DisplayAlerts = False
+                    shOld.Delete
+                    Application.DisplayAlerts = True
+                    MiseaJour = True '=> pas couleurs à mettre en col B
+            End If
+        Else
+        
+        
+        End If
+        Call MessageinaBottle("Information", "Import de la tournée " & Tournee & " en cours", 3)
     Else
-        If Tablo(i, 7) > 0 Or Tablo(i - 1, 8) = "HC" Then Tablo(i, 8) = "HC"
+        MsgBox "Le BDC :" & vbLf & MonBDC.Name & vbLf & " n'est pas au format attendu"
+        MonBDC.Close SaveChanges:=False
+        GoTo nextiteration
     End If
-Next i
-
-If Feuille.FilterMode Then Feuille.ShowAllData
-Feuille.Range("A" & nbLigneReserv + 2 & ":I" & (UBound(Tablo) + nbLigneReserv + 1)) = Tablo
-rng.Cells.Interior.Color = xlNone
-For Each Cel In rng
-    If Right(Cel, 2) = "01" Then
-        Cel.Interior.ColorIndex = 36 'tete de module en jaune
-        NbJaunes = NbJaunes + 1
-    End If
-Next Cel
-If NbJaunes = NbColonnes * 4 Then Feuille.Range("H6").Interior.Color = vbGreen Else: Feuille.Range("H6").Interior.Color = vbRed
-
-Feuille.[h4] = LastCase
+finito:
+    'On Error Resume Next
+    MonBDC.Close SaveChanges:=False
+ 
+'Next k
+'*****************************************************************************
+'2e partie
+    Call InitTablo(shTournee)
+    With shTournee
+        .Range("B1:B4") = Application.WorksheetFunction.Transpose(Array("NB Colonnes (modifiable) :", "NB PDI :", "NB PDI Hors Casier :", "Sens de lecture (modifiable) :"))
+        .Range("C1:C3") = Application.WorksheetFunction.Transpose(Array(NbColonnes, nbPDI(shTournee), nbPDIHC(shTournee)))
+        With .Range("C4").Validation
+            .Delete
+            .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, Formula1:="VERTICAL,HORIZONTAL"
+            .IgnoreBlank = False
+            .InCellDropdown = True
+            .ShowInput = True
+            .ShowError = True
+        End With
+        .Range("C1") = 5
+        .Range("C4") = "HORIZONTAL": Mur = False
+        .Range("G4") = "Dern. case :"
+        .Columns("A:A").HorizontalAlignment = xlCenter
+        .Range("A6:T6").AutoFilter
+        .Columns("G:G").NumberFormat = "0"
+        .Columns("G:G").HorizontalAlignment = xlCenter
+        .Columns("A:I").EntireColumn.AutoFit
+        .Columns("D:D").ColumnWidth = 40
+        .Columns("I:U").EntireColumn.Hidden = True
+        .Columns("V:V").ColumnWidth = 4.2
+        If .Columns("C:C").ColumnWidth < 12 Then .Columns("C:C").ColumnWidth = 12
+    
+        
+        Call MakeZeBoutonne(shTournee, .Range("e1").Left, .Range("e1").Top + 5, 100, 20, "MAJ Façade", "Facadise2", 6174487)
+        Call MakeZeBoutonne(shTournee, .Range("h1").Left, .Range("h1").Top + 5, 100, 20, "Autre action", "AutreAction2", 5287936)
+        Call MakeZeBoutonne(shTournee, .Range("d1").Left + 15, .Range("d1").Top + 5, 180, 20, "Mon casier en 3 clics", "Mon5Col2", 8355711)
+        Call PoutteZeCheckBox(shTournee, .Range("d3").Left + 15, .Range("d3").Top, 100, 10, "Police maigre", "PoliceMaigreHaut")
+        Call PoutteZeCheckBox(shTournee, .Range("d3").Left + 120, .Range("d3").Top, 100, 10, "Observations", "Obs")
+    
+        Call PoutteZeCheckBox(shTournee, .Range("d4").Left + 15, .Range("d4").Top, 100, 10, "Police Max", "PolicePlusGrande")
+        Call PoutteZeCheckBox(shTournee, .Range("d5").Left + 15, .Range("d5").Top, 100, 10, "Liseré ou PDI B grisés", "MontrerTypage")
+        
+        
+    
+        With .Range("B1:C4,G4:H4")
+        .Borders(xlEdgeBottom).LineStyle = 1
+        .Borders(xlEdgeLeft).LineStyle = 1
+        .Borders(xlEdgeRight).LineStyle = 1
+        .Borders(xlEdgeTop).LineStyle = 1
+        .Interior.Color = 10092441
+        End With
+        .Range("H4").HorizontalAlignment = xlCenter
+    End With
+    
+    Call PoutteZeCouleur(shTournee) 'teste si seulement si new bdc dans sub
+    Call InitModules(NbColonnes, Mur)
+    Call InscritModule(shTournee)
+    Application.EnableEvents = True
+    'Call TestModuleOK(shTournee)
+    Application.EnableEvents = False
+    shTournee.Tab.Color = 6299648 'bleu foncé
+    
+nextiteration:
+Next k
 fin:
 Application.EnableEvents = True
-End Sub
 
-Sub TestModuleOK(Feuille) 'en cours si mur
-' DÉSACTIVATION TEMPORAIRE POUR DIAGNOSTIC
-Debug.Print "TestModuleOK : DÉSACTIVÉ temporairement pour éviter les boucles infinies"
-Exit Sub
-
-' ANCIEN CODE - Réactiver après diagnostic
-Dim Ligne, Module, LargModule, Ecart, PremiereCase, AvantDernierNonVide, i, Loupe
-Dim compteurSecurite As Long ' SÉCURITÉ CONTRE BOUCLES INFINIES
-Call InitTablo(Feuille)
-Ligne = 1
-
-Do While Ligne < UBound(Tablo)
-    If Left(Tablo(Ligne, 8), 2) = "HC" Then Exit Sub
-    Module = Left(Tablo(Ligne, 8), 3)
-    LargModule = 0
-    PremiereCase = Ligne
-    compteurSecurite = 0 ' RÉINITIALISER LE COMPTEUR
-    
-    Do While Left(Tablo(Ligne, 8), 3) = Module Or Tablo(Ligne, 8) = ""
-        ' SÉCURITÉ : Éviter les boucles infinies
-        compteurSecurite = compteurSecurite + 1
-        
-        ' DIAGNOSTIC AGRESSIF : Afficher toutes les 50 itérations
-        If compteurSecurite Mod 50 = 0 Then
-            Debug.Print "TestModuleOK boucle: compteur=" & compteurSecurite & ", Ligne=" & Ligne & "/" & UBound(Tablo) & ", Module=" & Module & ", Tablo(Ligne,8)='" & Tablo(Ligne, 8) & "'"
-        End If
-        
-        ' SORTIE D'URGENCE : Plus restrictive
-        If compteurSecurite > 100 Then
-            Debug.Print "ARRÊT D'URGENCE : Boucle infinie détectée dans TestModuleOK après " & compteurSecurite & " itérations"
-            Debug.Print "Ligne=" & Ligne & ", UBound=" & UBound(Tablo) & ", Module=" & Module & ", Tablo(Ligne,8)='" & Tablo(Ligne, 8) & "'"
-            Exit Do
-        End If
-        
-        ' VÉRIFICATION SUPPLÉMENTAIRE : Sortir si Ligne dépasse les limites
-        If Ligne > UBound(Tablo) Or Ligne < 1 Then
-            Debug.Print "ERREUR : Ligne hors limites (" & Ligne & "), sortie forcée"
-            Exit Do
-        End If
-        
-        LargModule = LargModule + Tablo(Ligne, 7)
-        If Tablo(Ligne, 7) > 0 Then AvantDernierNonVide = Ligne
-        Ligne = Ligne + 1
-        
-    Loop
-    If LargModule > 26 Then
-        'on a un problème
-        Ecart = Tablo(AvantDernierNonVide, 7) - (LargModule - 26)
-        ''''''''''''''''''
-        If Ecart = 1 Then
-            For i = PremiereCase To AvantDernierNonVide 'recherche 3 ou 5...
-                If Tablo(i, 7) > 2 And Tablo(i, 7) Mod 2 = 1 Then
-                    Tablo(i, 7) = Tablo(i, 7) - Ecart
-                    Feuille.Cells(i + nbLigneReserv + 1, 7) = Tablo(i, 7)
-                    Ligne = 1
-                    GoTo Loupe
-                End If
-            Next i
-            For i = PremiereCase To AvantDernierNonVide 'recherche 1
-                If Tablo(i, 7) = 1 Then
-                    Tablo(i, 7) = Tablo(i, 7) + Ecart
-                    Feuille.Cells(i + nbLigneReserv + 1, 7) = Tablo(i, 7)
-                    Ligne = 1
-                    GoTo Loupe
-                End If
-            Next i
-            Tablo(PremiereCase, 7) = Tablo(PremiereCase, 7) + Ecart
-            Feuille.Cells(PremiereCase + nbLigneReserv + 1, 7) = Tablo(PremiereCase, 7)
-        Else
-        Tablo(PremiereCase, 7) = Tablo(PremiereCase, 7) + Ecart
-        Feuille.Cells(PremiereCase + nbLigneReserv + 1, 7) = Tablo(PremiereCase, 7)
-        End If
-        ''''''''''''''''''
-        Ligne = 1
-    End If
-Loupe:
-Loop
-fin:
 End Sub
 
 
-Function CouleurPoliceAdaptee(RGB As Long) As Long
- Dim r As Integer, g As Integer, b As Integer
- r = (RGB And &HFF)
- g = (RGB And &HFF00&) / 256
- b = (RGB And &HFF0000) / 65536
- CouleurPoliceAdaptee = vbWhite
- If r * 0.3 + g * 0.59 + b * 0.11 > 128 Then CouleurPoliceAdaptee = vbBlack
-End Function
-Sub MakeZeBoutonne(Feuille, Gauche, Haut, largeur, Hauteur, texte, Macro, CouleurDuFond)
-Dim Boutonne As Shape
-If Not (shapeExists(Feuille, Macro)) Then
-    Set Boutonne = Feuille.Shapes.AddShape(msoShapeRoundedRectangle, Gauche, Haut, largeur, Hauteur)
-    With Boutonne
-        .TextFrame.Characters.Text = texte
-        .Placement = xlFreeFloating
-        .ControlFormat.PrintObject = msoFalse
-        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
-        .TextFrame2.VerticalAnchor = msoAnchorMiddle
-        .OnAction = Macro
-        .Name = Macro
-        .Fill.ForeColor.RGB = CouleurDuFond
-    End With
-End If
-End Sub
-Sub PoutteZeCheckBox(Feuille, Gauche, Haut, largeur, Hauteur, texte, Nom) ' left,top largeur hauteur
-Dim cb As CheckBox
-If Not shapeExists(Feuille, Nom) Then
-    With Feuille
-        Set cb = .CheckBoxes.Add(Gauche, Haut, largeur, Hauteur)
-    End With
-    With cb
-        .Name = Nom
-        .Placement = xlFreeFloating
-        .PrintObject = False
-        .Characters.Text = texte
-        If Nom = "MontrerTypage" Then .Value = True
-        If Nom = "Obs" Then .Value = True
-
-    End With
-End If
-End Sub
-
-Function shapeExists(Feuille, shapeName) As Boolean
-'returns TRUE if a shape named [ShapeName] exists on the worksheet
-    Dim Sh As Shape
-    For Each Sh In Feuille.Shapes
-         If Sh.Name = shapeName Then shapeExists = True
-    Next Sh
-End Function
-
-Function FeuilleExiste(Nom As String) As Boolean
-On Error Resume Next
-FeuilleExiste = Len(ThisWorkbook.Worksheets(Nom).Name) > 0
-End Function
-
-
-Sub MessageinaBottle(Titre As String, texte As String, DureeEnSec As Long)
-    With Message
-        .Caption = Titre
-        .Label1.Caption = texte
-        Duree = DureeEnSec
-        .Top = 150
-        .Left = Application.Left + Application.Width / 2 - .Width / 2
-        .Top = Application.Top + Application.Height / 2 - .Height / 2
-        .Show
-    End With
-End Sub
-Sub stopInfo()
-    Unload Message
-End Sub
-Function Index_array(my_array, my_value, My_colonne, Optional ByVal Index_debut As Long = 1) As Long
+Sub Reinitialisation()
 Dim i
-Index_array = 0
-If Dimension(my_array) > 1 Then
-    For i = Index_debut To UBound(my_array)
-        If my_array(i, My_colonne) = my_value Then
-            Index_array = i
-            Exit For
-        End If
-    Next i
-Else
-    For i = Index_debut To UBound(my_array)
-        If my_array(i) = my_value Then
-            Index_array = i
-            Exit For
-        End If
-    Next i
-End If
-End Function
-
-Function Dimension(Tblo As Variant)
-Dim S As Variant, A
-On Error Resume Next
-A = 1
-Do
-S = UBound(Tblo, A)
-A = A + 1
-Loop While Err = 0
-Err.Clear
-Dimension = A - 2
-End Function
-
-Sub Quick(A(), gauc, droi, col, ordre As Boolean) ' Quick sort
-Dim Ref, g, d, i, temp
-  Ref = A((gauc + droi) \ 2, col)
-  g = gauc: d = droi
-  Do
-    If ordre Then
-      Do While A(g, col) < Ref: g = g + 1: Loop
-      Do While Ref < A(d, col): d = d - 1: Loop
-    Else
-      Do While A(g, col) > Ref: g = g + 1: Loop
-      Do While Ref > A(d, col): d = d - 1: Loop
-    End If
-    If g <= d Then
-      For i = LBound(A, 2) To UBound(A, 2)
-        temp = A(g, i): A(g, i) = A(d, i): A(d, i) = temp
-      Next i
-      g = g + 1: d = d - 1
-    End If
-  Loop While g <= d
-  If g < droi Then Call Quick(A, g, droi, col, ordre)
-  If gauc < d Then Call Quick(A, gauc, d, col, ordre)
-End Sub
-
-Sub AlleraMaFeuille()
-ThisWorkbook.Sheets(Application.CommandBars.ActionControl.Caption).Select
-End Sub
-
-
-Public Sub RangeSize(r As Range, Optional ByVal largeur As Single = -1, Optional ByVal Hauteur As Single = -1, Optional ByVal unit As Unité = 0)
-' katido https://excel-downloads.com/
-Dim w1!, w2!, k1!, k2!, k3!, k!
-
-If r Is Nothing Then Exit Sub
-If unit < 0 Or unit > 3 Then unit = 0
-k = Array(1, 0.75, 72, 72 / 2.54)(unit)
-largeur = k * largeur: Hauteur = k * Hauteur
-If largeur >= 0 Then
-  ' Calcul des constantes sur une cellule de la plage à modifier,
-  '   qui est donc censée ne pas être verrouillée.
-  With r.Columns(1)
-    .ColumnWidth = 20: w1 = .Width
-    .ColumnWidth = 40: w2 = .Width
-  End With
-  k2 = (w2 - w1) / 20: k3 = w1 - k2 * 20: k1 = k2 + k3
-  ' Application de ColumnWidth avec les constantes
-  If largeur <= k1 Then
-    r.ColumnWidth = largeur / k1
-  Else
-    r.ColumnWidth = (largeur - k3) / k2
-  End If
-End If
-If Hauteur >= 0 Then r.RowHeight = Hauteur
-
-End Sub
-
-Function LePourcentageDeA() As String
-Dim SommeLargA, SommeLargB, i
-'compter les espaces des A et B
-SommeLargA = 0: SommeLargB = 0
-For i = 1 To UBound(Tablo)
-    If Tablo(i, 22) = "A" Then SommeLargA = SommeLargA + Tablo(i, 7)
-    If Tablo(i, 22) = "B" Then SommeLargB = SommeLargB + Tablo(i, 7)
+Application.DisplayAlerts = False
+For i = ThisWorkbook.Sheets.Count To 5 Step -1
+    ThisWorkbook.Sheets(i).Delete
 Next i
-If (SommeLargA + SommeLargB) <> 0 Then
-    LePourcentageDeA = Format(SommeLargA / (SommeLargA + SommeLargB), "0.00%")
-Else
-    LePourcentageDeA = Format(0, "0.00%")
-End If
-End Function
+ThisWorkbook.Sheets("Typage").Cells.Clear
+
+Application.DisplayAlerts = True
+
+End Sub
+
+
+
+
+
+
+
+
 
 
 
