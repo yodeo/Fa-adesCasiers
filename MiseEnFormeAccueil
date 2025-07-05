@@ -89,11 +89,14 @@ Sub ColorerCellulesH6EtW6(ws As Worksheet)
         End If
     Next i
     
-    ' Vérifier s'il y a des valeurs rouges dans la colonne W
+    ' Vérifier s'il y a des valeurs "cm libres" positives dans la colonne W
     Set plageW = ws.Range("W7:W" & derniereLigne)
     rougeDetecteW = False
     For i = 7 To derniereLigne
-        If ws.Cells(i, 23).Interior.Color = RGB(255, 0, 0) Then
+        Dim valeurW As String
+        valeurW = Trim(CStr(ws.Cells(i, 23).Value))
+        ' Vérifier si la cellule contient "cm libres" et n'est pas "0 cm libres"
+        If InStr(valeurW, "cm libres") > 0 And valeurW <> "0 cm libres" And valeurW <> "" Then
             rougeDetecteW = True
             Exit For
         End If
@@ -206,4 +209,23 @@ Sub TestCmLibresSimple()
     Else
         MsgBox "Pas de code caisson en ligne 7", vbExclamation
     End If
+End Sub
+
+' =====================================================
+' FONCTION DE TEST POUR LE CLIGNOTEMENT
+' =====================================================
+
+Sub TestClignotement()
+    Dim ws As Worksheet
+    Dim celluleTest As Range
+    
+    Set ws = ActiveSheet
+    Set celluleTest = Selection
+    
+    MsgBox "Test clignotement sur la cellule sélectionnée: " & celluleTest.Address, vbInformation
+    
+    ' Appeler directement la fonction de clignotement
+    Call FaireClignoterCellule(ws, celluleTest.Row, celluleTest.Column)
+    
+    MsgBox "Test terminé", vbInformation
 End Sub
