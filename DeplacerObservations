@@ -1,65 +1,52 @@
 Option Explicit
 
 '--------------------------------------------
-' Module: Déplacement et restauration Colonne D
+' Module: Déplacement et restauration Colonne D sans feuille de sauvegarde
 ' Description:
-'   - MoveData: copie et déplace le contenu de D7:D(lastRow) vers X7:X
-'     en créant une feuille de sauvegarde nommée "Backup_D".
-'   - RestoreData: restaure les données de "Backup_D" vers D7:D(lastRow).
+'   - MoveData: coupe le contenu de D7:D(lastRow) et le colle à X7:X
+'   - RestoreData: coupe le contenu de X7:X(lastRow) et le colle à D7:D
 '--------------------------------------------
-
-Const BackupSheetName As String = "Backup_D"
 
 Sub MoveData()
     Dim ws As Worksheet
-    Dim backupWs As Worksheet
-    Dim lastRow As Long
+    Dim lastRowD As Long
+    Dim targetCell As Range
     
     Set ws = ActiveSheet
-    lastRow = ws.Cells(ws.Rows.Count, "D").End(xlUp).Row
-    
-    ' Créer ou nettoyer la feuille de sauvegarde
-    On Error Resume Next
-    Set backupWs = ThisWorkbook.Worksheets(BackupSheetName)
-    On Error GoTo 0
-    If backupWs Is Nothing Then
-        Set backupWs = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
-        backupWs.Name = BackupSheetName
-    Else
-        backupWs.Cells.Clear
+    ' Trouver la dernière ligne non vide en colonne D
+    lastRowD = ws.Cells(ws.Rows.Count, "D").End(xlUp).Row
+    If lastRowD < 7 Then
+        MsgBox "Aucune donnée à déplacer en colonne D à partir de D7.", vbExclamation
+        Exit Sub
     End If
     
-    ' Copier les données de D7:D(lastRow) dans Backup_D
-    ws.Range("D7:D" & lastRow).Copy Destination:=backupWs.Range("A1")
+    ' Définir la cellule cible X7
+    Set targetCell = ws.Range("X7")
     
-    ' Déplacer (couper-coller) vers X7
-    ws.Range("D7:D" & lastRow).Cut Destination:=ws.Range("X7")
+    ' Couper et coller
+    ws.Range("D7:D" & lastRowD).Cut Destination:=targetCell
     
-    MsgBox "Données déplacées vers X7 et sauvegardées dans la feuille '" & BackupSheetName & "'.", vbInformation
+    MsgBox "Données coupées de D7:D" & lastRowD & " et collées à partir de X7.", vbInformation
 End Sub
 
 Sub RestoreData()
     Dim ws As Worksheet
-    Dim backupWs As Worksheet
-    Dim lastBackupRow As Long
+    Dim lastRowX As Long
+    Dim targetCell As Range
     
-    On Error Resume Next
-    Set backupWs = ThisWorkbook.Worksheets(BackupSheetName)
-    On Error GoTo 0
-    If backupWs Is Nothing Then
-        MsgBox "Feuille de sauvegarde '" & BackupSheetName & "' introuvable.", vbExclamation
+    Set ws = ActiveSheet
+    ' Trouver la dernière ligne non vide en colonne X
+    lastRowX = ws.Cells(ws.Rows.Count, "X").End(xlUp).Row
+    If lastRowX < 7 Then
+        MsgBox "Aucune donnée à restaurer en colonne X à partir de X7.", vbExclamation
         Exit Sub
     End If
     
-    Set ws = ActiveSheet
-    lastBackupRow = backupWs.Cells(backupWs.Rows.Count, "A").End(xlUp).Row
+    ' Définir la cellule cible D7
+    Set targetCell = ws.Range("D7")
     
-    ' Restaurer dans D7:D(lastBackupRow+6)
-    ws.Range("D7:D" & lastBackupRow + 6).ClearContents
-    backupWs.Range("A1:A" & lastBackupRow).Copy Destination:=ws.Range("D7")
+    ' Couper et coller
+    ws.Range("X7:X" & lastRowX).Cut Destination:=targetCell
     
-    ' Optionnel: nettoyer la feuille de sauvegarde
-    backupWs.Cells.Clear
-    
-    MsgBox "Données restaurées de la feuille '" & BackupSheetName & "'.", vbInformation
+    MsgBox "Données coupées de X7:X" & lastRowX & " et collées à partir de D7.", vbInformation
 End Sub
