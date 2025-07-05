@@ -109,7 +109,7 @@ Function ValiderModificationLargeur(ws As Worksheet, Target As Range) As Boolean
                 ' C'est un PDI rattaché - vérifier la valeur
                 If nouvelleValeur <> 0 And nouvelleValeur <> "" Then
                     ' Afficher message d'information
-                    MsgBox "⚠️ Modification interdite !" & vbCrLf & vbCrLf & _
+                    MsgBox "?? Modification interdite !" & vbCrLf & vbCrLf & _
                            "Le PDI """ & nomPDI & """ est un PDI rattaché (" & typePDI & ")." & vbCrLf & _
                            "Les PDI rattachés doivent avoir une largeur de 0." & vbCrLf & vbCrLf & _
                            "La modification a été annulée.", _
@@ -165,33 +165,6 @@ Sub AjouterMenuContextuelFacade(Target As Range, ws As Worksheet)
         .FaceId = 1695
     End With
     
-    ' Séparateur
-'    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=2)
-'    With nouvelleOption
-'        .Caption = "-"
-'        .BeginGroup = True
-'        .Tag = "NavigationPDI"
-'    End With
-'
-'    ' Options d'optimisation selon le contenu de la cellule
-'    If Not IsEmpty(Target.Value) Then
-'        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
-'        With nouvelleOption
-'            .Caption = "?? Optimiser cette zone"
-'            .OnAction = "OptimiserZoneSelectionnee"
-'            .Tag = "NavigationPDI"
-'        End With
-'    End If
-'
-'    ' Option pour cellules vides
-'    If IsEmpty(Target.Value) Then
-'        Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=3)
-'        With nouvelleOption
-'            .Caption = "??? Insérer image ici"
-'            .OnAction = "InsererImageCellule"
-'            .Tag = "NavigationPDI"
-'        End With
-'    End If
 End Sub
 
 ' =====================================================
@@ -219,14 +192,7 @@ Sub AjouterMenuContextuelSource(Target As Range, ws As Worksheet)
         .FaceId = 1695
     End With
     
-'    ' Option : Régénérer façade
-'    Set nouvelleOption = menuContextuel.Controls.Add(Type:=msoControlButton, before:=2)
-'    With nouvelleOption
-'        .Caption = "?? Régénérer la façade"
-'        .OnAction = "GenererFacadePDI"
-'        .Tag = "NavigationPDI"
-'        .BeginGroup = True
-'    End With
+
 End Sub
 
 ' =====================================================
@@ -497,49 +463,7 @@ Sub EffacerStatusBar()
     Application.StatusBar = False
 End Sub
 
-' =====================================================
-' FONCTION : Faire clignoter une cellule pendant 3 secondes
-' =====================================================
 
-Sub FaireClignoterCellule(ws As Worksheet, ligne As Long, colonne As Long)
-    Dim cellule As Range
-    Dim couleurOriginale As Long
-    Dim policeCouleurOriginale As Long
-    Dim i As Integer
-    
-    On Error Resume Next
-    
-    ' Définir la cellule cible
-    Set cellule = ws.Cells(ligne, colonne)
-    
-    ' Sauvegarder les couleurs originales
-    couleurOriginale = cellule.Interior.Color
-    policeCouleurOriginale = cellule.Font.Color
-    
-    ' Gérer les cellules fusionnées
-    If cellule.MergeCells Then
-        Set cellule = cellule.MergeArea
-    End If
-    
-    ' Clignoter 6 fois (3 secondes à 0.5 seconde par cycle)
-    For i = 1 To 6
-        ' Phase 1: Jaune vif
-        cellule.Interior.Color = RGB(255, 255, 0) ' Jaune
-        cellule.Font.Color = RGB(255, 0, 0) ' Rouge
-        Application.Wait Now + TimeValue("00:00:00.25") ' 0.25 seconde
-        
-        ' Phase 2: Couleur originale
-        cellule.Interior.Color = couleurOriginale
-        cellule.Font.Color = policeCouleurOriginale
-        Application.Wait Now + TimeValue("00:00:00.25") ' 0.25 seconde
-    Next i
-    
-    ' S'assurer que les couleurs originales sont restaurées
-    cellule.Interior.Color = couleurOriginale
-    cellule.Font.Color = policeCouleurOriginale
-    
-    On Error GoTo 0
-End Sub
 
 ' Version améliorée de la suppression du menu contextuel
 Sub SupprimerOptionMenuContextuel()
@@ -921,48 +845,48 @@ Sub GenererCodesCarsonAutomatique(ws As Worksheet)
     On Error GoTo 0
 End Sub
 
-' =====================================================
-' FONCTION : Mise en forme conditionnelle pour caissons incomplets
-' =====================================================
-
-Sub AjouterMiseEnFormeConditionnelleCaissons(ws As Worksheet)
-    Dim derniereLigne As Long
-    Dim plageH As Range
-    Dim condition As FormatCondition
-    
-    On Error Resume Next
-    
-    ' Trouver la dernière ligne avec des données
-    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    
-    ' Définir la plage H7 à la dernière ligne
-    Set plageH = ws.Range("H7:H" & derniereLigne)
-    
-    ' Supprimer les conditions existantes sur la plage H
-    plageH.FormatConditions.Delete
-    
-    ' Condition 1: Caissons incomplets (< ou > 26cm) en rouge
-    Set condition = plageH.FormatConditions.Add( _
-        Type:=xlExpression, _
-        Formula1:="=ET(H7<>"""";SOMME.SI.ENS($G:$G;$H:$H;""=""&GAUCHE(H7;2)&""*"")<>26)")
-    
-    With condition
-        .Interior.Color = RGB(255, 0, 0) ' Rouge
-        .Font.Color = RGB(255, 255, 255) ' Blanc
-    End With
-    
-    ' Condition 2: Caissons complets (= 26cm) en vert pour la dernière ligne du caisson
-    Set condition = plageH.FormatConditions.Add( _
-        Type:=xlExpression, _
-        Formula1:="=ET(H7<>"""";SOMME.SI.ENS($G:$G;$H:$H;""=""&GAUCHE(H7;2)&""*"")=26;GAUCHE(H7;2)<>GAUCHE(H8;2))")
-    
-    With condition
-        .Interior.Color = RGB(0, 255, 0) ' Vert
-        .Font.Color = RGB(0, 0, 0) ' Noir
-    End With
-    
-    On Error GoTo 0
-End Sub
+'' =====================================================
+'' FONCTION : Mise en forme conditionnelle pour caissons incomplets
+'' =====================================================
+'
+'Sub AjouterMiseEnFormeConditionnelleCaissons(ws As Worksheet)
+'    Dim derniereLigne As Long
+'    Dim plageH As Range
+'    Dim condition As FormatCondition
+'
+'    On Error Resume Next
+'
+'    ' Trouver la dernière ligne avec des données
+'    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+'
+'    ' Définir la plage H7 à la dernière ligne
+'    Set plageH = ws.Range("H7:H" & derniereLigne)
+'
+'    ' Supprimer les conditions existantes sur la plage H
+'    plageH.FormatConditions.Delete
+'
+'    ' Condition 1: Caissons incomplets (< ou > 26cm) en rouge
+'    Set condition = plageH.FormatConditions.Add( _
+'        Type:=xlExpression, _
+'        Formula1:="=ET(H7<>"""";SOMME.SI.ENS($G:$G;$H:$H;""=""&GAUCHE(H7;2)&""*"")<>26)")
+'
+'    With condition
+'        .Interior.Color = RGB(255, 0, 0) ' Rouge
+'        .Font.Color = RGB(255, 255, 255) ' Blanc
+'    End With
+'
+'    ' Condition 2: Caissons complets (= 26cm) en vert pour la dernière ligne du caisson
+'    Set condition = plageH.FormatConditions.Add( _
+'        Type:=xlExpression, _
+'        Formula1:="=ET(H7<>"""";SOMME.SI.ENS($G:$G;$H:$H;""=""&GAUCHE(H7;2)&""*"")=26;GAUCHE(H7;2)<>GAUCHE(H8;2))")
+'
+'    With condition
+'        .Interior.Color = RGB(0, 255, 0) ' Vert
+'        .Font.Color = RGB(0, 0, 0) ' Noir
+'    End With
+'
+'    On Error GoTo 0
+'End Sub
 
 ' =====================================================
 ' FONCTION DE MISE À JOUR TEMPS RÉEL COMPLÈTE (RECRÉÉE)
@@ -984,7 +908,7 @@ Sub MiseAJourTempsReelComplete(ws As Worksheet)
     Call CalculerCmLibresDirectement(ws)
     
     ' 3. Mettre à jour les mises en forme conditionnelles
-    Call AjouterMiseEnFormeConditionnelleCaissons(ws)
+    'Call AjouterMiseEnFormeConditionnelleCaissons(ws)
     Call AjouterMiseEnFormeConditionnelleW6(ws)
     
     ' 4. Colorer H6 et W6 selon les valeurs rouges
@@ -1142,5 +1066,6 @@ Sub ProtegerColonneW(ws As Worksheet)
     
     On Error GoTo 0
 End Sub
+
 
 
