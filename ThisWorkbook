@@ -712,15 +712,36 @@ Sub AjouterMiseEnFormeConditionnelleW6(ws As Worksheet)
     ' Définir la plage W7 à la dernière ligne
     Set plageW = ws.Range("W7:W" & derniereLigne)
     
-    ' Supprimer les conditions existantes sur W6
+    ' Supprimer les conditions existantes sur W6 et colonne W
     ws.Range("W6").FormatConditions.Delete
+    plageW.FormatConditions.Delete
     
-    ' Ajouter une condition pour colorer W6 en rouge si des cm libres existent (formule Excel français)
+    ' Condition W6 : Rouge si des cm libres > 0 existent
     Set condition = ws.Range("W6").FormatConditions.Add( _
         Type:=xlExpression, _
         Formula1:="=SOMMEPROD(--(ESTNUM(TROUVE(""cm libres"";W7:W" & derniereLigne & "))))>0")
     
-    ' Appliquer le format (fond rouge, texte blanc)
+    With condition
+        .Interior.Color = RGB(255, 0, 0) ' Rouge
+        .Font.Color = RGB(255, 255, 255) ' Blanc
+    End With
+    
+    ' Condition colonne W : Vert pour "0 cm libres"
+    Set condition = plageW.FormatConditions.Add( _
+        Type:=xlTextString, _
+        String:="0 cm libres", _
+        TextOperator:=xlContains)
+    
+    With condition
+        .Interior.Color = RGB(0, 255, 0) ' Vert
+        .Font.Color = RGB(0, 0, 0) ' Noir
+    End With
+    
+    ' Condition colonne W : Rouge pour les autres cm libres (> 0)
+    Set condition = plageW.FormatConditions.Add( _
+        Type:=xlExpression, _
+        Formula1:="=ET(W7<>"""";W7<>""0 cm libres"";ESTNUM(TROUVE(""cm libres"";W7)))")
+    
     With condition
         .Interior.Color = RGB(255, 0, 0) ' Rouge
         .Font.Color = RGB(255, 255, 255) ' Blanc
@@ -813,15 +834,24 @@ Sub AjouterMiseEnFormeConditionnelleCaissons(ws As Worksheet)
     ' Supprimer les conditions existantes sur la plage H
     plageH.FormatConditions.Delete
     
-    ' Ajouter une condition pour colorer en rouge les caissons incomplets (formule Excel français)
+    ' Condition 1: Caissons incomplets (< ou > 26cm) en rouge
     Set condition = plageH.FormatConditions.Add( _
         Type:=xlExpression, _
         Formula1:="=ET(H7<>"""";SOMME.SI.ENS($G:$G;$H:$H;""=""&GAUCHE(H7;2)&""*"")<>26)")
     
-    ' Appliquer le format (fond rouge, texte blanc)
     With condition
         .Interior.Color = RGB(255, 0, 0) ' Rouge
         .Font.Color = RGB(255, 255, 255) ' Blanc
+    End With
+    
+    ' Condition 2: Caissons complets (= 26cm) en vert pour la dernière ligne du caisson
+    Set condition = plageH.FormatConditions.Add( _
+        Type:=xlExpression, _
+        Formula1:="=ET(H7<>"""";SOMME.SI.ENS($G:$G;$H:$H;""=""&GAUCHE(H7;2)&""*"")=26;GAUCHE(H7;2)<>GAUCHE(H8;2))")
+    
+    With condition
+        .Interior.Color = RGB(0, 255, 0) ' Vert
+        .Font.Color = RGB(0, 0, 0) ' Noir
     End With
     
     On Error GoTo 0
@@ -883,9 +913,9 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
     For i = 7 To derniereLigne
         If ws.Cells(i, 8).Value <> "" Then ' Si il y a un code caisson
             ' Formule pour calculer si c'est la dernière ligne du caisson
-            ' et afficher les cm libres seulement sur cette ligne (Excel français avec point-virgule)
+            ' et afficher les cm libres (même si 0) seulement sur cette ligne
             formule = "=SI(ET(H" & i & "<>"""";GAUCHE(H" & i & ";2)<>GAUCHE(H" & (i + 1) & ";2));" & _
-                     "MAX(0;26-SOMME.SI.ENS(G:G;H:H;""=""&GAUCHE(H" & i & ";2)&""*"")) & "" cm libres"";"""")"
+                     "(26-SOMME.SI.ENS(G:G;H:H;""=""&GAUCHE(H" & i & ";2)&""*"")) & "" cm libres"";"""")"
             
             ws.Cells(i, 23).Formula = formule ' Colonne W = 23
         Else
