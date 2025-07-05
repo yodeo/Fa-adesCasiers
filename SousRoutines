@@ -1,0 +1,449 @@
+Option Explicit
+Enum Unité
+  Point = 0
+  Pixel = 1
+  Pouce = 2
+  Centimètre = 3
+End Enum
+
+Public Duree As Long  ' temps d'affichage en s
+
+Sub RebouteZeEvents()
+Application.EnableEvents = True
+End Sub
+
+Sub OptiTablo2()
+Call OptiPlus(ActiveSheet, False)
+End Sub
+Sub OptiTablo3()
+ChoixRegroupement.Show
+'Call OptiPlus(ActiveSheet)
+End Sub
+Sub RegroupeVoies()
+RegrVoies.Show
+End Sub
+
+
+Sub Facadise2()
+PoliceMaigre = IIf(ActiveSheet.CheckBoxes("PoliceMaigreHaut").Value = xlOn, True, False)
+PoliceGrande = IIf(ActiveSheet.CheckBoxes("PolicePlusGrande").Value = xlOn, 2, 0)
+MontrerTypage = IIf(ActiveSheet.CheckBoxes("MontrerTypage").Value = xlOn, True, False)
+Observations = IIf(ActiveSheet.CheckBoxes("Obs").Value = xlOn, True, False)
+
+Call Facadise(ActiveSheet)
+End Sub
+Sub AutreAction2()
+Set shTournee = ActiveSheet
+Set SelectionActive = Selection
+AutreAction.Show
+End Sub
+Sub Mon5Col2()
+Mon5Colonnes.Show
+End Sub
+
+
+Sub InitTablo(Feuille)
+With Feuille
+    Tablo = Range(.Cells(nbLigneReserv + 2, 1), .Cells(.Range("B" & Rows.Count).End(xlUp).Row, 22))
+    If .[c1] = "" Then
+        NbColonnes = 5
+    Else
+        NbColonnes = .[c1]
+    End If
+    If .Range("C4") = "VERTICAL" Then Mur = True
+End With
+End Sub
+
+Function nbPDI(Feuille As Worksheet)
+nbPDI = UBound(Tablo)
+End Function
+
+Function nbPDIHC2(Feuille)
+Dim i, EspaceOccupe, EspaceDispo, EspaceManquant
+Call InitTablo(Feuille)
+nbPDIHC = 0
+Feuille.Columns("G:G").Interior.Color = xlNone
+EspaceDispo = 26 * 4 * NbColonnes
+EspaceOccupe = 0: EspaceManquant = 0
+For i = 1 To UBound(Tablo)
+    If EspaceOccupe < EspaceDispo Then
+        EspaceOccupe = EspaceOccupe + Tablo(i, 7)
+    Else
+        EspaceManquant = EspaceManquant + Tablo(i, 7)
+        nbPDIHC = nbPDIHC + 1
+        Feuille.Cells(i + 1 + nbLigneReserv, 7).Interior.Color = vbRed
+    End If
+Next i
+End Function
+Function nbPDIHC(Feuille)
+Dim i, EspaceOccupe, EspaceDispo, EspaceManquant
+Call InitTablo(Feuille)
+nbPDIHC = 0
+Feuille.Columns("G:G").Interior.Color = xlNone
+EspaceDispo = 26 * 4 * NbColonnes
+EspaceOccupe = Tablo(1, 7)
+i = 2
+Do
+    EspaceOccupe = EspaceOccupe + Tablo(i, 7)
+    i = i + 1
+Loop While i <= UBound(Tablo) And EspaceOccupe <= EspaceDispo
+i = i - 1
+If EspaceOccupe > EspaceDispo Then
+    Do While i <= UBound(Tablo)
+        nbPDIHC = nbPDIHC + 1
+        Feuille.Cells(i + 1 + nbLigneReserv, 7).Interior.Color = vbRed
+        i = i + 1
+    Loop
+End If
+End Function
+
+Sub PoutteZeCouleur(Feuille)
+Dim Couleurs, MonDico, C, NoCoul, i, Tempo
+If Not (MiseaJour) Then
+    ReDim Couleurs(0)
+    With ThisWorkbook.Sheets("Accueil")
+        i = 0
+        Do While .Cells(i + 2, 16).Interior.Color <> vbWhite
+            ReDim Preserve Couleurs(i)
+            Couleurs(i) = .Cells(i + 2, 16).Interior.Color
+            i = i + 1
+        Loop
+    End With
+    
+    If UBound(Couleurs) < 10 Then 'si pas assez de couleurs, on prends les couleurs par défaut
+        Erase Couleurs
+        Couleurs = Array(16751052, 16764108, 12632256, 16763904, 13434828, 52377, 10092543, 16764057, _
+                8421631, 10053222, 13421619, 13408767, 9868950, 10079487, 16776960, 39423, 8421376, 8421504, _
+                16751001, 6697881, 6723891, 52479, 6697728, 39168, 26367, 6684774, 65280, 16737843, 65535, 16711935, _
+                16711680, 128, 13056, 8388608, 32896, 8388736, 13395456, 3355443, 13209, 10040115, 13107, 255) 'pastel en premier
+    End If
+    Tempo = Couleurs(UBound(Couleurs))
+    For i = UBound(Couleurs) To 1 Step -1
+        Couleurs(i) = Couleurs(i - 1)
+    Next i
+    
+    Couleurs(0) = Tempo
+    Set MonDico = CreateObject("Scripting.Dictionary")
+    
+    For Each C In Range(Feuille.Cells(nbLigneReserv + 2, 2), Feuille.Cells(Feuille.Range("B" & Rows.Count).End(xlUp).Row, 2))
+       MonDico.Item(C.Value) = MonDico.Item(C.Value)
+    Next C
+    
+    For Each C In Range(Feuille.Cells(nbLigneReserv + 2, 2), Feuille.Cells(Feuille.Range("B" & Rows.Count).End(xlUp).Row, 2))
+        If C.Value <> "" Then
+            NoCoul = (Application.Match(C.Value, MonDico.Keys, 0)) Mod UBound(Couleurs)
+              C.Interior.Color = Couleurs(NoCoul)
+              C.offset(0, 3).Interior.Color = C.Interior.Color
+              C.Font.Color = CouleurPoliceAdaptee(C.Interior.Color)
+              C.offset(0, 3).Font.Color = C.Font.Color
+        End If
+    Next C
+Else
+    For Each C In Range(Feuille.Cells(nbLigneReserv + 2, 5), Feuille.Cells(Feuille.Range("B" & Rows.Count).End(xlUp).Row, 5))
+          C.Interior.Color = C.offset(0, -3).Interior.Color
+          C.Font.Color = C.offset(0, -3).Font.Color
+    Next C
+
+End If
+End Sub
+
+Sub InitModules(NbColonnes, Mur)
+Dim col, lettre, Cases, i
+Erase Module
+ReDim Module(26 * 4 * NbColonnes)
+
+If Mur = True Then
+    i = 1
+    For col = 1 To NbColonnes
+        For lettre = 65 To 68 'niveau
+                For Cases = 1 To 26
+                    Module(i) = col & Chr(lettre) & " " & Format(Cases, "00")
+                    i = i + 1
+                Next Cases
+        Next lettre
+    Next col
+Else
+    i = 1
+    For lettre = 65 To 68 'niveau en premier
+        For col = 1 To NbColonnes
+            For Cases = 1 To 26
+                Module(i) = col & Chr(lettre) & " " & Format(Cases, "00")
+                i = i + 1
+            Next Cases
+        Next col
+    Next lettre
+End If
+End Sub
+
+Sub InscritModule(Feuille)
+Dim i, Ecart, rng As Range, Cel, LastCase As String, NbJaunes
+On Error GoTo fin
+Application.EnableEvents = False
+For i = 1 To UBound(Tablo): Tablo(i, 8) = "": Next i
+Tablo(1, 8) = Module(1)
+
+Set rng = Feuille.Range("H" & nbLigneReserv + 2 & ":H" & (UBound(Tablo) + nbLigneReserv + 1))
+rng.Cells.ClearContents
+Ecart = Tablo(1, 7) + 1
+For i = 2 To UBound(Tablo)
+    If Ecart <= UBound(Module) Then
+        If Tablo(i, 7) > 0 Then
+            Tablo(i, 8) = Module(Ecart)
+            LastCase = Module(Ecart)
+            Ecart = Ecart + Tablo(i, 7)
+        End If
+    Else
+        If Tablo(i, 7) > 0 Or Tablo(i - 1, 8) = "HC" Then Tablo(i, 8) = "HC"
+    End If
+Next i
+
+If Feuille.FilterMode Then Feuille.ShowAllData
+Feuille.Range("A" & nbLigneReserv + 2 & ":I" & (UBound(Tablo) + nbLigneReserv + 1)) = Tablo
+rng.Cells.Interior.Color = xlNone
+For Each Cel In rng
+    If Right(Cel, 2) = "01" Then
+        Cel.Interior.ColorIndex = 36 'tete de module en jaune
+        NbJaunes = NbJaunes + 1
+    End If
+Next Cel
+If NbJaunes = NbColonnes * 4 Then Feuille.Range("H6").Interior.Color = vbGreen Else: Feuille.Range("H6").Interior.Color = vbRed
+
+Feuille.[h4] = LastCase
+fin:
+Application.EnableEvents = True
+End Sub
+
+Sub TestModuleOK(Feuille) 'en cours si mur
+Dim Ligne, Module, LargModule, Ecart, PremiereCase, AvantDernierNonVide, i, Loupe
+Call InitTablo(Feuille)
+Ligne = 1
+
+Do While Ligne < UBound(Tablo)
+    If Left(Tablo(Ligne, 8), 2) = "HC" Then Exit Sub
+    Module = Left(Tablo(Ligne, 8), 3)
+    LargModule = 0
+    PremiereCase = Ligne
+    Do While Left(Tablo(Ligne, 8), 3) = Module Or Tablo(Ligne, 8) = ""
+        LargModule = LargModule + Tablo(Ligne, 7)
+        If Tablo(Ligne, 7) > 0 Then AvantDernierNonVide = Ligne
+        Ligne = Ligne + 1
+        If Not (Ligne) < UBound(Tablo) Then Exit Do
+    Loop
+    If LargModule > 26 Then
+        'on a un problème
+        Ecart = Tablo(AvantDernierNonVide, 7) - (LargModule - 26)
+        ''''''''''''''''''
+        If Ecart = 1 Then
+            For i = PremiereCase To AvantDernierNonVide 'recherche 3 ou 5...
+                If Tablo(i, 7) > 2 And Tablo(i, 7) Mod 2 = 1 Then
+                    Tablo(i, 7) = Tablo(i, 7) - Ecart
+                    Feuille.Cells(i + nbLigneReserv + 1, 7) = Tablo(i, 7)
+                    Ligne = 1
+                    GoTo Loupe
+                End If
+            Next i
+            For i = PremiereCase To AvantDernierNonVide 'recherche 1
+                If Tablo(i, 7) = 1 Then
+                    Tablo(i, 7) = Tablo(i, 7) + Ecart
+                    Feuille.Cells(i + nbLigneReserv + 1, 7) = Tablo(i, 7)
+                    Ligne = 1
+                    GoTo Loupe
+                End If
+            Next i
+            Tablo(PremiereCase, 7) = Tablo(PremiereCase, 7) + Ecart
+            Feuille.Cells(PremiereCase + nbLigneReserv + 1, 7) = Tablo(PremiereCase, 7)
+        Else
+        Tablo(PremiereCase, 7) = Tablo(PremiereCase, 7) + Ecart
+        Feuille.Cells(PremiereCase + nbLigneReserv + 1, 7) = Tablo(PremiereCase, 7)
+        End If
+        ''''''''''''''''''
+        Ligne = 1
+    End If
+Loupe:
+Loop
+fin:
+End Sub
+
+
+Function CouleurPoliceAdaptee(RGB As Long) As Long
+ Dim r As Integer, g As Integer, b As Integer
+ r = (RGB And &HFF)
+ g = (RGB And &HFF00&) / 256
+ b = (RGB And &HFF0000) / 65536
+ CouleurPoliceAdaptee = vbWhite
+ If r * 0.3 + g * 0.59 + b * 0.11 > 128 Then CouleurPoliceAdaptee = vbBlack
+End Function
+Sub MakeZeBoutonne(Feuille, Gauche, Haut, largeur, Hauteur, texte, Macro, CouleurDuFond)
+Dim Boutonne As Shape
+If Not (shapeExists(Feuille, Macro)) Then
+    Set Boutonne = Feuille.Shapes.AddShape(msoShapeRoundedRectangle, Gauche, Haut, largeur, Hauteur)
+    With Boutonne
+        .TextFrame.Characters.Text = texte
+        .Placement = xlFreeFloating
+        .ControlFormat.PrintObject = msoFalse
+        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        .TextFrame2.VerticalAnchor = msoAnchorMiddle
+        .OnAction = Macro
+        .Name = Macro
+        .Fill.ForeColor.RGB = CouleurDuFond
+    End With
+End If
+End Sub
+Sub PoutteZeCheckBox(Feuille, Gauche, Haut, largeur, Hauteur, texte, Nom) ' left,top largeur hauteur
+Dim cb As CheckBox
+If Not shapeExists(Feuille, Nom) Then
+    With Feuille
+        Set cb = .CheckBoxes.Add(Gauche, Haut, largeur, Hauteur)
+    End With
+    With cb
+        .Name = Nom
+        .Placement = xlFreeFloating
+        .PrintObject = False
+        .Characters.Text = texte
+        If Nom = "MontrerTypage" Then .Value = True
+        If Nom = "Obs" Then .Value = True
+
+    End With
+End If
+End Sub
+
+Function shapeExists(Feuille, shapeName) As Boolean
+'returns TRUE if a shape named [ShapeName] exists on the worksheet
+    Dim Sh As Shape
+    For Each Sh In Feuille.Shapes
+         If Sh.Name = shapeName Then shapeExists = True
+    Next Sh
+End Function
+
+Function FeuilleExiste(Nom As String) As Boolean
+On Error Resume Next
+FeuilleExiste = Len(ThisWorkbook.Worksheets(Nom).Name) > 0
+End Function
+
+
+Sub MessageinaBottle(Titre As String, texte As String, DureeEnSec As Long)
+    With Message
+        .Caption = Titre
+        .Label1.Caption = texte
+        Duree = DureeEnSec
+        .Top = 150
+        .Left = Application.Left + Application.Width / 2 - .Width / 2
+        .Top = Application.Top + Application.Height / 2 - .Height / 2
+        .Show
+    End With
+End Sub
+Sub stopInfo()
+    Unload Message
+End Sub
+Function Index_array(my_array, my_value, My_colonne, Optional ByVal Index_debut As Long = 1) As Long
+Dim i
+Index_array = 0
+If Dimension(my_array) > 1 Then
+    For i = Index_debut To UBound(my_array)
+        If my_array(i, My_colonne) = my_value Then
+            Index_array = i
+            Exit For
+        End If
+    Next i
+Else
+    For i = Index_debut To UBound(my_array)
+        If my_array(i) = my_value Then
+            Index_array = i
+            Exit For
+        End If
+    Next i
+End If
+End Function
+
+Function Dimension(Tblo As Variant)
+Dim S As Variant, A
+On Error Resume Next
+A = 1
+Do
+S = UBound(Tblo, A)
+A = A + 1
+Loop While Err = 0
+Err.Clear
+Dimension = A - 2
+End Function
+
+Sub Quick(A(), gauc, droi, col, ordre As Boolean) ' Quick sort
+Dim Ref, g, d, i, temp
+  Ref = A((gauc + droi) \ 2, col)
+  g = gauc: d = droi
+  Do
+    If ordre Then
+      Do While A(g, col) < Ref: g = g + 1: Loop
+      Do While Ref < A(d, col): d = d - 1: Loop
+    Else
+      Do While A(g, col) > Ref: g = g + 1: Loop
+      Do While Ref > A(d, col): d = d - 1: Loop
+    End If
+    If g <= d Then
+      For i = LBound(A, 2) To UBound(A, 2)
+        temp = A(g, i): A(g, i) = A(d, i): A(d, i) = temp
+      Next i
+      g = g + 1: d = d - 1
+    End If
+  Loop While g <= d
+  If g < droi Then Call Quick(A, g, droi, col, ordre)
+  If gauc < d Then Call Quick(A, gauc, d, col, ordre)
+End Sub
+
+Sub AlleraMaFeuille()
+ThisWorkbook.Sheets(Application.CommandBars.ActionControl.Caption).Select
+End Sub
+
+
+Public Sub RangeSize(r As Range, Optional ByVal largeur As Single = -1, Optional ByVal Hauteur As Single = -1, Optional ByVal unit As Unité = 0)
+' katido https://excel-downloads.com/
+Dim w1!, w2!, k1!, k2!, k3!, k!
+
+If r Is Nothing Then Exit Sub
+If unit < 0 Or unit > 3 Then unit = 0
+k = Array(1, 0.75, 72, 72 / 2.54)(unit)
+largeur = k * largeur: Hauteur = k * Hauteur
+If largeur >= 0 Then
+  ' Calcul des constantes sur une cellule de la plage à modifier,
+  '   qui est donc censée ne pas être verrouillée.
+  With r.Columns(1)
+    .ColumnWidth = 20: w1 = .Width
+    .ColumnWidth = 40: w2 = .Width
+  End With
+  k2 = (w2 - w1) / 20: k3 = w1 - k2 * 20: k1 = k2 + k3
+  ' Application de ColumnWidth avec les constantes
+  If largeur <= k1 Then
+    r.ColumnWidth = largeur / k1
+  Else
+    r.ColumnWidth = (largeur - k3) / k2
+  End If
+End If
+If Hauteur >= 0 Then r.RowHeight = Hauteur
+
+End Sub
+
+Function LePourcentageDeA() As String
+Dim SommeLargA, SommeLargB, i
+'compter les espaces des A et B
+SommeLargA = 0: SommeLargB = 0
+For i = 1 To UBound(Tablo)
+    If Tablo(i, 22) = "A" Then SommeLargA = SommeLargA + Tablo(i, 7)
+    If Tablo(i, 22) = "B" Then SommeLargB = SommeLargB + Tablo(i, 7)
+Next i
+If (SommeLargA + SommeLargB) <> 0 Then
+    LePourcentageDeA = Format(SommeLargA / (SommeLargA + SommeLargB), "0.00%")
+Else
+    LePourcentageDeA = Format(0, "0.00%")
+End If
+End Function
+
+
+
+
+
+
+
+
+
+
+
