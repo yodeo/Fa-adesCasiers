@@ -912,9 +912,9 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
     ' Ajouter les formules pour chaque ligne à partir de la ligne 7
     For i = 7 To derniereLigne
         If ws.Cells(i, 8).Value <> "" Then ' Si il y a un code caisson
-            ' Formule pour calculer si c'est la dernière ligne du caisson
-            ' et afficher les cm libres (même si 0) seulement sur cette ligne
-            formule = "=SI(ET(H" & i & "<>"""";GAUCHE(H" & i & ";2)<>GAUCHE(H" & (i + 1) & ";2));" & _
+            ' Formule pour afficher les cm libres sur TOUTES les lignes avec code caisson
+            ' (pas seulement la dernière ligne du caisson)
+            formule = "=SI(H" & i & "<>"""";" & _
                      "(26-SOMME.SI.ENS(G:G;H:H;""=""&GAUCHE(H" & i & ";2)&""*"")) & "" cm libres"";"""")"
             
             ws.Cells(i, 23).Formula = formule ' Colonne W = 23
