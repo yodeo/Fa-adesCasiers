@@ -878,6 +878,9 @@ Sub MiseAJourTempsReelComplete(ws As Worksheet)
     Call AjouterMiseEnFormeConditionnelleCaissons(ws)
     Call AjouterMiseEnFormeConditionnelleW6(ws)
     
+    ' 4. Protéger la colonne W contre modification utilisateur
+    Call ProtegerColonneW(ws)
+    
     ' Réactiver les événements et l'affichage
     Application.EnableEvents = True
     Application.ScreenUpdating = True
@@ -909,6 +912,9 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
     ' Définir le format des cellules comme Standard (pas Texte) pour accepter les formules
     ws.Range("W7:W" & derniereLigne).NumberFormat = "General"
     
+    ' Verrouiller les cellules W contre modification utilisateur
+    ws.Range("W7:W" & derniereLigne).Locked = True
+    
     ' Ajouter les formules pour chaque ligne à partir de la ligne 7
     For i = 7 To derniereLigne
         If ws.Cells(i, 8).Value <> "" Then ' Si il y a un code caisson
@@ -923,6 +929,44 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
             ws.Cells(i, 23).ClearContents
         End If
     Next i
+    
+    On Error GoTo 0
+End Sub
+
+' =====================================================
+' FONCTION : Protéger la colonne W contre modification utilisateur
+' =====================================================
+
+Sub ProtegerColonneW(ws As Worksheet)
+    On Error Resume Next
+    
+    ' Déprotéger temporairement pour pouvoir modifier les propriétés
+    ws.Unprotect
+    
+    ' Déverrouiller toutes les cellules d'abord
+    ws.Cells.Locked = False
+    
+    ' Verrouiller seulement la colonne W (formules) et H (codes caisson)
+    ws.Columns("W:W").Locked = True
+    ws.Columns("H:H").Locked = True
+    
+    ' Protéger la feuille en permettant certaines actions
+    ws.Protect Password:="", _
+               DrawingObjects:=False, _
+               Contents:=True, _
+               Scenarios:=False, _
+               UserInterfaceOnly:=True, _
+               AllowFormattingCells:=True, _
+               AllowFormattingColumns:=True, _
+               AllowFormattingRows:=True, _
+               AllowInsertingColumns:=False, _
+               AllowInsertingRows:=True, _
+               AllowInsertingHyperlinks:=False, _
+               AllowDeletingColumns:=False, _
+               AllowDeletingRows:=True, _
+               AllowSorting:=True, _
+               AllowFiltering:=True, _
+               AllowUsingPivotTables:=True
     
     On Error GoTo 0
 End Sub
