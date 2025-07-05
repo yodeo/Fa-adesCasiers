@@ -255,11 +255,11 @@ finito:
         Call MakeZeBoutonne(shTournee, .Range("d1").Left + 15, .Range("d1").Top + 5, 180, 20, "Mon casier en 3 clics", "Mon5Col2", 8355711)
         
         ' Boutons pour les macros principales
-        Call MakeZeBoutonne(shTournee, .Range("A1").Left, .Range("A1").Top + 80, 140, 25, "Générer Façade PDI", "GenererFacadePDI", 3381759)
-        Call MakeZeBoutonne(shTournee, .Range("A1").Left + 145, .Range("A1").Top + 80, 140, 25, "Plan de Piquage", "PlanDePiquage", 255)
-        Call MakeZeBoutonne(shTournee, .Range("A1").Left + 290, .Range("A1").Top + 80, 140, 25, "Regrouper PDI", "RegrouperPDIMemesVoies", 52479)
-        Call MakeZeBoutonne(shTournee, .Range("A1").Left, .Range("A1").Top + 110, 140, 25, "Largeur Perso", "DefinirLargeurPersonnalisee", 10066329)
-        Call MakeZeBoutonne(shTournee, .Range("A1").Left + 145, .Range("A1").Top + 110, 140, 25, "Largeur Perso Bat", "DefinirLargeurPersonnaliseeBat", 13408767)
+        Call MakeZeBoutonne(shTournee, .Range("w1").Left, .Range("w1").Top + 5, 120, 20, "Générer Façade PDI", "GenererFacadePDI", 3381759)
+        Call MakeZeBoutonne(shTournee, .Range("w1").Left, .Range("w1").Top + 30, 120, 20, "Plan de Piquage", "PlanDePiquage", 255)
+        Call MakeZeBoutonne(shTournee, .Range("w1").Left, .Range("w1").Top + 55, 120, 20, "Regrouper PDI", "RegrouperPDIMemesVoies", 52479)
+        Call MakeZeBoutonne(shTournee, .Range("y1").Left, .Range("A1").Top + 5, 120, 20, "Largeur Perso", "DefinirLargeurPersonnalisee", 10066329)
+        Call MakeZeBoutonne(shTournee, .Range("y1").Left, .Range("A1").Top + 30, 120, 20, "Largeur Perso Bat", "DefinirLargeurPersonnaliseeBat", 13408767)
         
         Call PoutteZeCheckBox(shTournee, .Range("d3").Left + 15, .Range("d3").Top, 100, 10, "Police maigre", "PoliceMaigreHaut")
         Call PoutteZeCheckBox(shTournee, .Range("d3").Left + 120, .Range("d3").Top, 100, 10, "Observations", "Obs")
@@ -306,6 +306,7 @@ ThisWorkbook.Sheets("Typage").Cells.Clear
 Application.DisplayAlerts = True
 
 End Sub
+
 
 
 
