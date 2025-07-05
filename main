@@ -550,9 +550,6 @@ Sub GenererFacadePDI()
     ' Fusionner les cellules adjacentes avec le même nom de voie
     Call FusionnerVoiesAdjacentes(wsDest)
     
-    ' Mettre à jour les cellules vides dans la feuille source
-    ' Utiliser la colonne W pour stocker le nombre de cellules vides
-    Call MettreAJourCellulesVides(wsSource, wsDest, "W")
     
     ' AJOUTER LES BOUTONS ET MENU CONTEXTUEL À LA FEUILLE FACADE_PDI (VERSION SIMPLIFIÉE)
     Call AjouterBoutonsSeulement(wsDest)
@@ -661,7 +658,7 @@ Sub AppliquerHachuresMultivoies()
     
     Application.ScreenUpdating = True
     
-    MsgBox "Hachures appliquées à " & compteurHachures & " cases multivoies.", vbInformation, "Hachures Multivoies"
+    'MsgBox "Hachures appliquées à " & compteurHachures & " cases multivoies.", vbInformation, "Hachures Multivoies"
 End Sub
 
 Sub SupprimerHachuresMultivoies()
@@ -2030,14 +2027,6 @@ Sub MettreAJourColonneHAvecCouleur(wsSource As Worksheet, dictCodes As Object, d
 End Sub
 
 ' =====================================================
-' SUB : Mettre à jour les cellules vides dans la feuille source - MODIFIÉE POUR DERNIÈRE LIGNE PAR CAISSON
-' =====================================================
-Sub MettreAJourCellulesVides(wsSource As Worksheet, wsFacade As Worksheet, colonneMiseAJour As String)
-    ' Utiliser la nouvelle logique de calcul par caisson
-    Call RecalculerCellulesVidesParCaisson(wsSource)
-End Sub
-
-' =====================================================
 ' FONCTION : Abréger les types de voies
 ' =====================================================
 Function AbregerTypeVoie(nomVoie As String) As String
@@ -2619,5 +2608,4 @@ End Function
 ' Dans la macro GenererFacadePDI(), remplacer cette section :
 ' (Rechercher la partie qui commence par "' Construire le texte avec symbole si nécessaire")
 
-            
 
