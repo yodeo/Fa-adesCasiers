@@ -874,8 +874,8 @@ Sub MiseAJourTempsReelComplete(ws As Worksheet)
     ' 1. Régénérer automatiquement les codes caisson
     Call GenererCodesCarsonAutomatique(ws)
     
-    ' 2. Ajouter/mettre à jour les formules pour les cm libres
-    Call AjouterFormulesTempsReel(ws)
+    ' 2. Calculer directement les cm libres (sans formules)
+    Call CalculerCmLibresDirectement(ws)
     
     ' 3. Mettre à jour les mises en forme conditionnelles
     Call AjouterMiseEnFormeConditionnelleCaissons(ws)
@@ -898,11 +898,15 @@ End Sub
 ' FONCTION : Ajouter formules automatiques pour cm libres (version temps réel)
 ' =====================================================
 
-Sub AjouterFormulesTempsReel(ws As Worksheet)
+Sub CalculerCmLibresDirectement(ws As Worksheet)
     Dim derniereLigne As Long
     Dim i As Long
-    Dim formule As String
-    Dim nbFormulesAjoutees As Long
+    Dim dictCaissons As Object
+    Dim codeCaisson As String
+    Dim prefixeCaisson As String
+    Dim largeur As Double
+    Dim espaceLibre As Double
+    Dim nbValeursAjoutees As Long
     Dim feuilleEtaitProtegee As Boolean
     
     On Error Resume Next
@@ -914,12 +918,15 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
         MsgBox "DEBUG: Feuille déprotégée temporairement", vbInformation
     End If
     
+    ' Créer un dictionnaire pour stocker les totaux par caisson
+    Set dictCaissons = CreateObject("Scripting.Dictionary")
+    
     ' Trouver la dernière ligne avec des données
     derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    nbFormulesAjoutees = 0
+    nbValeursAjoutees = 0
     
     ' DEBUG : Afficher des informations sur la fonction
-    MsgBox "Debug AjouterFormulesTempsReel:" & vbCrLf & _
+    MsgBox "Debug CalculerCmLibresDirectement:" & vbCrLf & _
            "Feuille: " & ws.Name & vbCrLf & _
            "Dernière ligne: " & derniereLigne & vbCrLf & _
            "Était protégée: " & feuilleEtaitProtegee, vbInformation
@@ -931,43 +938,61 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
         ws.Range("W6").HorizontalAlignment = xlCenter
     End If
     
-    ' Définir le format des cellules comme Standard (pas Texte) pour accepter les formules
-    ws.Range("W7:W" & derniereLigne).NumberFormat = "General"
+    ' Effacer la colonne W d'abord
+    ws.Range("W7:W" & derniereLigne).ClearContents
     
-    ' Verrouiller les cellules W contre modification utilisateur
-    ws.Range("W7:W" & derniereLigne).Locked = True
-    
-    ' Ajouter les formules pour chaque ligne à partir de la ligne 7
+    ' ÉTAPE 1: Calculer les totaux par caisson
     For i = 7 To derniereLigne
-        If ws.Cells(i, 8).Value <> "" Then ' Si il y a un code caisson
-            ' Formule pour afficher les cm libres sur TOUTES les lignes avec code caisson
-            ' (pas seulement la dernière ligne du caisson)
-            formule = "=SI(H" & i & "<>"""";" & _
-                     "(26-SOMME.SI.ENS(G:G;H:H;""=""&GAUCHE(H" & i & ";2)&""*"")) & "" cm libres"";"""")"
+        codeCaisson = Trim(CStr(ws.Cells(i, 8).Value))
+        If codeCaisson <> "" And Len(codeCaisson) >= 2 Then
+            prefixeCaisson = Left(codeCaisson, 2)
+            largeur = Val(ws.Cells(i, 7).Value)
             
-            ws.Cells(i, 23).Formula = formule ' Colonne W = 23
-            nbFormulesAjoutees = nbFormulesAjoutees + 1
-            
-            ' DEBUG : Vérifier si la formule a bien été ajoutée
-            If nbFormulesAjoutees <= 3 Then
-                Dim formuleVerif As String
-                formuleVerif = ws.Cells(i, 23).Formula
-                MsgBox "DEBUG Formule ligne " & i & ":" & vbCrLf & _
-                       "Code caisson: " & ws.Cells(i, 8).Value & vbCrLf & _
-                       "Largeur: " & ws.Cells(i, 7).Value & vbCrLf & _
-                       "Formule ajoutée: " & formule & vbCrLf & _
-                       "Formule vérifiée: " & formuleVerif & vbCrLf & _
-                       "Valeur calculée: " & ws.Cells(i, 23).Value, vbInformation
+            ' Ajouter au dictionnaire
+            If dictCaissons.Exists(prefixeCaisson) Then
+                dictCaissons(prefixeCaisson) = dictCaissons(prefixeCaisson) + largeur
+            Else
+                dictCaissons(prefixeCaisson) = largeur
             End If
-        Else
-            ' Effacer la formule si pas de code caisson
-            ws.Cells(i, 23).ClearContents
+        End If
+    Next i
+    
+    ' ÉTAPE 2: Calculer et afficher les cm libres
+    For i = 7 To derniereLigne
+        codeCaisson = Trim(CStr(ws.Cells(i, 8).Value))
+        If codeCaisson <> "" And Len(codeCaisson) >= 2 Then
+            prefixeCaisson = Left(codeCaisson, 2)
+            
+            ' Calculer l'espace libre pour ce caisson
+            If dictCaissons.Exists(prefixeCaisson) Then
+                espaceLibre = 26 - dictCaissons(prefixeCaisson)
+                
+                ' Insérer directement la valeur calculée
+                If espaceLibre > 0 Then
+                    ws.Cells(i, 23).Value = espaceLibre & " cm libres"
+                Else
+                    ws.Cells(i, 23).Value = "0 cm libres"
+                End If
+                
+                nbValeursAjoutees = nbValeursAjoutees + 1
+                
+                ' DEBUG : Afficher quelques exemples
+                If nbValeursAjoutees <= 3 Then
+                    MsgBox "DEBUG Valeur ligne " & i & ":" & vbCrLf & _
+                           "Code caisson: " & codeCaisson & vbCrLf & _
+                           "Préfixe: " & prefixeCaisson & vbCrLf & _
+                           "Total caisson: " & dictCaissons(prefixeCaisson) & vbCrLf & _
+                           "Espace libre: " & espaceLibre & vbCrLf & _
+                           "Valeur insérée: " & ws.Cells(i, 23).Value, vbInformation
+                End If
+            End If
         End If
     Next i
     
     ' DEBUG : Afficher le résumé
-    MsgBox "DEBUG Résumé AjouterFormulesTempsReel:" & vbCrLf & _
-           "Formules ajoutées: " & nbFormulesAjoutees & vbCrLf & _
+    MsgBox "DEBUG Résumé CalculerCmLibresDirectement:" & vbCrLf & _
+           "Valeurs ajoutées: " & nbValeursAjoutees & vbCrLf & _
+           "Caissons traités: " & dictCaissons.Count & vbCrLf & _
            "Sur " & (derniereLigne - 6) & " lignes analysées", vbInformation
     
     ' Reprotéger la feuille si elle était protégée au départ
@@ -977,6 +1002,15 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
     End If
     
     On Error GoTo 0
+End Sub
+
+' =====================================================
+' ANCIENNE FONCTION (GARDÉE POUR RÉFÉRENCE)
+' =====================================================
+
+Sub AjouterFormulesTempsReel_OLD(ws As Worksheet)
+    ' Cette fonction est gardée pour référence mais n'est plus utilisée
+    ' Elle utilisait des formules Excel qui ne s'ajoutaient pas correctement
 End Sub
 
 ' =====================================================
