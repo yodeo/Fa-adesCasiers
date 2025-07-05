@@ -273,44 +273,39 @@ Sub FusionnerCellulesMemeLigne(ByRef FeuilleDest As String)
 End Sub
 
 Sub FusionnerCellulesCase(ByRef FeuilleDest As String)
-    ' VERSION OPTIMISÉE avec algorithme amélioré
+    ' VERSION SIMPLIFIÉE et sûre
     Dim ws As Worksheet
     Dim lastRow As Long, i As Long
     Dim valuesProcessed As Object
-    Dim mergeOperations As Collection
     
     Application.DisplayAlerts = False
     Set ws = Worksheets(FeuilleDest)
     Set valuesProcessed = CreateObject("Scripting.Dictionary")
-    Set mergeOperations = New Collection
     
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     
-    ' PHASE 1: Identifier toutes les opérations de fusion
+    ' Traitement direct sans collections complexes
     For i = 1 To lastRow
         If Not IsEmpty(ws.Cells(i, 1)) And Not valuesProcessed.Exists(ws.Cells(i, 1).Value) Then
             Dim currentValue As String
             currentValue = ws.Cells(i, 1).Value
             valuesProcessed.Add currentValue, True
             
-            ' Collecter les informations de fusion pour cette valeur
-            CollectMergeInfo ws, currentValue, lastRow, mergeOperations
+            ' Fusionner directement pour cette valeur
+            Call FusionnerMemeValeurSimple(ws, currentValue, lastRow)
         End If
     Next i
-    
-    ' PHASE 2: Exécuter toutes les fusions en lot
-    For Each mergeOp In mergeOperations
-        ExecuteMergeOperation ws, mergeOp
-    Next mergeOp
     
     Application.DisplayAlerts = True
 End Sub
 
-Sub CollectMergeInfo(ws As Worksheet, valueToFind As String, lastRow As Long, mergeOps As Collection)
+Sub FusionnerMemeValeurSimple(ws As Worksheet, valueToFind As String, lastRow As Long)
+    ' VERSION SIMPLIFIÉE sans collections complexes
     Dim i As Long, startRow As Long, endRow As Long
     Dim inSequence As Boolean
     
     inSequence = False
+    startRow = 0
     
     For i = 1 To lastRow
         If Not IsEmpty(ws.Cells(i, 1)) And ws.Cells(i, 1).Value = valueToFind Then
@@ -322,47 +317,41 @@ Sub CollectMergeInfo(ws As Worksheet, valueToFind As String, lastRow As Long, me
             If inSequence Then
                 endRow = i - 1
                 
-                ' Ajouter l'opération de fusion si nécessaire
+                ' Effectuer la fusion si nécessaire
                 If endRow > startRow Then
-                    Dim mergeOp As Object
-                    Set mergeOp = CreateObject("Scripting.Dictionary")
-                    mergeOp.Add "startRow", startRow
-                    mergeOp.Add "endRow", endRow
-                    mergeOp.Add "value", valueToFind
-                    mergeOps.Add mergeOp
+                    ws.Range(ws.Cells(startRow, 1), ws.Cells(endRow, 1)).Merge
+                    
+                    ' Appliquer le formatage
+                    With ws.Cells(startRow, 1)
+                        .HorizontalAlignment = xlCenter
+                        .VerticalAlignment = xlCenter
+                        .Orientation = 90
+                        .Font.Bold = True
+                        .Interior.Color = RGB(230, 230, 230)
+                    End With
                 End If
                 
                 inSequence = False
+                startRow = 0
             End If
         End If
     Next i
     
     ' Traiter la fin si nécessaire
-    If inSequence And i > startRow Then
-        Set mergeOp = CreateObject("Scripting.Dictionary")
-        mergeOp.Add "startRow", startRow
-        mergeOp.Add "endRow", lastRow
-        mergeOp.Add "value", valueToFind
-        mergeOps.Add mergeOp
+    If inSequence And startRow > 0 Then
+        endRow = lastRow
+        If endRow > startRow Then
+            ws.Range(ws.Cells(startRow, 1), ws.Cells(endRow, 1)).Merge
+            
+            With ws.Cells(startRow, 1)
+                .HorizontalAlignment = xlCenter
+                .VerticalAlignment = xlCenter
+                .Orientation = 90
+                .Font.Bold = True
+                .Interior.Color = RGB(230, 230, 230)
+            End With
+        End If
     End If
-End Sub
-
-Sub ExecuteMergeOperation(ws As Worksheet, mergeOp As Object)
-    Dim startRow As Long, endRow As Long
-    startRow = mergeOp("startRow")
-    endRow = mergeOp("endRow")
-    
-    ' Effectuer la fusion
-    ws.Range(ws.Cells(startRow, 1), ws.Cells(endRow, 1)).Merge
-    
-    ' Appliquer le formatage en une seule opération
-    With ws.Cells(startRow, 1)
-        .HorizontalAlignment = xlCenter
-        .VerticalAlignment = xlCenter
-        .Orientation = 90
-        .Font.Bold = True
-        .Interior.Color = RGB(230, 230, 230)
-    End With
 End Sub
 
 Sub AjusterDimensions(ByRef FeuilleDest As String)
