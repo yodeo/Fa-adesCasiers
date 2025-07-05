@@ -715,10 +715,10 @@ Sub AjouterMiseEnFormeConditionnelleW6(ws As Worksheet)
     ' Supprimer les conditions existantes sur W6
     ws.Range("W6").FormatConditions.Delete
     
-    ' Ajouter une condition pour colorer W6 en rouge si des cm libres existent
+    ' Ajouter une condition pour colorer W6 en rouge si des cm libres existent (formule Excel français)
     Set condition = ws.Range("W6").FormatConditions.Add( _
         Type:=xlExpression, _
-        Formula1:="=SUMPRODUCT(--(ISNUMBER(FIND(""cm libres"",W7:W" & derniereLigne & "))))>0")
+        Formula1:="=SOMMEPROD(--(ESTNUM(TROUVE(""cm libres"";W7:W" & derniereLigne & "))))>0")
     
     ' Appliquer le format (fond rouge, texte blanc)
     With condition
@@ -760,7 +760,7 @@ Sub GenererCodesCarsonAutomatique(ws As Worksheet)
     
     ' Parcourir toutes les lignes à partir de la ligne 7
     For i = 7 To derniereLigne
-        If ws.Cells(i, 7).Value <> "" Then ' Si il y a une largeur
+        If ws.Cells(i, 7).Value <> "" And Val(ws.Cells(i, 7).Value) > 0 Then ' Si il y a une largeur > 0
             Dim largeurActuelle As Double
             largeurActuelle = Val(ws.Cells(i, 7).Value)
             
@@ -777,13 +777,16 @@ Sub GenererCodesCarsonAutomatique(ws As Worksheet)
                 numeroPosition = 1
             End If
             
-            ' Générer le code caisson
+            ' Générer le code caisson basé sur la position actuelle (somme des largeurs précédentes + 1)
             codeCaisson = numeroCaisson & lettreCaisson & " " & Format(numeroPosition, "00")
             ws.Cells(i, 8).Value = codeCaisson
             
             ' Mettre à jour les variables
             largeurCumulee = largeurCumulee + largeurActuelle
-            numeroPosition = numeroPosition + 1
+            numeroPosition = numeroPosition + largeurActuelle ' Position suivante = position actuelle + largeur actuelle
+        Else
+            ' Effacer le code caisson si largeur = 0 ou vide
+            ws.Cells(i, 8).ClearContents
         End If
     Next i
     
@@ -810,10 +813,10 @@ Sub AjouterMiseEnFormeConditionnelleCaissons(ws As Worksheet)
     ' Supprimer les conditions existantes sur la plage H
     plageH.FormatConditions.Delete
     
-    ' Ajouter une condition pour colorer en rouge les caissons incomplets
+    ' Ajouter une condition pour colorer en rouge les caissons incomplets (formule Excel français)
     Set condition = plageH.FormatConditions.Add( _
         Type:=xlExpression, _
-        Formula1:="=AND(H7<>"""",SUMIFS($G:$G,$H:$H,""=""&LEFT(H7,2)&""*"")<>26)")
+        Formula1:="=ET(H7<>"""";SOMME.SI.ENS($G:$G;$H:$H;""=""&GAUCHE(H7;2)&""*"")<>26)")
     
     ' Appliquer le format (fond rouge, texte blanc)
     With condition
@@ -873,13 +876,16 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
         ws.Range("W6").HorizontalAlignment = xlCenter
     End If
     
+    ' Définir le format des cellules comme Standard (pas Texte) pour accepter les formules
+    ws.Range("W7:W" & derniereLigne).NumberFormat = "General"
+    
     ' Ajouter les formules pour chaque ligne à partir de la ligne 7
     For i = 7 To derniereLigne
         If ws.Cells(i, 8).Value <> "" Then ' Si il y a un code caisson
             ' Formule pour calculer si c'est la dernière ligne du caisson
-            ' et afficher les cm libres seulement sur cette ligne
-            formule = "=IF(AND(H" & i & "<>"""",LEFT(H" & i & ",2)<>LEFT(H" & (i + 1) & ",2))," & _
-                     "MAX(0,26-SUMIFS(G:G,H:H,""=""&LEFT(H" & i & ",2)&""*"")) & "" cm libres"","""")"
+            ' et afficher les cm libres seulement sur cette ligne (Excel français avec point-virgule)
+            formule = "=SI(ET(H" & i & "<>"""";GAUCHE(H" & i & ";2)<>GAUCHE(H" & (i + 1) & ";2));" & _
+                     "MAX(0;26-SOMME.SI.ENS(G:G;H:H;""=""&GAUCHE(H" & i & ";2)&""*"")) & "" cm libres"";"""")"
             
             ws.Cells(i, 23).Formula = formule ' Colonne W = 23
         Else
