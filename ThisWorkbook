@@ -491,33 +491,51 @@ End Sub
 
 Sub MettreAJourEspacesLibres(ws As Worksheet, Target As Range)
     Dim ligne As Long
-    Dim largeurUtilisee As Double
+    Dim codeCaisson As String
+    Dim sommeLargeursCaisson As Double
     Dim espaceLibre As Double
     Dim maxCapacite As Double
     Dim celluleW As Range
+    Dim derniereLigne As Long
+    Dim i As Long
     
     On Error Resume Next
     
     ' Constante : capacité maximale d'un caisson
     maxCapacite = 26
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
     
     ' Traiter chaque ligne modifiée
     For ligne = Target.Row To Target.Row + Target.Rows.Count - 1
         ' Vérifier qu'on est dans la zone de données (ligne 7+)
         If ligne >= 7 Then
-            ' Lire la largeur utilisée en colonne G
-            largeurUtilisee = Val(ws.Cells(ligne, 7).Value)
+            ' Lire le code caisson en colonne H
+            codeCaisson = Trim(CStr(ws.Cells(ligne, 8).Value))
             
-            ' Calculer l'espace libre
-            espaceLibre = maxCapacite - largeurUtilisee
-            
-            ' Mettre à jour la colonne W
-            Set celluleW = ws.Cells(ligne, 23) ' Colonne W = 23
-            
-            If espaceLibre > 0 Then
-                celluleW.Value = espaceLibre & " cm libres"
-            Else
-                celluleW.Value = ""
+            If codeCaisson <> "" Then
+                ' Calculer la somme des largeurs pour ce caisson
+                sommeLargeursCaisson = 0
+                For i = 7 To derniereLigne
+                    If Trim(CStr(ws.Cells(i, 8).Value)) = codeCaisson Then
+                        sommeLargeursCaisson = sommeLargeursCaisson + Val(ws.Cells(i, 7).Value)
+                    End If
+                Next i
+                
+                ' Calculer l'espace libre du caisson
+                espaceLibre = maxCapacite - sommeLargeursCaisson
+                
+                ' Mettre à jour la colonne W pour toutes les lignes de ce caisson
+                For i = 7 To derniereLigne
+                    If Trim(CStr(ws.Cells(i, 8).Value)) = codeCaisson Then
+                        Set celluleW = ws.Cells(i, 23) ' Colonne W = 23
+                        
+                        If espaceLibre > 0 Then
+                            celluleW.Value = espaceLibre & " cm libres"
+                        Else
+                            celluleW.Value = ""
+                        End If
+                    End If
+                Next i
             End If
         End If
     Next ligne
