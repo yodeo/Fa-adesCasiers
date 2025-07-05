@@ -561,3 +561,81 @@ Sub MettreAJourEspacesLibres(ws As Worksheet, Target As Range)
     
     On Error GoTo 0
 End Sub
+
+' =====================================================
+' FONCTION POUR CALCULER TOUS LES ESPACES LIBRES ET COLORER W6
+' =====================================================
+
+Sub CalculerTousEspacesLibres(ws As Worksheet)
+    Dim derniereLigne As Long
+    Dim maxCapacite As Double
+    Dim i As Long
+    Dim dictCaissons As Object
+    Dim prefixeCaisson As String
+    Dim codeCaisson As String
+    Dim sommeCaisson As Double
+    Dim espaceLibre As Double
+    Dim derniereLigneCaisson As Long
+    Dim sommeGenerale As Double
+    
+    On Error Resume Next
+    
+    ' Constante : capacité maximale d'un caisson
+    maxCapacite = 26
+    derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    sommeGenerale = 0
+    
+    ' Créer un dictionnaire pour stocker les caissons
+    Set dictCaissons = CreateObject("Scripting.Dictionary")
+    
+    ' Effacer toutes les valeurs existantes en colonne W
+    ws.Range("W7:W" & derniereLigne).ClearContents
+    
+    ' Parcourir toutes les lignes pour identifier les caissons
+    For i = 7 To derniereLigne
+        codeCaisson = Trim(CStr(ws.Cells(i, 8).Value))
+        
+        If codeCaisson <> "" And Len(codeCaisson) >= 2 Then
+            prefixeCaisson = Left(codeCaisson, 2)
+            
+            ' Initialiser le caisson s'il n'existe pas
+            If Not dictCaissons.Exists(prefixeCaisson) Then
+                dictCaissons(prefixeCaisson) = Array(0, 0) ' (somme, dernière ligne)
+            End If
+            
+            ' Mettre à jour la somme et la dernière ligne
+            Dim infoCaisson As Variant
+            infoCaisson = dictCaissons(prefixeCaisson)
+            infoCaisson(0) = infoCaisson(0) + Val(ws.Cells(i, 7).Value)
+            infoCaisson(1) = i
+            dictCaissons(prefixeCaisson) = infoCaisson
+        End If
+    Next i
+    
+    ' Calculer et afficher les espaces libres pour chaque caisson
+    Dim clef As Variant
+    For Each clef In dictCaissons.Keys
+        Dim info As Variant
+        info = dictCaissons(clef)
+        sommeCaisson = info(0)
+        derniereLigneCaisson = info(1)
+        
+        espaceLibre = maxCapacite - sommeCaisson
+        
+        If espaceLibre > 0 Then
+            ws.Cells(derniereLigneCaisson, 23).Value = espaceLibre & " cm libres"
+            sommeGenerale = sommeGenerale + espaceLibre
+        End If
+    Next clef
+    
+    ' Colorer W6 en rouge si la somme générale > 0
+    If sommeGenerale > 0 Then
+        ws.Range("W6").Interior.Color = RGB(255, 0, 0) ' Rouge
+        ws.Range("W6").Font.Color = RGB(255, 255, 255) ' Texte blanc
+    Else
+        ws.Range("W6").Interior.ColorIndex = xlNone
+        ws.Range("W6").Font.ColorIndex = xlAutomatic
+    End If
+    
+    On Error GoTo 0
+End Sub
