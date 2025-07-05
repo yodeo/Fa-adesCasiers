@@ -70,9 +70,10 @@ Sub PlanDePiquage()
         fontColorData(j) = sourceRange.Cells(j, 1).Font.Color
     Next j
     
-    ' Calculer les dimensions de destination optimales
-    destCols = maxCol + 1
-    destRows = ((dataRows + maxCol - 1) \ maxCol) * 4 ' Estimation haute
+    ' Calculer les dimensions de destination avec marge de sécurité généreuse
+    destCols = maxCol + 5 ' +5 pour sécurité
+    ' Estimation très généreuse: chaque ligne de données peut créer jusqu'à 4 lignes de destination
+    destRows = dataRows * 4 + 50 ' Marge très généreuse
     
     ' Initialiser les tableaux de destination
     ReDim destData(1 To destRows, 1 To destCols)
@@ -104,11 +105,14 @@ Sub PlanDePiquage()
             destRow = destRow + 4
         End If
         
-        ' Remplir les données dans les tableaux (en mémoire)
-        destData(destRow, destCol) = CStr(sourceData(i, 1))     ' NUM ext
-        destData(destRow + 1, destCol) = CStr(sourceData(i, 4)) ' OBSERVATIONS
-        destData(destRow + 2, destCol) = CStr(sourceData(i, 2)) ' VOIE
-        caseModuleData(destRow, 1) = currentCaseModule
+        ' Vérifier les limites avant d'écrire dans les tableaux
+        If destRow + 2 <= UBound(destData, 1) And destCol <= UBound(destData, 2) Then
+            ' Remplir les données dans les tableaux (en mémoire)
+            destData(destRow, destCol) = CStr(sourceData(i, 1))     ' NUM ext
+            destData(destRow + 1, destCol) = CStr(sourceData(i, 4)) ' OBSERVATIONS
+            destData(destRow + 2, destCol) = CStr(sourceData(i, 2)) ' VOIE
+            caseModuleData(destRow, 1) = currentCaseModule
+        End If
         
         ' Stocker les informations de formatage pour application ultérieure
         Dim formatItem As Object
