@@ -903,8 +903,16 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
     Dim i As Long
     Dim formule As String
     Dim nbFormulesAjoutees As Long
+    Dim feuilleEtaitProtegee As Boolean
     
     On Error Resume Next
+    
+    ' Vérifier si la feuille est protégée et la déprotéger temporairement
+    feuilleEtaitProtegee = ws.ProtectContents
+    If feuilleEtaitProtegee Then
+        ws.Unprotect
+        MsgBox "DEBUG: Feuille déprotégée temporairement", vbInformation
+    End If
     
     ' Trouver la dernière ligne avec des données
     derniereLigne = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
@@ -913,7 +921,8 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
     ' DEBUG : Afficher des informations sur la fonction
     MsgBox "Debug AjouterFormulesTempsReel:" & vbCrLf & _
            "Feuille: " & ws.Name & vbCrLf & _
-           "Dernière ligne: " & derniereLigne, vbInformation
+           "Dernière ligne: " & derniereLigne & vbCrLf & _
+           "Était protégée: " & feuilleEtaitProtegee, vbInformation
     
     ' Ajouter un titre en W6 si il n'existe pas
     If ws.Range("W6").Value = "" Then
@@ -939,12 +948,16 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
             ws.Cells(i, 23).Formula = formule ' Colonne W = 23
             nbFormulesAjoutees = nbFormulesAjoutees + 1
             
-            ' DEBUG : Afficher quelques exemples de formules
+            ' DEBUG : Vérifier si la formule a bien été ajoutée
             If nbFormulesAjoutees <= 3 Then
+                Dim formuleVerif As String
+                formuleVerif = ws.Cells(i, 23).Formula
                 MsgBox "DEBUG Formule ligne " & i & ":" & vbCrLf & _
                        "Code caisson: " & ws.Cells(i, 8).Value & vbCrLf & _
                        "Largeur: " & ws.Cells(i, 7).Value & vbCrLf & _
-                       "Formule: " & formule, vbInformation
+                       "Formule ajoutée: " & formule & vbCrLf & _
+                       "Formule vérifiée: " & formuleVerif & vbCrLf & _
+                       "Valeur calculée: " & ws.Cells(i, 23).Value, vbInformation
             End If
         Else
             ' Effacer la formule si pas de code caisson
@@ -957,6 +970,12 @@ Sub AjouterFormulesTempsReel(ws As Worksheet)
            "Formules ajoutées: " & nbFormulesAjoutees & vbCrLf & _
            "Sur " & (derniereLigne - 6) & " lignes analysées", vbInformation
     
+    ' Reprotéger la feuille si elle était protégée au départ
+    ' MAIS on ne le fait pas ici car ProtegerColonneW le fera après
+    If feuilleEtaitProtegee Then
+        MsgBox "DEBUG: Feuille laissée déprotégée pour ProtegerColonneW", vbInformation
+    End If
+    
     On Error GoTo 0
 End Sub
 
@@ -966,6 +985,9 @@ End Sub
 
 Sub ProtegerColonneW(ws As Worksheet)
     On Error Resume Next
+    
+    ' DEBUG : Confirmer l'appel de la fonction
+    MsgBox "DEBUG ProtegerColonneW: Protection de la feuille " & ws.Name, vbInformation
     
     ' Déprotéger temporairement pour pouvoir modifier les propriétés
     ws.Unprotect
