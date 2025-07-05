@@ -307,7 +307,7 @@ Sub SimplificationBornesNumPDI()
                         nbModifiees = nbModifiees + 1
                     End If
                 End If
-            End If
+        
         Next j
     Next i
     
@@ -1058,7 +1058,7 @@ Function ObtenirMeilleureRepresentation(numeroBase As Long, groupes As Object) A
         Dim groupe As Collection
         Set groupe = groupeTrouve
     Else
-        Dim groupe As Collection
+        'Dim groupe As Collection
         Set groupe = groupes(numeroBaseStr)
     End If
     
@@ -1117,7 +1117,7 @@ Function ObtenirPlusPetiteRepresentation(numeroBase As Long, groupes As Object) 
         Dim groupe As Collection
         Set groupe = groupeTrouve
     Else
-        Dim groupe As Collection
+        'Dim groupe As Collection
         Set groupe = groupes(numeroBaseStr)
     End If
     
@@ -2078,3 +2078,4 @@ Sub SimplifierBornesFromButtonMultivoies()
         Call SimplificationBornesNumPDI
     End If
 End Sub
+
