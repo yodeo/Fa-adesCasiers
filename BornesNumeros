@@ -1016,11 +1016,11 @@ Function FormaterPlage(debut As Long, fin As Long, groupes As Object) As String
         ' Une seule valeur - prendre la plus haute extension disponible
         FormaterPlage = ObtenirMeilleureRepresentation(debut, groupes)
     Else
-        ' Plage - début sans extension, fin avec la plus haute extension
+        ' Plage - meilleure représentation pour début et fin
         Dim debutTexte As String
         Dim finTexte As String
         
-        debutTexte = CStr(debut) ' Toujours sans extension pour le début
+        debutTexte = ObtenirMeilleureRepresentation(debut, groupes) ' Meilleure extension pour le début
         finTexte = ObtenirMeilleureRepresentation(fin, groupes) ' Plus haute extension pour la fin
         
         FormaterPlage = debutTexte & " à " & finTexte
