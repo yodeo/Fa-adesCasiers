@@ -587,7 +587,7 @@ Function TraiterCaseMultivoiesAvecBornes(texteOriginal As String, voieComplete A
         ' Traiter les pairs de cette voie
         If pairsVoie.Count > 0 Then
             Dim resPairs As String
-            resPairs = GenererBornesUltraSimplifiees(pairsVoie, autresP)
+            resPairs = GenererBornesSimples(pairsVoie)
             If resPairs <> "" Then
                 bornesVoie = resPairs
             End If
@@ -596,7 +596,7 @@ Function TraiterCaseMultivoiesAvecBornes(texteOriginal As String, voieComplete A
         ' Traiter les impairs de cette voie
         If impairsVoie.Count > 0 Then
             Dim resImpairs As String
-            resImpairs = GenererBornesUltraSimplifiees(impairsVoie, autresI)
+            resImpairs = GenererBornesSimples(impairsVoie)
             If resImpairs <> "" Then
                 If bornesVoie <> "" Then
                     bornesVoie = bornesVoie & " / " & resImpairs
