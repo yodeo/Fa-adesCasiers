@@ -5,12 +5,22 @@ Sub MettreEnFormeAccueil()
 
     ' Déterminer la feuille active (compatible avec toutes les feuilles sources)
     Set ws = ActiveSheet
+    
+    ' DEBUG : Afficher des informations sur la feuille
+    MsgBox "Debug MettreEnFormeAccueil:" & vbCrLf & _
+           "Feuille active: " & ws.Name & vbCrLf & _
+           "Est feuille source: " & EstFeuilleSource(ws), vbInformation
+    
     If Not EstFeuilleSource(ws) Then
         ' Si pas une feuille source, essayer "Accueil" par défaut
         On Error Resume Next
         Set ws = ThisWorkbook.Sheets("Accueil")
         On Error GoTo 0
-        If ws Is Nothing Then Exit Sub
+        If ws Is Nothing Then 
+            MsgBox "Aucune feuille source trouvée !", vbExclamation
+            Exit Sub
+        End If
+        MsgBox "Utilisation de la feuille Accueil par défaut", vbInformation
     End If
 
     ' Centrer tout le contenu de la feuille horizontalement et verticalement
@@ -112,4 +122,26 @@ Sub ColorerCellulesH6EtW6(ws As Worksheet)
     End With
     
     On Error GoTo 0
+End Sub
+
+' =====================================================
+' FONCTION DE TEST POUR DÉBUGGER LES CM LIBRES
+' =====================================================
+
+Sub TestCmLibres()
+    Dim ws As Worksheet
+    
+    ' Prendre la feuille active
+    Set ws = ActiveSheet
+    
+    MsgBox "Test sur la feuille: " & ws.Name & vbCrLf & _
+           "EstFeuilleSource: " & EstFeuilleSource(ws), vbInformation
+    
+    ' Forcer l'appel direct de la fonction
+    If EstFeuilleSource(ws) Then
+        Call AjouterFormulesTempsReel(ws)
+        MsgBox "AjouterFormulesTempsReel terminé", vbInformation
+    Else
+        MsgBox "Cette feuille n'est pas reconnue comme feuille source", vbExclamation
+    End If
 End Sub
