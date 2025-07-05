@@ -266,10 +266,10 @@ Sub SimplificationBornesNumPDI()
                             If otherAdr <> adresse Then
                                 Dim numeroObj As Object
                                 For Each numeroObj In dataParCellule(voie)(otherAdr)("pairs")
-                                    autresP(numeroObj("numeroBase")) = True
+                                    autresP(numeroObj("cleUnique")) = True
                                 Next
                                 For Each numeroObj In dataParCellule(voie)(otherAdr)("impairs")
-                                    autresI(numeroObj("numeroBase")) = True
+                                    autresI(numeroObj("cleUnique")) = True
                                 Next
                             End If
                         Next
@@ -486,10 +486,10 @@ Function TraiterCelluleMultivoiesSimplification(valeurNum As String, voieComplet
                     If otherAdr <> adresse Then
                         Dim numeroObj As Object
                         For Each numeroObj In dataParCellule(partieVoie)(otherAdr)("pairs")
-                            autresP(numeroObj("numeroBase")) = True
+                            autresP(numeroObj("cleUnique")) = True
                         Next
                         For Each numeroObj In dataParCellule(partieVoie)(otherAdr)("impairs")
-                            autresI(numeroObj("numeroBase")) = True
+                            autresI(numeroObj("cleUnique")) = True
                         Next
                     End If
                 Next
@@ -976,15 +976,36 @@ Function PeutEtendreborne(fin As Long, actuel As Long, exclus As Object) As Bool
     End If
     
     ' Vérifier s'il y a des exclusions entre fin et actuel
+    ' Maintenant les exclusions contiennent des clés uniques comme "18|BIS"
     Dim numeroTest As Long
     For numeroTest = fin + 2 To actuel - 2 Step 2 ' Même parité
-        If exclus.Exists(numeroTest) Then
+        ' Vérifier toutes les formes possibles de ce numéro (sans extension, avec extensions)
+        Dim cleTest As String
+        
+        ' Forme de base (sans extension)
+        cleTest = numeroTest & "|"
+        If ExisteCleAvecPrefixe(exclus, cleTest) Then
             PeutEtendreborne = False
             Exit Function
         End If
     Next numeroTest
     
     PeutEtendreborne = True
+End Function
+
+' =====================================================
+' FUNCTION : Vérifier si une clé avec préfixe existe dans le dictionnaire
+' =====================================================
+Function ExisteCleAvecPrefixe(dictionnaire As Object, prefixe As String) As Boolean
+    ExisteCleAvecPrefixe = False
+    
+    Dim cle As Variant
+    For Each cle In dictionnaire.Keys
+        If Left(CStr(cle), Len(prefixe)) = prefixe Then
+            ExisteCleAvecPrefixe = True
+            Exit Function
+        End If
+    Next cle
 End Function
 
 ' =====================================================
