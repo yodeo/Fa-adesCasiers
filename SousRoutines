@@ -198,6 +198,11 @@ End If
 End Sub
 
 Sub InscritModule(Feuille)
+' DÉSACTIVATION TEMPORAIRE POUR DIAGNOSTIC
+Debug.Print "InscritModule : DÉSACTIVÉ temporairement pour diagnostic"
+Exit Sub
+
+' ANCIEN CODE - Réactiver après diagnostic
 Dim i, Ecart, rng As Range, Cel, LastCase As String, NbJaunes
 On Error GoTo fin
 Application.EnableEvents = False
@@ -262,6 +267,11 @@ Application.EnableEvents = True
 End Sub
 
 Sub TestModuleOK(Feuille) 'en cours si mur
+' DÉSACTIVATION TEMPORAIRE POUR DIAGNOSTIC
+Debug.Print "TestModuleOK : DÉSACTIVÉ temporairement pour éviter les boucles infinies"
+Exit Sub
+
+' ANCIEN CODE - Réactiver après diagnostic
 Dim Ligne, Module, LargModule, Ecart, PremiereCase, AvantDernierNonVide, i, Loupe
 Dim compteurSecurite As Long ' SÉCURITÉ CONTRE BOUCLES INFINIES
 Call InitTablo(Feuille)
@@ -277,15 +287,29 @@ Do While Ligne < UBound(Tablo)
     Do While Left(Tablo(Ligne, 8), 3) = Module Or Tablo(Ligne, 8) = ""
         ' SÉCURITÉ : Éviter les boucles infinies
         compteurSecurite = compteurSecurite + 1
-        If compteurSecurite > UBound(Tablo) * 2 Then
-            Debug.Print "ERREUR : Boucle infinie détectée dans TestModuleOK, Ligne=" & Ligne & ", Module=" & Module
+        
+        ' DIAGNOSTIC AGRESSIF : Afficher toutes les 50 itérations
+        If compteurSecurite Mod 50 = 0 Then
+            Debug.Print "TestModuleOK boucle: compteur=" & compteurSecurite & ", Ligne=" & Ligne & "/" & UBound(Tablo) & ", Module=" & Module & ", Tablo(Ligne,8)='" & Tablo(Ligne, 8) & "'"
+        End If
+        
+        ' SORTIE D'URGENCE : Plus restrictive
+        If compteurSecurite > 100 Then
+            Debug.Print "ARRÊT D'URGENCE : Boucle infinie détectée dans TestModuleOK après " & compteurSecurite & " itérations"
+            Debug.Print "Ligne=" & Ligne & ", UBound=" & UBound(Tablo) & ", Module=" & Module & ", Tablo(Ligne,8)='" & Tablo(Ligne, 8) & "'"
+            Exit Do
+        End If
+        
+        ' VÉRIFICATION SUPPLÉMENTAIRE : Sortir si Ligne dépasse les limites
+        If Ligne > UBound(Tablo) Or Ligne < 1 Then
+            Debug.Print "ERREUR : Ligne hors limites (" & Ligne & "), sortie forcée"
             Exit Do
         End If
         
         LargModule = LargModule + Tablo(Ligne, 7)
         If Tablo(Ligne, 7) > 0 Then AvantDernierNonVide = Ligne
         Ligne = Ligne + 1
-        If Ligne > UBound(Tablo) Then Exit Do ' CONDITION DE SORTIE AMÉLIORÉE
+        
     Loop
     If LargModule > 26 Then
         'on a un problème
