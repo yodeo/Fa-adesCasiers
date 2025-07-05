@@ -8,7 +8,7 @@ Function EstPDIRattache(numPDI As String, ligneActuelle As Long) As Boolean
     Dim wsAccueil As Worksheet
     Dim typePDI As String
     
-    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
+    Set wsAccueil = ActiveSheet
     
     ' Lire la valeur de la colonne F (TYPE PDI) - colonne 6
     typePDI = UCase(Trim(wsAccueil.Cells(ligneActuelle, 6).Text))
@@ -36,6 +36,9 @@ Sub DefinirLargeurPersonnalisee()
     Dim nouvelleLargeur As String
     Dim largeurNumerique As Integer
     
+    ' Supprimer la protection de la feuille
+    Call EnleverProtectionFeuilleActive
+    
     ' Demander à l'utilisateur la largeur souhaitée
     nouvelleLargeur = InputBox("Quelle largeur souhaitez-vous appliquer aux PDI principaux ?" & vbCrLf & _
                               "(Les PDI rattachés seront automatiquement mis à 0)", _
@@ -51,7 +54,8 @@ Sub DefinirLargeurPersonnalisee()
     End If
     
     ' Initialisation
-    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
+    Set wsAccueil = ActiveSheet
+
     compteurModifiesPrincipaux = 0
     compteurModifies0 = 0
     
@@ -119,7 +123,8 @@ Sub DefinirLargeurPersonnaliseeBat()
     End If
 
     ' Initialisation
-    Set wsAccueil = ThisWorkbook.Sheets("Accueil")
+    Set wsAccueil = ActiveSheet
+
     compteurModifiesPrincipaux = 0
     compteurModifies0 = 0
 
@@ -156,5 +161,14 @@ Sub DefinirLargeurPersonnaliseeBat()
            "- " & compteurModifies0 & " PDI rattachés mis à 0", _
            vbInformation, "Mise à jour terminée"
 End Sub
+
+Function ConvertirEnEntier(valeur As String, valeurParDefaut As Integer) As Integer
+    If IsNumeric(valeur) Then
+        ConvertirEnEntier = CInt(valeur)
+    Else
+        ConvertirEnEntier = valeurParDefaut
+    End If
+End Function
+
 
 
