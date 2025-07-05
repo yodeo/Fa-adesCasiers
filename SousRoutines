@@ -43,8 +43,22 @@ End Sub
 
 
 Sub InitTablo(Feuille)
+On Error GoTo ErreurInitTablo
 With Feuille
-    Tablo = Range(.Cells(nbLigneReserv + 2, 1), .Cells(.Range("B" & Rows.Count).End(xlUp).Row, 22))
+    ' OPTIMISATION : Vérifier la taille avant de charger
+    Dim derLigne As Long
+    derLigne = .Range("B" & Rows.Count).End(xlUp).Row
+    
+    ' SÉCURITÉ : Limiter la taille du tableau
+    If derLigne - nbLigneReserv > 10000 Then
+        Debug.Print "ATTENTION : Tableau très volumineux (" & (derLigne - nbLigneReserv) & " lignes)"
+        ' Limiter à 10000 lignes pour éviter les problèmes de performance
+        derLigne = nbLigneReserv + 10000
+    End If
+    
+    Debug.Print "InitTablo : Chargement de " & (derLigne - nbLigneReserv - 1) & " lignes"
+    Tablo = Range(.Cells(nbLigneReserv + 2, 1), .Cells(derLigne, 22))
+    
     If .[c1] = "" Then
         NbColonnes = 5
     Else
@@ -52,6 +66,14 @@ With Feuille
     End If
     If .Range("C4") = "VERTICAL" Then Mur = True
 End With
+Exit Sub
+
+ErreurInitTablo:
+    Debug.Print "ERREUR dans InitTablo : " & Err.Description
+    ' Initialiser un tableau minimal en cas d'erreur
+    ReDim Tablo(1 To 1, 1 To 22)
+    NbColonnes = 5
+    Mur = False
 End Sub
 
 Function nbPDI(Feuille As Worksheet)
@@ -179,13 +201,39 @@ Sub InscritModule(Feuille)
 Dim i, Ecart, rng As Range, Cel, LastCase As String, NbJaunes
 On Error GoTo fin
 Application.EnableEvents = False
+
+' SÉCURITÉ : Vérifier que Tablo est valide
+If Not IsArray(Tablo) Then
+    Debug.Print "ERREUR : Tablo n'est pas initialisé dans InscritModule"
+    GoTo fin
+End If
+
 For i = 1 To UBound(Tablo): Tablo(i, 8) = "": Next i
+
+' SÉCURITÉ : Vérifier que Module est valide
+If Not IsArray(Module) Or UBound(Module) < 1 Then
+    Debug.Print "ERREUR : Module n'est pas initialisé, appel InitModules"
+    Call InitModules(NbColonnes, Mur)
+End If
+
 Tablo(1, 8) = Module(1)
 
 Set rng = Feuille.Range("H" & nbLigneReserv + 2 & ":H" & (UBound(Tablo) + nbLigneReserv + 1))
 rng.Cells.ClearContents
 Ecart = Tablo(1, 7) + 1
+
+' SÉCURITÉ : Ajouter un debug pour voir la progression
+If UBound(Tablo) > 1000 Then
+    Debug.Print "InscritModule : Traitement de " & UBound(Tablo) & " lignes (peut être lent)"
+End If
+
 For i = 2 To UBound(Tablo)
+    ' SÉCURITÉ : Debug périodique pour gros volumes
+    If i Mod 1000 = 0 Then
+        Debug.Print "InscritModule : Ligne " & i & "/" & UBound(Tablo)
+        DoEvents ' Permet à Excel de respirer
+    End If
+    
     If Ecart <= UBound(Module) Then
         If Tablo(i, 7) > 0 Then
             Tablo(i, 8) = Module(Ecart)
@@ -215,6 +263,7 @@ End Sub
 
 Sub TestModuleOK(Feuille) 'en cours si mur
 Dim Ligne, Module, LargModule, Ecart, PremiereCase, AvantDernierNonVide, i, Loupe
+Dim compteurSecurite As Long ' SÉCURITÉ CONTRE BOUCLES INFINIES
 Call InitTablo(Feuille)
 Ligne = 1
 
@@ -223,11 +272,20 @@ Do While Ligne < UBound(Tablo)
     Module = Left(Tablo(Ligne, 8), 3)
     LargModule = 0
     PremiereCase = Ligne
+    compteurSecurite = 0 ' RÉINITIALISER LE COMPTEUR
+    
     Do While Left(Tablo(Ligne, 8), 3) = Module Or Tablo(Ligne, 8) = ""
+        ' SÉCURITÉ : Éviter les boucles infinies
+        compteurSecurite = compteurSecurite + 1
+        If compteurSecurite > UBound(Tablo) * 2 Then
+            Debug.Print "ERREUR : Boucle infinie détectée dans TestModuleOK, Ligne=" & Ligne & ", Module=" & Module
+            Exit Do
+        End If
+        
         LargModule = LargModule + Tablo(Ligne, 7)
         If Tablo(Ligne, 7) > 0 Then AvantDernierNonVide = Ligne
         Ligne = Ligne + 1
-        If Not (Ligne) < UBound(Tablo) Then Exit Do
+        If Ligne > UBound(Tablo) Then Exit Do ' CONDITION DE SORTIE AMÉLIORÉE
     Loop
     If LargModule > 26 Then
         'on a un problème
@@ -436,7 +494,6 @@ Else
     LePourcentageDeA = Format(0, "0.00%")
 End If
 End Function
-
 
 
 
