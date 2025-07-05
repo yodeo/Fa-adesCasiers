@@ -575,10 +575,10 @@ Function TraiterCaseMultivoiesAvecBornes(texteOriginal As String, voieComplete A
         Dim partieVoie As String
         partieVoie = Trim(partiesVoies(i))
         
-        ' Extraire les numéros de cette voie
+        ' Extraire les numéros de cette voie spécifique uniquement
         Dim pairsVoie As New Collection
         Dim impairsVoie As New Collection
-        Call ExtraireNumerosPDI(partieVoie, pairsVoie, impairsVoie)
+        Call ExtraireNumerosPartieVoie(partieVoie, pairsVoie, impairsVoie)
         
         ' Générer les bornes pour cette voie
         Dim bornesVoie As String
@@ -623,6 +623,39 @@ Function TraiterCaseMultivoiesAvecBornes(texteOriginal As String, voieComplete A
     
     TraiterCaseMultivoiesAvecBornes = resultatFinal
 End Function
+
+' =====================================================
+' FUNCTION : Extraire les numéros d'une partie de voie spécifique
+' =====================================================
+Sub ExtraireNumerosPartieVoie(partieTexte As String, ByRef numsP As Collection, ByRef numsI As Collection)
+    On Error Resume Next
+    
+    ' Utiliser seulement l'expression régulière pour extraire les numéros de cette partie
+    Dim reg As Object
+    Set reg = CreateObject("VBScript.RegExp")
+    reg.Pattern = "\d+"
+    reg.Global = True
+    
+    Dim matches As Object
+    Set matches = reg.Execute(partieTexte)
+    
+    Dim i As Long
+    Dim n As Long
+    
+    For i = 0 To matches.Count - 1
+        n = CLng(matches(i).Value)
+        If Err.Number = 0 And n > 0 Then
+            If n Mod 2 = 0 Then
+                numsP.Add n
+            Else
+                numsI.Add n
+            End If
+        End If
+        Err.Clear
+    Next i
+    
+    On Error GoTo 0
+End Sub
 
 ' =====================================================
 ' FUNCTION : Générer bornes ultra-simplifiées - LOGIQUE PRINCIPALE
