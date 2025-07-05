@@ -216,6 +216,7 @@ Sub ColorerCellulesH6EtW6_Robuste(ws As Worksheet)
     ws.Range("A2").Font.Bold = True
     
     ' === ANALYSE COLONNE W ===
+    ' Nouvelle condition : Rouge si cellules différentes de vide ou "0 cm libres"
     rougeDetecteW = False
     compteurDebug = 0
     
@@ -223,14 +224,11 @@ Sub ColorerCellulesH6EtW6_Robuste(ws As Worksheet)
         Dim valeurW As String
         valeurW = Trim(CStr(ws.Cells(i, 23).Value))
         
-        If valeurW <> "" And InStr(valeurW, "cm libres") > 0 Then
-            Dim valeurNumerique As Double
-            valeurNumerique = Val(valeurW)
-            
-            If valeurNumerique > 0 Then
-                rougeDetecteW = True
-                compteurDebug = compteurDebug + 1
-            End If
+        ' Vérifier si la cellule n'est PAS vide ET n'est PAS "0 cm libres"
+        If valeurW <> "" And valeurW <> "0 cm libres" Then
+            rougeDetecteW = True
+            compteurDebug = compteurDebug + 1
+            Exit For ' Sortir dès qu'on trouve une cellule problématique
         End If
     Next i
     
@@ -328,24 +326,15 @@ Sub DebugColorationW6()
         
         If valeurW = "" Then
             compteurVide = compteurVide + 1
-            debugInfo = debugInfo & " (VIDE)"
-        ElseIf InStr(valeurW, "cm libres") > 0 Then
-            If valeurW = "0 cm libres" Then
-                compteurVert = compteurVert + 1
-                debugInfo = debugInfo & " (0 CM - OK)"
-            Else
-                Dim valeurNumerique As Double
-                valeurNumerique = Val(valeurW)
-                If valeurNumerique > 0 Then
-                    rougeDetecteW = True
-                    compteurRouge = compteurRouge + 1
-                    debugInfo = debugInfo & " (CM LIBRES POSITIFS - ROUGE)"
-                Else
-                    debugInfo = debugInfo & " (CM LIBRES ZÉRO)"
-                End If
-            End If
+            debugInfo = debugInfo & " (VIDE - OK)"
+        ElseIf valeurW = "0 cm libres" Then
+            compteurVert = compteurVert + 1
+            debugInfo = debugInfo & " (0 CM LIBRES - OK)"
         Else
-            debugInfo = debugInfo & " (AUTRE)"
+            ' Toute autre valeur déclenche le rouge
+            rougeDetecteW = True
+            compteurRouge = compteurRouge + 1
+            debugInfo = debugInfo & " (AUTRE VALEUR - ROUGE)"
         End If
         
         debugInfo = debugInfo & vbCrLf
