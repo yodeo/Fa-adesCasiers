@@ -3,7 +3,15 @@ Sub MettreEnFormeAccueil()
     Dim plageW As Range, plageG As Range
     Dim derniereLigne As Long
 
-    Set ws = ThisWorkbook.Sheets("Accueil")
+    ' Déterminer la feuille active (compatible avec toutes les feuilles sources)
+    Set ws = ActiveSheet
+    If Not EstFeuilleSource(ws) Then
+        ' Si pas une feuille source, essayer "Accueil" par défaut
+        On Error Resume Next
+        Set ws = ThisWorkbook.Sheets("Accueil")
+        On Error GoTo 0
+        If ws Is Nothing Then Exit Sub
+    End If
 
     ' Centrer tout le contenu de la feuille horizontalement et verticalement
     With ws.Cells
@@ -22,10 +30,11 @@ Sub MettreEnFormeAccueil()
     plageW.FormatConditions.Delete
     plageG.FormatConditions.Delete
 
-    ' Appliquer mise en forme conditionnelle colonne W (>0 ? fond rouge, texte blanc)
-    With plageW.FormatConditions.Add(Type:=xlCellValue, Operator:=xlGreater, Formula1:="0")
+    ' Appliquer mise en forme conditionnelle colonne W (texte contient "cm libres" ? fond rouge, texte blanc)
+    With plageW.FormatConditions.Add(Type:=xlTextString, String:="cm libres", TextOperator:=xlContains)
         .Interior.Color = RGB(255, 0, 0)
         .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
     End With
 
     ' Appliquer mise en forme conditionnelle colonne G (>0 ? fond bleu clair, texte noir)
@@ -34,7 +43,9 @@ Sub MettreEnFormeAccueil()
         .Font.Color = RGB(0, 0, 0) ' Noir
     End With
 
+    ' Rendre la colonne W visible si elle était masquée
+    ws.Columns("W:W").Hidden = False
+    ws.Columns("W:W").ColumnWidth = 15
 
     'MsgBox "Mise en forme conditionnelle appliquée avec succès.", vbInformation
 End Sub
-
