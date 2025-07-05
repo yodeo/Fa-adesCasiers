@@ -26,9 +26,10 @@ Sub MettreEnFormeAccueil()
     Set plageW = ws.Range("W7:W" & derniereLigne)
     Set plageG = ws.Range("G7:G" & derniereLigne)
 
-    ' Supprimer les anciennes règles si nécessaire (optionnel)
+    ' Supprimer les anciennes règles SEULEMENT pour les colonnes G et W (pas H)
     plageW.FormatConditions.Delete
     plageG.FormatConditions.Delete
+    ' IMPORTANT : Ne pas supprimer les conditions de la colonne H (codes caisson)
 
     ' Appliquer mise en forme conditionnelle colonne W (texte contient "cm libres" ? fond rouge, texte blanc)
     With plageW.FormatConditions.Add(Type:=xlTextString, String:="cm libres", TextOperator:=xlContains)
