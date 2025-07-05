@@ -496,32 +496,38 @@ Function GenererTexteBornesUltraSimplifiees(collPairs As Collection, collImpairs
     Dim estMultiVoies As Boolean
     estMultiVoies = (InStr(voieComplete, ChrW(&H25CB)) > 0) Or (InStr(voieComplete, " / ") > 0)
     
-    ' Traiter les numéros pairs
-    If collPairs.Count > 0 Then
-        Dim resPairs As String
-        resPairs = GenererBornesUltraSimplifiees(collPairs, autresP)
-        If resPairs <> "" Then
-            If estMultiVoies Then
-                res = "[" & resPairs & "]"
-            Else
-                res = resPairs
+    ' Si c'est une case multi-voies, traiter séparément chaque voie
+    If estMultiVoies And InStr(texteOriginal, " / ") > 0 Then
+        res = TraiterCaseMultivoiesAvecBornes(texteOriginal, voieComplete, collPairs, collImpairs, autresP, autresI)
+    Else
+        ' Traitement normal pour les cases mono-voie
+        ' Traiter les numéros pairs
+        If collPairs.Count > 0 Then
+            Dim resPairs As String
+            resPairs = GenererBornesUltraSimplifiees(collPairs, autresP)
+            If resPairs <> "" Then
+                If estMultiVoies Then
+                    res = "[" & resPairs & "]"
+                Else
+                    res = resPairs
+                End If
             End If
         End If
-    End If
-    
-    ' Traiter les numéros impairs
-    If collImpairs.Count > 0 Then
-        Dim resImpairs As String
-        resImpairs = GenererBornesUltraSimplifiees(collImpairs, autresI)
-        If resImpairs <> "" Then
-            If estMultiVoies Then
-                resImpairs = "[" & resImpairs & "]"
-            End If
-            
-            If res <> "" Then
-                res = res & " / " & resImpairs
-            Else
-                res = resImpairs
+        
+        ' Traiter les numéros impairs
+        If collImpairs.Count > 0 Then
+            Dim resImpairs As String
+            resImpairs = GenererBornesUltraSimplifiees(collImpairs, autresI)
+            If resImpairs <> "" Then
+                If estMultiVoies Then
+                    resImpairs = "[" & resImpairs & "]"
+                End If
+                
+                If res <> "" Then
+                    res = res & " / " & resImpairs
+                Else
+                    res = resImpairs
+                End If
             End If
         End If
     End If
@@ -540,6 +546,82 @@ Function GenererTexteBornesUltraSimplifiees(collPairs As Collection, collImpairs
     Else
         GenererTexteBornesUltraSimplifiees = texteOriginal
     End If
+End Function
+
+' =====================================================
+' FUNCTION : Traiter case multi-voies avec bornes séparées par voie
+' =====================================================
+Function TraiterCaseMultivoiesAvecBornes(texteOriginal As String, voieComplete As String, _
+                                         collPairs As Collection, collImpairs As Collection, _
+                                         autresP As Object, autresI As Object) As String
+    
+    ' Nettoyer le texte des numéros (enlever symbole et observations)
+    Dim numerosSeuls As String
+    numerosSeuls = EnleverSymboleDebut(texteOriginal)
+    If InStr(numerosSeuls, vbCrLf) > 0 Then
+        numerosSeuls = Split(numerosSeuls, vbCrLf)(0)
+    End If
+    
+    ' Séparer les parties par voie (utiliser " / " comme séparateur)
+    Dim partiesVoies As Variant
+    partiesVoies = Split(numerosSeuls, " / ")
+    
+    ' Traiter chaque voie séparément
+    Dim resultatsVoies As Collection
+    Set resultatsVoies = New Collection
+    
+    Dim i As Integer
+    For i = 0 To UBound(partiesVoies)
+        Dim partieVoie As String
+        partieVoie = Trim(partiesVoies(i))
+        
+        ' Extraire les numéros de cette voie
+        Dim pairsVoie As New Collection
+        Dim impairsVoie As New Collection
+        Call ExtraireNumerosPDI(partieVoie, pairsVoie, impairsVoie)
+        
+        ' Générer les bornes pour cette voie
+        Dim bornesVoie As String
+        bornesVoie = ""
+        
+        ' Traiter les pairs de cette voie
+        If pairsVoie.Count > 0 Then
+            Dim resPairs As String
+            resPairs = GenererBornesUltraSimplifiees(pairsVoie, autresP)
+            If resPairs <> "" Then
+                bornesVoie = resPairs
+            End If
+        End If
+        
+        ' Traiter les impairs de cette voie
+        If impairsVoie.Count > 0 Then
+            Dim resImpairs As String
+            resImpairs = GenererBornesUltraSimplifiees(impairsVoie, autresI)
+            If resImpairs <> "" Then
+                If bornesVoie <> "" Then
+                    bornesVoie = bornesVoie & " / " & resImpairs
+                Else
+                    bornesVoie = resImpairs
+                End If
+            End If
+        End If
+        
+        ' Ajouter les crochets pour chaque voie
+        If bornesVoie <> "" Then
+            resultatsVoies.Add "[" & bornesVoie & "]"
+        End If
+    Next i
+    
+    ' Construire le résultat final
+    Dim resultatFinal As String
+    resultatFinal = ""
+    
+    For i = 1 To resultatsVoies.Count
+        If i > 1 Then resultatFinal = resultatFinal & " / "
+        resultatFinal = resultatFinal & resultatsVoies(i)
+    Next i
+    
+    TraiterCaseMultivoiesAvecBornes = resultatFinal
 End Function
 
 ' =====================================================
@@ -1671,4 +1753,3 @@ Sub SimplifierBornesFromButtonMultivoies()
         Call SimplificationBornesNumPDI
     End If
 End Sub
-
